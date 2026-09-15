@@ -31,29 +31,61 @@ pub struct AurionNode {
 }
 
 impl AurionNode {
-    /// Inisialisasi simpul Aurion baru dari genesis state dan konfigurasi node.
+    /// Inisialisasi simpul Aurion baru dari genesis state dan konfigurasi node (in-memory mode).
     pub fn new(
         config: NodeConfig,
         genesis: GenesisInitialization,
         validator_keypair: Option<Keypair>,
         validator_index: Option<u32>,
     ) -> Self {
-        let ledger = Arc::new(Mutex::new(ChainLedger::from_genesis(genesis)));
+        Self::new_with_optional_store(config, genesis, validator_keypair, validator_index, None)
+    }
+
+    /// Inisialisasi simpul Aurion baru dengan persistent StateStore (redb).
+    pub fn new_with_store(
+        config: NodeConfig,
+        genesis: GenesisInitialization,
+        validator_keypair: Option<Keypair>,
+        validator_index: Option<u32>,
+        store: Arc<dyn crate::storage::StateStore>,
+    ) -> Self {
+        Self::new_with_optional_store(config, genesis, validator_keypair, validator_index, Some(store))
+    }
+
+    /// Inisialisasi internal simpul dengan atau tanpa StateStore.
+    pub fn new_with_optional_store(
+        config: NodeConfig,
+        genesis: GenesisInitialization,
+        validator_keypair: Option<Keypair>,
+        validator_index: Option<u32>,
+        store: Option<Arc<dyn crate::storage::StateStore>>,
+    ) -> Self {
+        let ledger_inst = if let Some(s) = store {
+            ChainLedger::from_genesis_with_store(genesis, s)
+                .expect("Failed to initialize or recover ChainLedger with store")
+        } else {
+            ChainLedger::from_genesis(genesis)
+        };
+
+        let ledger = Arc::new(Mutex::new(ledger_inst));
         let rpc_context = Arc::new(RpcContext::new(config.chain_id));
         let mempool = Arc::clone(&rpc_context.mempool);
         let pubsub = Arc::new(SubscriptionManager::new());
 
-        // Sinkronisasi state awal genesis ke rpc_context
+        // Sinkronisasi state awal / recovered ke rpc_context
         {
             let guard = ledger.lock().unwrap();
-            rpc_context.current_height.store(0, Ordering::SeqCst);
-            rpc_context.finalized_height.store(0, Ordering::SeqCst);
+            let latest_h = guard.latest_height();
+            rpc_context.current_height.store(latest_h, Ordering::SeqCst);
+            rpc_context.finalized_height.store(latest_h, Ordering::SeqCst);
             *rpc_context.accounts.lock().unwrap() = guard.accounts.clone();
-            rpc_context
-                .headers
-                .lock()
-                .unwrap()
-                .insert(0, guard.genesis_header.clone());
+            for (h, b) in guard.blocks.iter().enumerate() {
+                rpc_context
+                    .headers
+                    .lock()
+                    .unwrap()
+                    .insert(h as u64, b.header.clone());
+            }
         }
 
 

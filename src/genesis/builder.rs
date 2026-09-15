@@ -13,6 +13,7 @@ pub const GENESIS_CHAIN_ID: u32 = 1001;
 pub const GENESIS_TIMESTAMP: u64 = 1773532800; // 15 Maret 2026 00:00:00 UTC
 
 /// Hasil inisialisasi blok dan state genesis.
+#[derive(Clone)]
 pub struct GenesisInitialization {
     pub header: BlockHeader,
     pub accounts: HashMap<Address, Account>,

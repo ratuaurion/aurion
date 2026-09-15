@@ -82,6 +82,7 @@ REQUIRED_DOCS = [
     "docs/Application-Rules-Layer/application/11-INTEGRATION-RULES.md",
     "docs/Application-Rules-Layer/application/12-OPERATIONAL-RULES.md",
     "docs/Application-Rules-Layer/application/13-COMPATIBILITY-VERSIONING.md",
+    "docs/Application-Rules-Layer/application/14-STORAGE-PERSISTENCE-SPECIFICATION.md",
     ".internal-tasks/CONTEXT_ANCHOR.md",
     ".internal-tasks/TASK_REGISTER.md",
 ]
@@ -233,12 +234,12 @@ def main():
     if not rust_violations:
         print("      PASS: Zero unsafe blocks and zero float primitives detected in codebase.")
 
-    # 3. Audit Documentation Set
-    print("[3/4] Verifying Documentation Set Synchronization (29 Required Specs)...")
+    # 3. Audit Documentation Set Synchronization
+    print("[3/4] Verifying Documentation Set Synchronization (30 Required Specs)...")
     doc_violations = audit_docs_existence(WORKSPACE_ROOT)
     all_violations.extend(doc_violations)
     if not doc_violations:
-        print("      PASS: All 29 specification, constitutional, and application documents present.")
+        print("      PASS: All 30 specification, constitutional, and application documents present.")
 
     # 4. Audit Deprecated Tree Isolation
     print("[4/4] Verifying Complete Isolation from Deprecated Trees...")

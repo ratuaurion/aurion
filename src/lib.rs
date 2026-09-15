@@ -13,6 +13,7 @@ pub mod genesis;
 pub mod mempool;
 pub mod runtime;
 pub mod state;
+pub mod storage;
 pub mod transaction;
 pub mod wallet;
 pub mod wire;

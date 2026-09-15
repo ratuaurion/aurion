@@ -35,6 +35,8 @@ pub enum ChainError {
     InvalidCommitCertificate(CertificateError),
     #[error("State transition error: {0}")]
     StateTransition(StateTransitionError),
+    #[error("Storage engine error: {0}")]
+    Storage(String),
 }
 
 /// Ledger kanonikal rantai blok Aurion.
@@ -45,10 +47,11 @@ pub struct ChainLedger {
     pub accounts: HashMap<Address, Account>,
     pub monetary: MonetaryState,
     pub validator_set: ValidatorSet,
+    pub store: Option<std::sync::Arc<dyn crate::storage::StateStore>>,
 }
 
 impl ChainLedger {
-    /// Inisialisasi ChainLedger baru dari GenesisInitialization.
+    /// Inisialisasi ChainLedger baru dari GenesisInitialization tanpa storage persisten (in-memory).
     pub fn from_genesis(genesis: GenesisInitialization) -> Self {
         let genesis_block = Block::new(genesis.header.clone(), Vec::new(), None);
         let genesis_hash = genesis_block.hash();
@@ -63,6 +66,79 @@ impl ChainLedger {
             accounts: genesis.accounts,
             monetary: genesis.monetary,
             validator_set: genesis.validator_set,
+            store: None,
+        }
+    }
+
+    /// Inisialisasi ChainLedger dengan storage engine persisten (redb).
+    /// Jika storage sudah berisi blok, pulihkan (recover) state secara otomatis dan verifikasi state root.
+    pub fn from_genesis_with_store(
+        genesis: GenesisInitialization,
+        store: std::sync::Arc<dyn crate::storage::StateStore>,
+    ) -> Result<Self, ChainError> {
+        if let Some(latest_h) = store.get_latest_height().map_err(|e| ChainError::Storage(e.to_string()))? {
+            // RECOVERY PATH: Muat state dan blok dari disk
+            let accounts = store.get_all_accounts().map_err(|e| ChainError::Storage(e.to_string()))?;
+            let latest_block = store
+                .get_block_by_height(latest_h)
+                .map_err(|e| ChainError::Storage(e.to_string()))?
+                .ok_or_else(|| ChainError::Storage(format!("Blok pada tinggi {} hilang dari storage", latest_h)))?;
+
+            let computed_root = compute_accounts_state_root(&accounts);
+            if computed_root != latest_block.header.state_root {
+                return Err(ChainError::InvalidStateRoot {
+                    expected: latest_block.header.state_root,
+                    got: computed_root,
+                });
+            }
+
+            let mut blocks = Vec::with_capacity((latest_h + 1) as usize);
+            let mut block_by_hash = HashMap::new();
+            for h in 0..=latest_h {
+                if let Some(b) = store.get_block_by_height(h).map_err(|e| ChainError::Storage(e.to_string()))? {
+                    block_by_hash.insert(b.hash(), h);
+                    blocks.push(b);
+                }
+            }
+
+            Ok(Self {
+                genesis_header: genesis.header,
+                blocks,
+                block_by_hash,
+                accounts,
+                monetary: genesis.monetary,
+                validator_set: genesis.validator_set,
+                store: Some(store),
+            })
+        } else {
+            // INITIALIZATION PATH: Storage kosong, komit Genesis blok secara atomik
+            let genesis_block = Block::new(genesis.header.clone(), Vec::new(), None);
+            let genesis_hash = genesis_block.hash();
+            let mut block_by_hash = HashMap::new();
+            block_by_hash.insert(genesis_hash, 0);
+
+            let initial_accounts: Vec<(Address, Account)> =
+                genesis.accounts.iter().map(|(k, v)| (*k, v.clone())).collect();
+            let dummy_cert = crate::consensus::certificate::CommitCertificate {
+                height: 0,
+                round: 0,
+                block_hash: genesis_hash,
+                precommits: Vec::new(),
+            };
+
+            store
+                .commit_block_atomic(&genesis_block, &dummy_cert, &initial_accounts)
+                .map_err(|e| ChainError::Storage(e.to_string()))?;
+
+            Ok(Self {
+                genesis_header: genesis.header,
+                blocks: vec![genesis_block],
+                block_by_hash,
+                accounts: genesis.accounts,
+                monetary: genesis.monetary,
+                validator_set: genesis.validator_set,
+                store: Some(store),
+            })
         }
     }
 
@@ -183,7 +259,16 @@ impl ChainLedger {
             });
         }
 
-        // 8. Komit ke ledger (Semua validasi lolos 100%)
+        // 8. Komit ke persistent storage secara atomik (jika storage engine aktif)
+        if let Some(store) = &self.store {
+            let updated_accounts: Vec<(Address, Account)> =
+                accounts_clone.iter().map(|(k, v)| (*k, v.clone())).collect();
+            store
+                .commit_block_atomic(&block, cert, &updated_accounts)
+                .map_err(|e| ChainError::Storage(e.to_string()))?;
+        }
+
+        // 9. Komit ke in-memory cache ledger (Semua validasi dan persistensi disk lolos 100%)
         let block_hash = block.hash();
         let block_height = block.height();
 

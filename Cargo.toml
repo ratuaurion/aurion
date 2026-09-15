@@ -22,10 +22,11 @@ zeroize = "1.8"
 hex = "0.4"
 zenoh = { version = "1.1", default-features = false, features = ["transport_tcp", "transport_quic"] }
 tokio = { version = "1", features = ["full"] }
-
+redb = "4.3"
 
 [dev-dependencies]
 hex = "0.4"
+tempfile = "3"
 
 [[bin]]
 name = "aurion"
@@ -34,3 +35,12 @@ path = "src/main.rs"
 [lib]
 name = "aurion"
 path = "src/lib.rs"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+overflow-checks = true
+
