@@ -73,9 +73,21 @@ impl Quantum {
     }
 
     #[inline]
+    pub fn from_aur(aur: u64) -> Result<Self, MonetaryError> {
+        let quanta = (aur as u128)
+            .checked_mul(QUANTA_PER_AUR)
+            .ok_or(MonetaryError::Overflow)?;
+        if quanta > MAX_SUPPLY_QUANTA {
+            return Err(MonetaryError::SupplyCapExceeded(quanta));
+        }
+        Ok(Quantum(quanta))
+    }
+
+    #[inline]
     pub const fn as_u128(&self) -> u128 {
         self.0
     }
+
 
     #[inline]
     pub fn checked_add(self, other: Quantum) -> Result<Quantum, MonetaryError> {

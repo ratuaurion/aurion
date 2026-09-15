@@ -136,3 +136,37 @@ impl CommitCertificate {
         Ok(())
     }
 }
+
+impl CanonicalEncode for CommitCertificate {
+    fn encode_canonical(&self, buf: &mut Vec<u8>) {
+        self.block_hash.encode_canonical(buf);
+        self.height.encode_canonical(buf);
+        self.round.encode_canonical(buf);
+        let count = self.precommits.len() as u32;
+        count.encode_canonical(buf);
+        for vote in &self.precommits {
+            vote.encode_canonical(buf);
+        }
+    }
+}
+
+impl CanonicalDecode for CommitCertificate {
+    fn decode_canonical(bytes: &[u8], cursor: &mut usize) -> Result<Self, CodecError> {
+        let block_hash = Hash256::decode_canonical(bytes, cursor)?;
+        let height = u64::decode_canonical(bytes, cursor)?;
+        let round = u64::decode_canonical(bytes, cursor)?;
+        let count = u32::decode_canonical(bytes, cursor)?;
+        let mut precommits = Vec::with_capacity(count as usize);
+        for _ in 0..count {
+            precommits.push(Vote::decode_canonical(bytes, cursor)?);
+        }
+
+        Ok(CommitCertificate {
+            block_hash,
+            height,
+            round,
+            precommits,
+        })
+    }
+}
+

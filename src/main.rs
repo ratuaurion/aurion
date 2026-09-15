@@ -7,11 +7,18 @@ use aurion::conformance::{
     generate_golden_vectors_json, generate_json_report, generate_markdown_report,
     print_terminal_report, run_all_pillars, TestStatus,
 };
+use aurion::consensus::certificate::ValidatorEntry;
+use aurion::core::Address;
+use aurion::crypto::{derive_address_from_pubkey, Keypair};
+use aurion::genesis::builder::build_genesis;
+use aurion::runtime::config::NodeConfig;
+use aurion::runtime::node::AurionNode;
 use std::env;
 use std::fs;
 use std::process;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args: Vec<String> = env::args().collect();
     let command = if args.len() > 1 {
         args[1].as_str()
@@ -30,24 +37,129 @@ fn main() {
             handle_conformance_subcommand(&args[2..]);
         }
         "node" => {
-            println!("[AURION RUNTIME] Starting Aurion Full Node Daemon...");
-            println!("[AURION RUNTIME] Initializing P2P Wire Protocol (Magic: AUR0)...");
+            println!("==================================================================");
+            println!("  [AURION NODE] Starting Sovereign Full Node Daemon...");
+            println!("==================================================================");
+            let mut rpc_bind = "127.0.0.1:8545".to_string();
+            let mut i = 2;
+            while i < args.len() {
+                if (args[i] == "--rpc-bind" || args[i] == "-b") && i + 1 < args.len() {
+                    rpc_bind = args[i + 1].clone();
+                    i += 1;
+                }
+                i += 1;
+            }
+
+            let config = NodeConfig {
+                rpc_bind,
+                ..Default::default()
+            };
+
+            let creator_addr = Address::from_bytes([1u8; 32]);
+            let dev_addr = Address::from_bytes([2u8; 32]);
+            let val_entry = ValidatorEntry {
+                validator_id: creator_addr,
+                consensus_pubkey: [1u8; 32],
+                voting_weight: 100,
+            };
+            let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
+            let node = AurionNode::new(config, genesis, None, None);
+
+            println!("[AURION NODE] Genesis State initialized successfully.");
+            println!("[AURION NODE] Chain ID: {}", node.config.chain_id);
+            println!("[AURION NODE] Ledger Height: {}", node.ledger.lock().unwrap().latest_height());
+            println!("[AURION NODE] P2P Wire Protocol: Magic AUR0 on {}", node.config.p2p_bind);
+            println!("[AURION NODE] Serving JSON-RPC 2.0 and WebSocket on http://{}", node.config.rpc_bind);
+            println!("[AURION NODE] Press Ctrl+C to stop.");
+
+            if let Err(e) = node.run_rpc_server(None).await {
+                eprintln!("[AURION NODE] Server error: {e}");
+            }
         }
         "validator" => {
-            println!("[AURION RUNTIME] Starting Aurion Validator Engine...");
-            println!("[AURION RUNTIME] Enforcing Single-Slot BFT Consensus...");
+            println!("==================================================================");
+            println!("  [AURION VALIDATOR] Starting BFT Consensus Validator Engine...");
+            println!("==================================================================");
+            let mut rpc_bind = "127.0.0.1:8545".to_string();
+            let mut i = 2;
+            while i < args.len() {
+                if (args[i] == "--rpc-bind" || args[i] == "-b") && i + 1 < args.len() {
+                    rpc_bind = args[i + 1].clone();
+                    i += 1;
+                }
+                i += 1;
+            }
+
+            let config = NodeConfig {
+                rpc_bind,
+                ..NodeConfig::new_validator(Vec::new())
+            };
+
+            let val_key = Keypair::generate();
+            let val_addr = derive_address_from_pubkey(&val_key.public_key_bytes());
+            let dev_addr = Address::from_bytes([2u8; 32]);
+            let val_entry = ValidatorEntry {
+                validator_id: val_addr,
+                consensus_pubkey: val_key.public_key_bytes(),
+                voting_weight: 100,
+            };
+            let genesis = build_genesis(val_addr, dev_addr, vec![val_entry]);
+            let node = AurionNode::new(config, genesis, Some(val_key), Some(0));
+
+            println!("[AURION VALIDATOR] Validator consensus keypair active.");
+            println!("[AURION VALIDATOR] Consensus Algorithm: Single-Slot BFT Finality (2/3+ Quorum).");
+            println!("[AURION VALIDATOR] Serving JSON-RPC 2.0 & Status Gateway on http://{}", node.config.rpc_bind);
+            println!("[AURION VALIDATOR] Press Ctrl+C to stop.");
+
+            if let Err(e) = node.run_rpc_server(None).await {
+                eprintln!("[AURION VALIDATOR] Server error: {e}");
+            }
         }
         "wallet" => {
             aurion::wallet::cli::handle_wallet_subcommand(&args[2..]);
         }
         "rpc" => {
-            println!("[AURION RUNTIME] Starting JSON-RPC 2.0 Server on 127.0.0.1:8545...");
+            println!("==================================================================");
+            println!("  [AURION RPC] Starting Standalone Gateway JSON-RPC 2.0 Server...");
+            println!("==================================================================");
+            let mut rpc_bind = "127.0.0.1:8545".to_string();
+            let mut i = 2;
+            while i < args.len() {
+                if (args[i] == "--bind" || args[i] == "-b") && i + 1 < args.len() {
+                    rpc_bind = args[i + 1].clone();
+                    i += 1;
+                }
+                i += 1;
+            }
+
+            let config = NodeConfig {
+                rpc_bind,
+                ..Default::default()
+            };
+
+            let creator_addr = Address::from_bytes([1u8; 32]);
+            let dev_addr = Address::from_bytes([2u8; 32]);
+            let val_entry = ValidatorEntry {
+                validator_id: creator_addr,
+                consensus_pubkey: [1u8; 32],
+                voting_weight: 100,
+            };
+            let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
+            let node = AurionNode::new(config, genesis, None, None);
+
+            println!("[AURION RPC] Gateway bound to http://{}", node.config.rpc_bind);
+            println!("[AURION RPC] Press Ctrl+C to stop.");
+
+            if let Err(e) = node.run_rpc_server(None).await {
+                eprintln!("[AURION RPC] Server error: {e}");
+            }
         }
         _ => {
             print_help();
         }
     }
 }
+
 
 fn handle_conformance_subcommand(subargs: &[String]) {
     let subcmd = if !subargs.is_empty() {

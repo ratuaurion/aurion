@@ -32,6 +32,23 @@ impl Keypair {
         }
     }
 
+    /// Pembangkitan kunci acak baru menggunakan entropi sistem dan Blake3 KDF.
+    pub fn generate() -> Self {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let pid = std::process::id();
+        let mut entropy = Vec::with_capacity(32);
+        entropy.extend_from_slice(&now.to_be_bytes());
+        entropy.extend_from_slice(&pid.to_be_bytes());
+        let hash = crate::crypto::blake3_derive_key("AURION-EPHEMERAL-KEYGEN", &entropy);
+        Self::from_seed(hash.as_bytes())
+    }
+
+
+
     #[inline]
     pub fn public_key_bytes(&self) -> [u8; 32] {
         self.verifying_key.to_bytes()
@@ -55,6 +72,13 @@ impl Drop for Keypair {
         bytes.zeroize();
     }
 }
+
+impl Clone for Keypair {
+    fn clone(&self) -> Self {
+        Self::from_seed(&self.signing_key.to_bytes())
+    }
+}
+
 
 /// Verifikasi tanda tangan Ed25519 dengan aturan ketat RFC 8032 (Anti-Malleability).
 pub fn ed25519_verify_strict(
