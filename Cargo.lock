@@ -142,6 +142,8 @@ dependencies = [
  "ed25519-dalek",
  "hex",
  "redb",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror",
  "tokio",

@@ -3,6 +3,7 @@
 //! Aurion: Ekosistem Blockchain & Mata Uang Kripto Berdaulat.
 //! Sesuai Invariant AUR-ARCH-001: Single Sovereign Ecosystem.
 
+pub mod cli;
 pub mod codec;
 pub mod conformance;
 pub mod consensus;

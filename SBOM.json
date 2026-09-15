@@ -9,8 +9,8 @@
   },
   "stats": {
     "total_dependencies": 360,
-    "direct_dependencies": 9,
-    "transitive_dependencies": 351
+    "direct_dependencies": 11,
+    "transitive_dependencies": 349
   },
   "direct_dependencies": [
     {
@@ -41,6 +41,18 @@
       "name": "redb",
       "version": "4.3.0",
       "checksum": "fb338a6c67830a61bed824b78c2bb034ab1ff401a20616bd7957524f4fdc2f22",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
+      "source": "registry+https://github.com/rust-lang/crates.io-index"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.151",
+      "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
@@ -1402,12 +1414,6 @@
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {
-      "name": "serde",
-      "version": "1.0.229",
-      "checksum": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba",
-      "source": "registry+https://github.com/rust-lang/crates.io-index"
-    },
-    {
       "name": "serde_core",
       "version": "1.0.229",
       "checksum": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48",
@@ -1423,12 +1429,6 @@
       "name": "serde_derive_internals",
       "version": "0.30.0",
       "checksum": "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd",
-      "source": "registry+https://github.com/rust-lang/crates.io-index"
-    },
-    {
-      "name": "serde_json",
-      "version": "1.0.151",
-      "checksum": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14",
       "source": "registry+https://github.com/rust-lang/crates.io-index"
     },
     {

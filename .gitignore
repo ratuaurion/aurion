@@ -5,6 +5,10 @@
 .internal-tasks/
 .tasks/
 
+# Local Runtime & Database
+data/
+*.redb
+
 # IDE & OS
 .DS_Store
 Thumbs.db

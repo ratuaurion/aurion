@@ -1,5 +1,6 @@
 //! Modul Conformance Test Suite (CTS) & Compliance Harness Aurion.
 
+pub mod cli;
 pub mod report;
 pub mod runner;
 pub mod vectors;
