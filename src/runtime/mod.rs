@@ -3,5 +3,5 @@
 pub mod config;
 pub mod supervisor;
 
-pub use config::NodeConfig;
-pub use supervisor::RuntimeSupervisor;
+pub use config::{NodeConfig, NodeRole};
+pub use supervisor::{HealthCheckError, RuntimeSupervisor, MAX_STATE_LATENCY_MS};
