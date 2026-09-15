@@ -14,4 +14,5 @@ pub mod mempool;
 pub mod runtime;
 pub mod state;
 pub mod transaction;
+pub mod wallet;
 pub mod wire;

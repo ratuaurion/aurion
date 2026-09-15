@@ -38,8 +38,7 @@ fn main() {
             println!("[AURION RUNTIME] Enforcing Single-Slot BFT Consensus...");
         }
         "wallet" => {
-            println!("[AURION RUNTIME] Launching Aurion Secure Wallet Subsystem...");
-            println!("[AURION RUNTIME] Derivation Path: m/44'/9999'/0'/0/0 (BIP-44)");
+            aurion::wallet::cli::handle_wallet_subcommand(&args[2..]);
         }
         "rpc" => {
             println!("[AURION RUNTIME] Starting JSON-RPC 2.0 Server on 127.0.0.1:8545...");

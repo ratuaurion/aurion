@@ -6,6 +6,8 @@ use std::fmt;
 pub struct Signature(pub [u8; 64]);
 
 impl Signature {
+    pub const ZERO: Self = Signature([0u8; 64]);
+
     pub const fn from_bytes(bytes: [u8; 64]) -> Self {
         Signature(bytes)
     }
