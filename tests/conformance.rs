@@ -186,10 +186,10 @@ fn pillar_5_state_transition_execution() {
         signature: Signature::from_bytes([0u8; 64]),
     };
 
-    let (burned, miner_reward) = apply_transaction(&mut accounts, &mut monetary, &miner, &tx).unwrap();
+    let receipt = apply_transaction(&mut accounts, &mut monetary, &miner, &tx).unwrap();
 
-    assert_eq!(burned.as_u128(), 10_000_000); // 20% of 50M
-    assert_eq!(miner_reward.as_u128(), 40_000_000); // 80% of 50M
+    assert_eq!(receipt.burned_fee.as_u128(), 10_000_000); // 20% of 50M
+    assert_eq!(receipt.miner_fee.as_u128(), 40_000_000); // 80% of 50M
 
     assert_eq!(accounts.get(&sender).unwrap().balance.as_u128(), 650_000_000);
     assert_eq!(accounts.get(&sender).unwrap().nonce, 1);

@@ -150,3 +150,23 @@ async fn test_run_cli_entrypoint() {
     let res = run_cli(&args).await;
     assert!(res.is_ok());
 }
+
+#[tokio::test]
+async fn test_cli_dispatch_contract_deploy_and_inspect() {
+    // Valid simple return bytecode: PUSH1 0, RETURN -> 6000F3
+    let bytecode_hex = "6000f3".to_string();
+    let res = dispatch(
+        CliCommand::Contract(vec!["deploy".to_string(), bytecode_hex]),
+        OutputFormat::Json,
+    ).await;
+    assert!(res.is_ok());
+
+    // Inspect dummy contract address
+    let hex_addr = "02".repeat(32);
+    let res = dispatch(
+        CliCommand::Contract(vec!["inspect".to_string(), hex_addr]),
+        OutputFormat::Json,
+    ).await;
+    assert!(res.is_ok());
+}
+

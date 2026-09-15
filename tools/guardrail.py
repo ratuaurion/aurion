@@ -51,7 +51,7 @@ CANONICAL_VALUES = {
     "TX_BASE_BYTES": 184,
 }
 
-# Required Documentation Files (13 Protocol Specs + 14 App Rules + README)
+# Required Documentation Files (13 Protocol Specs + 16 App Rules + README + 2 Task ledgers = 32 total)
 REQUIRED_DOCS = [
     "README.md",
     "docs/Constitutions/AURION CONSTITUTION.md",
@@ -84,6 +84,7 @@ REQUIRED_DOCS = [
     "docs/Application-Rules-Layer/application/13-COMPATIBILITY-VERSIONING.md",
     "docs/Application-Rules-Layer/application/14-STORAGE-PERSISTENCE-SPECIFICATION.md",
     "docs/Application-Rules-Layer/application/15-UNIFIED-CLI-SPECIFICATION.md",
+    "docs/Application-Rules-Layer/application/16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md",
     ".internal-tasks/CONTEXT_ANCHOR.md",
     ".internal-tasks/TASK_REGISTER.md",
 ]
@@ -236,11 +237,11 @@ def main():
         print("      PASS: Zero unsafe blocks and zero float primitives detected in codebase.")
 
     # 3. Audit Documentation Set Synchronization
-    print("[3/4] Verifying Documentation Set Synchronization (31 Required Specs)...")
+    print(f"[3/4] Verifying Documentation Set Synchronization ({len(REQUIRED_DOCS)} Required Specs)...")
     doc_violations = audit_docs_existence(WORKSPACE_ROOT)
     all_violations.extend(doc_violations)
     if not doc_violations:
-        print("      PASS: All 31 specification, constitutional, and application documents present.")
+        print(f"      PASS: All {len(REQUIRED_DOCS)} specification, constitutional, and application documents present.")
 
     # 4. Audit Deprecated Tree Isolation
     print("[4/4] Verifying Complete Isolation from Deprecated Trees...")

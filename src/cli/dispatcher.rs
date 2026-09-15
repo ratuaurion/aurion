@@ -64,6 +64,25 @@ struct BlockInfo {
     tx_count: usize,
 }
 
+#[derive(Serialize)]
+struct ContractDeployInfo {
+    status: &'static str,
+    bytecode_bytes: usize,
+    code_hash: String,
+    valid_jumpdests: usize,
+    estimated_gas: u64,
+}
+
+#[derive(Serialize)]
+struct ContractInspectInfo {
+    address: String,
+    is_contract: bool,
+    code_hash: Option<String>,
+    storage_root: Option<String>,
+    balance_aur: String,
+    nonce: u64,
+}
+
 pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), String> {
     match command {
         CliCommand::Version => {
@@ -400,6 +419,99 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             Ok(())
         }
 
+        CliCommand::Contract(args) => {
+            let sub = args.first().map(|s| s.as_str()).unwrap_or("help");
+            match sub {
+                "deploy" => {
+                    if args.len() < 2 {
+                        return Err("Bytecode required: aurion contract deploy <hex_bytecode>".to_string());
+                    }
+                    let bytecode_hex = &args[1];
+                    let bytecode = hex::decode(bytecode_hex)
+                        .map_err(|e| format!("Invalid hex bytecode: {e}"))?;
+
+                    let verified = crate::vm::verifier::BytecodeVerifier::verify(&bytecode)
+                        .map_err(|e| format!("Bytecode verification failed: {e}"))?;
+
+                    let code_hash = crate::crypto::blake3_hash(&bytecode);
+                    let info = ContractDeployInfo {
+                        status: "VERIFIED_CANONICAL",
+                        bytecode_bytes: bytecode.len(),
+                        code_hash: code_hash.to_hex(),
+                        valid_jumpdests: verified.valid_jump_dests.len(),
+                        estimated_gas: 50_000 + (bytecode.len() as u64 * 200),
+                    };
+
+                    format.print(&info, || {
+                        println!("==================================================================");
+                        println!("             AURION AVM BYTECODE VERIFICATION SUCCESS             ");
+                        println!("==================================================================");
+                        println!("  Status:           {}", info.status);
+                        println!("  Bytecode Size:    {} bytes", info.bytecode_bytes);
+                        println!("  Code Hash:        {}", info.code_hash);
+                        println!("  Valid JumpDests:  {}", info.valid_jumpdests);
+                        println!("  Deployment Gas:   {} Gas", info.estimated_gas);
+                        println!("==================================================================");
+                    });
+                }
+                "inspect" => {
+                    if args.len() < 2 {
+                        return Err("Address required: aurion contract inspect <contract_address>".to_string());
+                    }
+                    let addr_str = &args[1];
+                    let addr = if addr_str.starts_with("aur") {
+                        crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_MAINNET)
+                            .or_else(|_| crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_TESTNET))
+                            .map_err(|e| format!("Invalid Bech32m address: {e}"))?
+                    } else if addr_str.len() == 64 {
+                        let mut bytes = [0u8; 32];
+                        hex::decode_to_slice(addr_str, &mut bytes)
+                            .map_err(|e| format!("Invalid hex address: {e}"))?;
+                        Address::from_bytes(bytes)
+                    } else {
+                        return Err(format!("Invalid address format: {addr_str}"));
+                    };
+
+                    let db_path = get_arg_value(&args, "--db-path")
+                        .unwrap_or_else(|| "data/aurion.redb".to_string());
+                    let store_opt = RedbStorageEngine::open_or_create(&db_path).ok();
+                    let account = store_opt.and_then(|store| store.get_account(&addr).ok().flatten());
+
+                    let (bal, nonce, code_h, stor_r, is_c) = match account {
+                        Some(acc) => {
+                            let is_c = acc.is_contract();
+                            (acc.balance, acc.nonce, acc.code_hash.map(|h| h.to_hex()), acc.storage_root.map(|h| h.to_hex()), is_c)
+                        }
+                        None => (crate::core::Quantum::ZERO, 0, None, None, false),
+                    };
+
+                    let whole = bal.as_u128() / 100_000_000;
+                    let frac = bal.as_u128() % 100_000_000;
+                    let info = ContractInspectInfo {
+                        address: addr_str.to_string(),
+                        is_contract: is_c,
+                        code_hash: code_h,
+                        storage_root: stor_r,
+                        balance_aur: format!("{whole}.{frac:08}"),
+                        nonce,
+                    };
+
+                    format.print(&info, || {
+                        println!("Contract:       {}", info.address);
+                        println!("Is Contract:    {}", info.is_contract);
+                        println!("Code Hash:      {}", info.code_hash.as_deref().unwrap_or("None"));
+                        println!("Storage Root:   {}", info.storage_root.as_deref().unwrap_or("None"));
+                        println!("Balance:        {} AUR", info.balance_aur);
+                        println!("Nonce:          {}", info.nonce);
+                    });
+                }
+                _ => {
+                    println!("Usage: aurion contract <deploy|inspect> [options]");
+                }
+            }
+            Ok(())
+        }
+
         CliCommand::Conformance(args) => {
             crate::conformance::cli::handle_conformance_subcommand(&args);
             Ok(())
@@ -439,6 +551,7 @@ fn print_master_help() {
     println!("  wallet      Manage keys, BIP-39 24-word mnemonics, and transaction signing");
     println!("  account     Query account balances, nonces, and on-chain identity");
     println!("  block       Inspect canonical blocks by height or hash");
+    println!("  contract    Deploy, call, and inspect Aurion VM (AVM) smart contracts");
     println!("  storage     Inspect redb persistent storage status and integrity");
     println!("  genesis     Inspect genesis parameters, allocations, and canonical hash");
     println!("  conformance Run or export 8-Pillar Protocol Conformance Test Suite (CTS)");

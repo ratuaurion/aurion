@@ -4,7 +4,7 @@ use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::{Address, Quantum, Signature};
 
 pub const TRANSACTION_BASE_BYTES: usize = 184;
-pub const MAX_TRANSACTION_PAYLOAD_BYTES: usize = 256;
+pub const MAX_TRANSACTION_PAYLOAD_BYTES: usize = 24 * 1024; // 24 KB
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -13,6 +13,8 @@ pub enum TxType {
     Stake = 0x02,
     Unstake = 0x03,
     GovernanceVote = 0x04,
+    ContractDeploy = 0x05,
+    ContractCall = 0x06,
 }
 
 impl CanonicalEncode for TxType {
@@ -31,6 +33,8 @@ impl CanonicalDecode for TxType {
             0x02 => Ok(TxType::Stake),
             0x03 => Ok(TxType::Unstake),
             0x04 => Ok(TxType::GovernanceVote),
+            0x05 => Ok(TxType::ContractDeploy),
+            0x06 => Ok(TxType::ContractCall),
             other => Err(CodecError::TrailingBytes(other as usize)),
         }
     }

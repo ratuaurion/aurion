@@ -105,10 +105,7 @@ fn test_rpc_methods_account_state() {
     let address = Address(addr_bytes);
     let bech32_addr = encode_address_bech32m(&address, "aur").expect("Valid bech32m");
 
-    let acc = Account {
-        nonce: 7,
-        balance: Quantum::new(500_000_000), // 5 AUR
-    };
+    let acc = Account::new(Quantum::new(500_000_000), 7);
     ctx.accounts.lock().unwrap().insert(address, acc);
 
     // aur_getBalance

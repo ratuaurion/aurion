@@ -16,5 +16,6 @@ pub mod runtime;
 pub mod state;
 pub mod storage;
 pub mod transaction;
+pub mod vm;
 pub mod wallet;
 pub mod wire;
