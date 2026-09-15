@@ -8,6 +8,7 @@ pub mod conformance;
 pub mod consensus;
 pub mod core;
 pub mod crypto;
+pub mod gateway;
 pub mod genesis;
 pub mod mempool;
 pub mod runtime;

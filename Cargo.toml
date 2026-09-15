@@ -21,7 +21,8 @@ thiserror = "2.0"
 zeroize = "1.8"
 hex = "0.4"
 zenoh = { version = "1.1", default-features = false, features = ["transport_tcp", "transport_quic"] }
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["full"] }
+
 
 [dev-dependencies]
 hex = "0.4"
