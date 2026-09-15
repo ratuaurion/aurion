@@ -10,8 +10,9 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 
 ---
 
-## Indeks Spesifikasi Aturan Aplikasi (Dokumen 00 s/d 13)
+## Indeks Spesifikasi Aturan Aplikasi (Dokumen 00 s/d 17)
 
+### Bagian I: Aturan Aplikasi & Integrasi Klien (Dokumen 00 s/d 13)
 | Dokumen | Judul | Fokus Utama |
 | :--- | :--- | :--- |
 | **[00-APPLICATION-RULES.md](application/00-APPLICATION-RULES.md)** | Arsitektur & Prinsip Umum | Batas boundary protokol-aplikasi, 3 Compliance Tiers (Tier 1 Consensus, Tier 2 Operational, Tier 3 Client), dan prinsip non-reimplementsi. |
@@ -28,6 +29,35 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 | **[11-INTEGRATION-RULES.md](application/11-INTEGRATION-RULES.md)** | Aturan Integrasi Ekosistem | Pedoman arsitektur custody bursa kripto (95% Cold Storage / 5% Hot Wallet), penarikan dana dengan distributed lock / mutex, skema multi-signature/TSS (FROST / MuSig2), dan verifikasi SPV/Light Client untuk bridge lintas chain. |
 | **[12-OPERATIONAL-RULES.md](application/12-OPERATIONAL-RULES.md)** | Aturan Operasional Produksi | Arsitektur Sentry Node, isolasi ketat validator tanpa public IP, endpoint pemeriksaan kesehatan mendalam (`/healthz/deep`), metrik Prometheus global, dan protokol mitigasi DoS. |
 | **[13-COMPATIBILITY-VERSIONING.md](application/13-COMPATIBILITY-VERSIONING.md)** | Kompatibilitas & Versioning | Model versioning independen 4-dimensi (Protokol, RPC, SDK, Database Schema), aturan SemVer 2.0.0, jendela depresiasi minimal 180 hari, dan siklus rilis terkoordinasi. |
+
+### Bagian II: Kontrak Arsitektur Sistem Inti L1 (Dokumen 14 s/d 16)
+| Dokumen | Judul | Fokus Utama |
+| :--- | :--- | :--- |
+| **[14-STORAGE-PERSISTENCE-SPECIFICATION.md](application/14-STORAGE-PERSISTENCE-SPECIFICATION.md)** | Mesin Penyimpanan & Persistensi | Kontrak penyimpanan murni Rust `redb 4.3` ACID transactional multi-table commit, zero C++ library, pemulihan crash deterministik, dan isolasi storage API dari storage engine. |
+| **[15-UNIFIED-CLI-SPECIFICATION.md](application/15-UNIFIED-CLI-SPECIFICATION.md)** | Unified CLI & Application Control Plane | Antarmuka operasional tunggal `/bin/aurion` mengontrol node, validator, wallet, storage, account, block, genesis, dan conformance dengan output ganda (Human Text & Machine JSON `--output json`). |
+| **[16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md](application/16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md)** | Smart Contract & Execution Layer (AVM) | Aurion Native Virtual Machine (AVM) 256-bit word stack, 48 opcodes deterministik, zero float, gas metering integer exact, verifier bytecode statis, dan rollback state atomik. |
+
+### Bagian III: Blueprint Arsitektur Evolusi & Horizon L2/L3 (Dokumen 17)
+| Dokumen | Judul | Fokus Utama |
+| :--- | :--- | :--- |
+| **[17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md](application/17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L2 Scaling & Settlement | Ekstensi kapasitas eksekusi horizontal, kompresi batch, L1 Settlement Bridge pada AVM, Data Availability (DA), Validity/Fraud proofs, invariant `L2-*`, kriteria transisi gerbang, dan model pengukuran progres multi-layer terukur. |
+
+---
+
+## Kerangka Kerja Tiga Cakupan (Multi-Layer Evolution Framework)
+
+```text
+                    APPLICATION RULES LAYER
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        │                     │                     │
+     L1 RULES              L2 RULES              L3 RULES
+  (Current Scope)       (Planned Scope)       (Future Scope)
+  Dokumen 00 s/d 16       Dokumen 17          Horizon L3+
+        │                     │                     │
+  Reference Impl        L2 Architecture       App-Specific
+  64/64 Tests PASS       Blueprint 100%       Rollup Domains
+```
 
 ---
 

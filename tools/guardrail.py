@@ -51,7 +51,7 @@ CANONICAL_VALUES = {
     "TX_BASE_BYTES": 184,
 }
 
-# Required Documentation Files (13 Protocol Specs + 16 App Rules + README + 2 Task ledgers = 32 total)
+# Required Documentation Files (13 Protocol Specs + 17 App Rules + README + 2 Task ledgers + 1 Constitution = 35 total)
 REQUIRED_DOCS = [
     "README.md",
     "docs/Constitutions/AURION CONSTITUTION.md",
@@ -85,6 +85,7 @@ REQUIRED_DOCS = [
     "docs/Application-Rules-Layer/application/14-STORAGE-PERSISTENCE-SPECIFICATION.md",
     "docs/Application-Rules-Layer/application/15-UNIFIED-CLI-SPECIFICATION.md",
     "docs/Application-Rules-Layer/application/16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md",
+    "docs/Application-Rules-Layer/application/17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md",
     ".internal-tasks/CONTEXT_ANCHOR.md",
     ".internal-tasks/TASK_REGISTER.md",
 ]
