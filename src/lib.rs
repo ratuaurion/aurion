@@ -4,6 +4,7 @@
 //! Sesuai Invariant AUR-ARCH-001: Single Sovereign Ecosystem.
 
 pub mod codec;
+pub mod conformance;
 pub mod consensus;
 pub mod core;
 pub mod crypto;
