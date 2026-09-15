@@ -1,0 +1,33 @@
+[package]
+name = "aurion"
+version = "1.0.0"
+edition = "2021"
+authors = ["Aurion Core Contributors"]
+description = "Aurion Sovereign Cryptocurrency & Blockchain Ecosystem (Single Binary)"
+license = "MIT OR Apache-2.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+float_arithmetic = "deny"
+cast_precision_loss = "deny"
+
+[dependencies]
+blake3 = { version = "1.5", default-features = false }
+ed25519-dalek = { version = "2.1", default-features = false, features = ["fast", "rand_core"] }
+bech32 = "0.11"
+thiserror = "2.0"
+zeroize = "1.8"
+hex = "0.4"
+
+[dev-dependencies]
+hex = "0.4"
+
+[[bin]]
+name = "aurion"
+path = "src/main.rs"
+
+[lib]
+name = "aurion"
+path = "src/lib.rs"
