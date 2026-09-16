@@ -233,3 +233,56 @@ async fn test_cli_dispatch_l2_subcommands_text_and_json() {
     assert!(res.is_ok());
 }
 
+#[tokio::test]
+async fn test_cli_dispatch_l4_subcommands_text_and_json() {
+    // 1. L4 Relay (Text & JSON)
+    let res = dispatch(CliCommand::L4(vec!["relay".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L4(vec!["relay".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 2. L4 Bridge (Text & JSON)
+    let res = dispatch(CliCommand::L4(vec!["bridge".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L4(vec!["bridge".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 3. L4 Verify (Text & JSON)
+    let res = dispatch(CliCommand::L4(vec!["verify".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L4(vec!["verify".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 4. L4 Circuit (Text & JSON)
+    let res = dispatch(CliCommand::L4(vec!["circuit".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L4(vec!["circuit".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 5. L4 Status (Text & JSON)
+    let res = dispatch(CliCommand::L4(vec!["status".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L4(vec!["status".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 6. L4 Help
+    let res = dispatch(CliCommand::L4(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 7. Test entrypoint parsing via run_cli with "interop" and "l4" alias
+    let res = run_cli(&[
+        "l4".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+
+    let res = run_cli(&[
+        "interop".to_string(),
+        "relay".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
+
+
