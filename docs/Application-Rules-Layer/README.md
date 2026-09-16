@@ -45,6 +45,9 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 | **[19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md](application/19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L4 Interoperability & Cross-Domain Ecosystem | **L4 Interoperability** | Hub interoperabilitas berdaulat tanpa ketergantungan konsensus eksternal: cross-chain messaging, aset, state, proof, dan identitas lintas rantai, adapter protokol eksternal, model keamanan bridge, dan invariant `AUR-L4-*`. |
 | **[20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md](application/20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md)** | Blueprint L5 Global Distributed Infrastructure | **L5 Ecosystem Infrastructure** | Jaringan infrastruktur komputasi & data global: decentralized compute, distributed storage, decentralized DA, distributed indexing, identity mesh, service networks, M2M autonomous economy, dan invariant `AUR-L5-*`. |
 
+> **Detail Perencanaan Eksekusi Proyek L2:**  
+> Untuk rincian 7 fase eksekusi dan 21 tugas terukur L2, lihat direktori proyek: **[`application/aurion-l2-scaling/`](application/aurion-l2-scaling/README.md)** (Dokumen Rinci: **[`AURION-L2-EXECUTION-PHASES.md`](application/aurion-l2-scaling/AURION-L2-EXECUTION-PHASES.md)**).
+
 ---
 
 ## Kerangka Kerja Lima Horizon Evolusi (Aurion Evolution Domains)
