@@ -16,6 +16,7 @@ pub enum CliCommand {
     Network(Vec<String>),
     Contract(Vec<String>),
     Conformance(Vec<String>),
+    L2(Vec<String>),
     Version,
     Help,
 }
@@ -40,6 +41,7 @@ impl CliCommand {
             "network" => Self::Network(args[1..].to_vec()),
             "contract" => Self::Contract(args[1..].to_vec()),
             "conformance" => Self::Conformance(args[1..].to_vec()),
+            "l2" => Self::L2(args[1..].to_vec()),
             "version" | "-v" | "--version" => Self::Version,
             "help" | "-h" | "--help" => Self::Help,
             _ => Self::Help,

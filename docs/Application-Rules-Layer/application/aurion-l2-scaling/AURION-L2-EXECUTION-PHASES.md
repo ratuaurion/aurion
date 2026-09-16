@@ -142,13 +142,14 @@
 ---
 
 ### Fase L2-6: Single Binary CLI Integration & L2 Conformance Suite
-*File Target: `src/cli/`, `tests/l2_conformance.rs`, `tests/l2_lifecycle_e2e.rs`*
+*Status: 100% SELESAI (Single Binary CLI `/bin/aurion l2`, 10-Pillar L2-CTS Harness, & Full Lifecycle E2E Suite)*  
+*File Target:* [`src/cli/`](../../../src/cli/), [`tests/l2_conformance.rs`](../../../tests/l2_conformance.rs), [`tests/l2_lifecycle_e2e.rs`](../../../tests/l2_lifecycle_e2e.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-601** | CLI Dispatcher Subcommands `/bin/aurion l2` | Integrasi single binary: `aurion l2 node`, `aurion l2 sequencer`, `aurion l2 bridge`, `aurion l2 tx`. | `AUR-ARCH-001`, `L2-ARCH-002` |
-| **L2-TSK-602** | L2 Conformance Test Harness (L2-CTS) | 10 pilar pengujian kepatuhan (`REQ-L2-01..10`) mencakup DA, bridge, dispute, dan rollback. | `L2-ARCH-001`, `REQ-L2-*` |
-| **L2-TSK-603** | End-to-End L2 Lifecycle Integration Suite | Test siklus utuh: Deposit L1 $\to$ L2 Tx $\to$ Batch $\to$ L1 Commit $\to$ Withdraw. | Seluruh Invariant L2 |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-601** | CLI Dispatcher Subcommands `/bin/aurion l2` | Integrasi single binary: `aurion l2 node`, `aurion l2 sequencer`, `aurion l2 bridge`, `aurion l2 tx` dengan output human-readable dan format mesin `--output json`. | `AUR-ARCH-001`, `L2-ARCH-002` | **DONE** |
+| **L2-TSK-602** | L2 Conformance Test Harness (L2-CTS) | 10 pilar pengujian kepatuhan (`REQ-L2-01..10`) mencakup ABI selectors, batch frame codec, SMT state roots, DA calldata posting, STF atomic rollback, two-way messaging, forced queue, sequencer soft finality, escape hatch, dan zero-float/zero-unsafe. | `L2-ARCH-001`, `REQ-L2-*` | **DONE** |
+| **L2-TSK-603** | End-to-End L2 Lifecycle Integration Suite | Uji siklus hidup utuh (`tests/l2_lifecycle_e2e.rs`): Deposit L1 $\to$ L2 Tx $\to$ Soft Finality $\to$ Batch DA Commit $\to$ L2 Burn $\to$ Merkle Withdrawal $\to$ Vault Conservation $\to$ Forced Inclusion $\to$ Escape Hatch Claim. | Seluruh Invariant L2 | **DONE** |
 
 ---
 

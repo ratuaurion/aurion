@@ -170,3 +170,66 @@ async fn test_cli_dispatch_contract_deploy_and_inspect() {
     assert!(res.is_ok());
 }
 
+#[tokio::test]
+async fn test_cli_dispatch_l2_subcommands_text_and_json() {
+    // 1. L2 Node (Text & JSON)
+    let res = dispatch(CliCommand::L2(vec!["node".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L2(vec!["node".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 2. L2 Sequencer (Text & JSON)
+    let res = dispatch(CliCommand::L2(vec!["sequencer".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L2(vec!["sequencer".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 3. L2 Bridge (Text & JSON)
+    let res = dispatch(CliCommand::L2(vec!["bridge".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L2(vec!["bridge".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 4. L2 Tx Simulation (Text & JSON)
+    let res = dispatch(
+        CliCommand::L2(vec![
+            "tx".to_string(),
+            "--from".to_string(),
+            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+            "--to".to_string(),
+            "aur1222222222222222222222222222222222222222222222222222sqqqqqqqq".to_string(),
+            "--amount-quanta".to_string(),
+            "500000000".to_string(),
+        ]),
+        OutputFormat::Text,
+    ).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(
+        CliCommand::L2(vec![
+            "tx".to_string(),
+            "--from".to_string(),
+            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+            "--to".to_string(),
+            "aur1222222222222222222222222222222222222222222222222222sqqqqqqqq".to_string(),
+            "--amount-quanta".to_string(),
+            "500000000".to_string(),
+        ]),
+        OutputFormat::Json,
+    ).await;
+    assert!(res.is_ok());
+
+    // 5. L2 Help
+    let res = dispatch(CliCommand::L2(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 6. Test entrypoint parsing
+    let res = run_cli(&[
+        "l2".to_string(),
+        "node".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
+
