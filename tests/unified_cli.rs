@@ -285,4 +285,69 @@ async fn test_cli_dispatch_l4_subcommands_text_and_json() {
     assert!(res.is_ok());
 }
 
+#[tokio::test]
+async fn test_cli_dispatch_l5_subcommands_text_and_json() {
+    // 1. L5 Node (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["node".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["node".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 2. L5 Compute (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["compute".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["compute".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 3. L5 Storage (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["storage".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["storage".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 4. L5 DA (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["da".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["da".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 5. L5 Pay (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["pay".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["pay".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 6. L5 Agent (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["agent".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["agent".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 7. L5 Status (Text & JSON)
+    let res = dispatch(CliCommand::L5(vec!["status".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::L5(vec!["status".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 8. L5 Help
+    let res = dispatch(CliCommand::L5(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 9. Test entrypoint parsing via run_cli with "infra" and "l5" alias
+    let res = run_cli(&[
+        "l5".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+
+    let res = run_cli(&[
+        "infra".to_string(),
+        "node".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
+
+
 

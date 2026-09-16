@@ -6,6 +6,7 @@
 
 // 1. Domain Fungsional Utama Aurion (Domain-Driven Architecture)
 pub mod consensus;
+pub mod infrastructure;
 pub mod interop;
 pub mod platform;
 pub mod primitives;
@@ -20,6 +21,7 @@ pub use consensus::mempool;
 pub use scaling as l2;
 pub use specialized as l3;
 pub use interop as l4;
+pub use infrastructure as l5;
 pub use platform::{cli, conformance, gateway, runtime, storage, wallet, wire};
 
 
