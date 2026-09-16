@@ -104,13 +104,15 @@
 ---
 
 ### Fase L2-3: L2 Sequencer Engine & Batch Assembler
-*File Target: `src/l2/sequencer.rs`*
+*Status: 100% SELESAI (Mempool Prioritisasi Fee, Anti-DoS, Canonical BatchFrame Assembler, & Soft Finality <50ms)*  
+*File Target:* [`src/l2/sequencer.rs`](../../../src/l2/sequencer.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-301** | L2 Mempool & In-Memory Transaksi | Antrean transaksi mempool L2 dengan pengurutan fee, pencegahan nonce ganda, dan batas DoS. | `AUR-APP-03`, `L2-LIFE-001` |
-| **L2-TSK-302** | Batch Assembler & Kompresi Transaksi | Penggabungan $N$ transaksi menjadi satu payload batch terkompresi dengan metadata batch hash. | `L2-DA-001`, `L2-SETTLE-002` |
-| **L2-TSK-303** | Sequencer Runtime & Soft Finality (<50ms) | Engine sequencer memproduksi blok L2 dengan konfirmasi cepat (soft finality) sebelum commit L1. | `L2-LIFE-001`, `L2-LIFE-002` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-301** | L2 Mempool & In-Memory Transaksi | Antrean transaksi mempool L2 dengan pengurutan prioritas fee tertinggi (`drain_prioritized`), pencegahan nonce ganda per akun, dan batas anti-DoS 10.000 transaksi (`MAX_L2_MEMPOOL_CAPACITY`). | `AUR-APP-03`, `L2-LIFE-001` | **DONE** |
+| **L2-TSK-302** | Batch Assembler & Kompresi Transaksi | Penggabungan transaksi dari blok-blok aktif ke dalam framing biner kanonikal `L2BatchFrame` (`AUL2` 102-byte header) dengan metadata batch hash dan Blake3 DA commitment. | `L2-DA-001`, `L2-SETTLE-002` | **DONE** |
+| **L2-TSK-303** | Sequencer Runtime & Soft Finality (<50ms) | Daemon sequencer memproduksi blok L2 deterministik dengan STF atomik dan menerbitkan pengesahan konfirmasi instan `L2SoftFinalityReceipt` sebelum commit L1. | `L2-LIFE-001`, `L2-LIFE-002` | **DONE** |
+
 
 ---
 
