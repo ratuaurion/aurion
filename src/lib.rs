@@ -2,21 +2,18 @@
 
 //! Aurion: Ekosistem Blockchain & Mata Uang Kripto Berdaulat.
 //! Sesuai Invariant AUR-ARCH-001: Single Sovereign Ecosystem.
+//! Terstruktur dalam 5 Domain Fungsional Utama (Domain-Driven Architecture).
 
-pub mod cli;
-pub mod codec;
-pub mod conformance;
+// 1. Lima Domain Fungsional Utama Aurion
 pub mod consensus;
-pub mod core;
-pub mod crypto;
-pub mod gateway;
-pub mod genesis;
-pub mod l2;
-pub mod mempool;
-pub mod runtime;
-pub mod state;
-pub mod storage;
-pub mod transaction;
-pub mod vm;
-pub mod wallet;
-pub mod wire;
+pub mod platform;
+pub mod primitives;
+pub mod scaling;
+pub mod statemachine;
+
+// 2. Re-export Kanonikal Transparan untuk Kompatibilitas & Integrasi Ruang Kerja Penuh
+pub use primitives::{codec, core, crypto, genesis};
+pub use statemachine::{state, transaction, vm};
+pub use consensus::mempool;
+pub use scaling as l2;
+pub use platform::{cli, conformance, gateway, runtime, storage, wallet, wire};

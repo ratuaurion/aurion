@@ -153,20 +153,19 @@
 
 ---
 
-## 3. Struktur Modul Kode Sumber (`src/l2/`)
+## 3. Struktur Kode Sumber Domain-Driven Architecture
 
-Seluruh implementasi L2 wajib diisolasi di dalam sub-direktori `src/l2/` tanpa mengubah kode konsensus L1:
+Seluruh kode sumber Aurion distrukturkan ke dalam 5 Domain Fungsional Mandiri (Domain-Driven Architecture) bebas label numerik layer (`L1/L2`):
 
 ```text
 src/
-├── l2/
-│   ├── mod.rs          # Export publik aurion::l2
-│   ├── types.rs        # L2-TSK-101 (L2Block, L2Tx, L2Batch, L2Receipt)
-│   ├── state.rs        # L2-TSK-102 (Blake3 SMT, L2StateRoot)
-│   ├── vm.rs           # L2-TSK-201..203 (Rollup VM STF)
-│   ├── sequencer.rs    # L2-TSK-301..303 (Mempool & Batch Assembler)
-│   ├── bridge.rs       # L2-TSK-401..403 (L1 Settlement Bridge Client)
-│   └── relayer.rs      # L2-TSK-501..503 (Two-Way Relayer & Escape Hatch)
+├── primitives/         # Fondasi protokol bersama (core, crypto, codec, genesis)
+├── statemachine/       # Mesin status & eksekusi STF/AVM (state, vm, transaction)
+├── consensus/          # Konsensus BFT & antrean prioritas (bft, mempool)
+├── scaling/            # Ekstensi throughput tinggi rollup & bridge (types, state, vm, sequencer, bridge, relayer, abi, codec)
+├── platform/           # Infrastruktur sistem & klien (storage, wire, gateway, wallet, cli, runtime, conformance)
+├── lib.rs              # Re-export kanonikal transparan untuk seluruh ruang kerja
+└── main.rs             # Bootstrap single binary (/bin/aurion)
 ```
 
 ---
