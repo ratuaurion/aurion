@@ -117,13 +117,15 @@
 ---
 
 ### Fase L2-4: Kontrak L1 Settlement Bridge & DA Ingestion
-*File Target: `src/l2/bridge.rs`, `src/vm/`*
+*Status: 100% SELESAI (Vault Conservation, Blake3 DA Posting Commitment, & Atomic State Transition)*  
+*File Target:* [`src/l2/bridge.rs`](../../../src/l2/bridge.rs), [`src/l2/abi.rs`](../../../src/l2/abi.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-401** | Kontrak AVM `L2SettlementBridge` di Layer-1 | Smart contract dideploy di L1 AVM: vault deposit, tracking `state_root`, dan validasi pengajuan batch. | `L2-SETTLE-001`, `L2-SETTLE-005` |
-| **L2-TSK-402** | Calldata DA Posting ke Ledger L1 | Penyerahan payload batch ke calldata transaksi L1 dengan Blake3 checksum guarantee. | `L2-DA-001`, `L2-DA-002` |
-| **L2-TSK-403** | Verifikasi Transisi State Atomik di L1 | L1 mengevaluasi `prev_root` vs `next_root` dan memperbarui state komitmen secara atomik. | `L2-SETTLE-003`, `L2-PROOF-001` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-401** | Kontrak AVM `L2SettlementBridge` di Layer-1 | Kontrak settlement L1 dengan pengelolaan deposit vault, konservasi nilai (`vault_balance`), pelacakan state root, dan emisi log kejadian (`BridgeEvent`). | `L2-SETTLE-001`, `L2-SETTLE-005` | **DONE** |
+| **L2-TSK-402** | Calldata DA Posting ke Ledger L1 | Verifikasi integritas komitmen DA Blake3 atas seluruh frame calldata (`verify_state_transition_with_da`) dan penyimpanan riwayat komitmen per batch. | `L2-DA-001`, `L2-DA-002` | **DONE** |
+| **L2-TSK-403** | Verifikasi Transisi State Atomik di L1 | Evaluasi berkesinambungan `prev_root` vs `next_root`, penomoran batch sekuensial, pemutakhiran status atomik, dan verifikasi penarikan via cabang Merkle. | `L2-SETTLE-003`, `L2-PROOF-001` | **DONE** |
+
 
 ---
 
