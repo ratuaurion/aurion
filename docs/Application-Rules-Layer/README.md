@@ -45,8 +45,12 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 | **[19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md](application/19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L4 Interoperability & Cross-Domain Ecosystem | **L4 Interoperability** | Hub interoperabilitas berdaulat tanpa ketergantungan konsensus eksternal: cross-chain messaging, aset, state, proof, dan identitas lintas rantai, adapter protokol eksternal, model keamanan bridge, dan invariant `AUR-L4-*`. |
 | **[20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md](application/20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md)** | Blueprint L5 Global Distributed Infrastructure | **L5 Ecosystem Infrastructure** | Jaringan infrastruktur komputasi & data global: decentralized compute, distributed storage, decentralized DA, distributed indexing, identity mesh, service networks, M2M autonomous economy, dan invariant `AUR-L5-*`. |
 
-> **Detail Perencanaan Eksekusi Proyek L2:**  
-> Untuk rincian 7 fase eksekusi dan 21 tugas terukur L2, lihat direktori proyek: **[`application/aurion-l2-scaling/`](application/aurion-l2-scaling/README.md)** (Dokumen Rinci: **[`AURION-L2-EXECUTION-PHASES.md`](application/aurion-l2-scaling/AURION-L2-EXECUTION-PHASES.md)**).
+### Bagian IV: Direktori Proyek Eksekusi Bertahap (Roadmap L2 s/d L5)
+Setiap domain evolusi memiliki sub-direktori perencanaan tugas kerja teknis (*Execution Phases & Task Register*) yang terisolasi dan terpetakan:
+* **L2 Scaling Project:** **[`application/aurion-l2-scaling/`](application/aurion-l2-scaling/README.md)** (Rincian 7 Fase: **[`AURION-L2-EXECUTION-PHASES.md`](application/aurion-l2-scaling/AURION-L2-EXECUTION-PHASES.md)**)
+* **L3 Specialized Execution Project:** **[`application/aurion-l3-specialized/`](application/aurion-l3-specialized/README.md)** (Rincian 7 Fase: **[`AURION-L3-EXECUTION-PHASES.md`](application/aurion-l3-specialized/AURION-L3-EXECUTION-PHASES.md)**)
+* **L4 Interoperability Project:** **[`application/aurion-l4-interoperability/`](application/aurion-l4-interoperability/README.md)** (Rincian 7 Fase: **[`AURION-L4-EXECUTION-PHASES.md`](application/aurion-l4-interoperability/AURION-L4-EXECUTION-PHASES.md)**)
+* **L5 Global Infrastructure Project:** **[`application/aurion-l5-infrastructure/`](application/aurion-l5-infrastructure/README.md)** (Rincian 7 Fase: **[`AURION-L5-EXECUTION-PHASES.md`](application/aurion-l5-infrastructure/AURION-L5-EXECUTION-PHASES.md)**)
 
 ---
 
