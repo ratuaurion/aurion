@@ -134,11 +134,11 @@ mod tests {
         let sender = Address::from_bytes([1u8; 32]);
         let recipient = Address::from_bytes([2u8; 32]);
 
-        sequencer.state.set_account(L2Account {
-            address: sender,
-            balance: Quantum::new(500_000_000),
-            nonce: 0,
-        });
+        sequencer.state.set_account(L2Account::new(
+            sender,
+            Quantum::new(500_000_000),
+            0,
+        ));
 
         let tx = L2Transaction {
             sender,

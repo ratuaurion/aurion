@@ -78,15 +78,16 @@ impl L2ExecutionEngine {
                 .nonce
                 .checked_add(1)
                 .ok_or(L2ExecutionError::ArithmeticOverflow)?,
+            storage_root: sender_acc.storage_root,
         };
         state.set_account(updated_sender);
 
         // 5. Tambah Saldo Penerima
-        let recipient_acc = state.get_account(&tx.recipient).cloned().unwrap_or(L2Account {
-            address: tx.recipient,
-            balance: Quantum::ZERO,
-            nonce: 0,
-        });
+        let recipient_acc = state.get_account(&tx.recipient).cloned().unwrap_or(L2Account::new(
+            tx.recipient,
+            Quantum::ZERO,
+            0,
+        ));
 
         let new_recipient_balance = recipient_acc
             .balance
@@ -98,6 +99,7 @@ impl L2ExecutionEngine {
             address: tx.recipient,
             balance: Quantum::new(new_recipient_balance),
             nonce: recipient_acc.nonce,
+            storage_root: recipient_acc.storage_root,
         };
         state.set_account(updated_recipient);
 
@@ -124,11 +126,11 @@ mod tests {
         let sender = Address::from_bytes([1u8; 32]);
         let recipient = Address::from_bytes([2u8; 32]);
 
-        state.set_account(L2Account {
-            address: sender,
-            balance: Quantum::new(1_000_000_000), // 10 AUR
-            nonce: 0,
-        });
+        state.set_account(L2Account::new(
+            sender,
+            Quantum::new(1_000_000_000), // 10 AUR
+            0,
+        ));
 
         let tx = L2Transaction {
             sender,
@@ -159,11 +161,11 @@ mod tests {
         let sender = Address::from_bytes([1u8; 32]);
         let recipient = Address::from_bytes([2u8; 32]);
 
-        state.set_account(L2Account {
-            address: sender,
-            balance: Quantum::new(100_000), // Hanya 0.001 AUR
-            nonce: 0,
-        });
+        state.set_account(L2Account::new(
+            sender,
+            Quantum::new(100_000), // Hanya 0.001 AUR
+            0,
+        ));
 
         let tx = L2Transaction {
             sender,

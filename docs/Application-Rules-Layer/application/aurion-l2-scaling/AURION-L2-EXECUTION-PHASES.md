@@ -79,13 +79,14 @@
 ---
 
 ### Fase L2-1: Tipe Data Primitif & State Representation L2
-*File Target: `src/l2/types.rs`, `src/l2/state.rs`*
+*Status: 100% SELESAI (Tipe Data Kanonikal, SMT 256-bit, & Vektor Pengujian Terverifikasi)*  
+*File Target:* [`src/l2/types.rs`](../../../src/l2/types.rs), [`src/l2/state.rs`](../../../src/l2/state.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-101** | Primitif Data L2 (`L2Transaction`, `L2Block`, `L2Batch`) | Struktur transaksi L2, batch header, receipt, nonce tracking, Zero-Float `Quantum(u128)`. | `L2-ARCH-003`, `L2-ARCH-005` |
-| **L2-TSK-102** | L2 Account & SMT Blake3 (`L2StateRoot`) | Sparse Merkle Tree (SMT) deterministik berbasis Blake3 256-bit untuk membuktikan saldo akun L2. | `L2-SETTLE-002`, `L2-MSG-001` |
-| **L2-TSK-103** | Canonical Encode/Decode & Golden Test Vectors L2 | Serialisasi byte kanonikal big-endian roundtrip 100% identik dan golden test vectors. | `AUR-ARCH-005`, `L2-ARCH-005` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-101** | Primitif Data L2 (`L2Transaction`, `L2Block`, `L2Batch`, `L2Receipt`) | Struktur data transaksi L2, batch header, receipt, nonce tracking, Zero-Float `Quantum(u128)`, verifikasi tanda tangan Ed25519, `compute_txs_root`. | `L2-ARCH-003`, `L2-ARCH-005` | **DONE** |
+| **L2-TSK-102** | L2 Account & SMT Blake3 (`L2StateRoot`) | `L2Account` dengan `storage_root`, Sparse Merkle Tree (SMT) deterministik Blake3 256-bit, dan pembangkitan/verifikasi bukti keanggotaan `L2AccountProof`. | `L2-SETTLE-002`, `L2-MSG-001` | **DONE** |
+| **L2-TSK-103** | Canonical Encode/Decode & Golden Test Vectors L2 | Serialisasi byte kanonikal big-endian roundtrip 100% identik (`encode_canonical`/`decode_canonical`) dan pengujian vektor emas deterministik (92 total tes lolos). | `AUR-ARCH-005`, `L2-ARCH-005` | **DONE** |
 
 ---
 
