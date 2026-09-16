@@ -94,6 +94,12 @@ impl DomainId {
         data.extend_from_slice(name.as_bytes());
         Self(*blake3_hash(&data).as_bytes())
     }
+
+    /// Mengubah DomainId menjadi representasi hex string
+    #[must_use]
+    pub fn to_hex(&self) -> String {
+        hex::encode(self.0)
+    }
 }
 
 impl fmt::Display for DomainId {

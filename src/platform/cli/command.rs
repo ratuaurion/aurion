@@ -17,6 +17,7 @@ pub enum CliCommand {
     Contract(Vec<String>),
     Conformance(Vec<String>),
     L2(Vec<String>),
+    Specialized(Vec<String>),
     Version,
     Help,
 }
@@ -42,6 +43,7 @@ impl CliCommand {
             "contract" => Self::Contract(args[1..].to_vec()),
             "conformance" => Self::Conformance(args[1..].to_vec()),
             "l2" => Self::L2(args[1..].to_vec()),
+            "specialized" | "l3" => Self::Specialized(args[1..].to_vec()),
             "version" | "-v" | "--version" => Self::Version,
             "help" | "-h" | "--help" => Self::Help,
             _ => Self::Help,
