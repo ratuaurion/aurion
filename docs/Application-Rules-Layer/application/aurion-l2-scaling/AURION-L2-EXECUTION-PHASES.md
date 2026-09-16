@@ -63,14 +63,18 @@
 
 ## 2. Rincian Tugas & Kriteria Keberhasilan Per Fase
 
-### Fase L2-0: Spesifikasi Kontrak Bridge & Format Calldata (Persiapan)
-*Status: SELESAI / RATIFIED (Baseline 20.0%)*
+### Fase L2-0: Spesifikasi Kontrak Bridge & Format Calldata (Persiapan Arsitektur)
+*Status: 100% SELESAI (Spesifikasi Formal & Implementasi Codec/ABI Terverifikasi)*  
+*Dokumen Spesifikasi:*  
+- [01-L2-SETTLEMENT-BRIDGE-ABI-SPECIFICATION.md](01-L2-SETTLEMENT-BRIDGE-ABI-SPECIFICATION.md)  
+- [02-L2-BATCH-CALLDATA-COMPRESSION-SPECIFICATION.md](02-L2-BATCH-CALLDATA-COMPRESSION-SPECIFICATION.md)  
+*File Kode Target:* [`src/l2/abi.rs`](../../../src/l2/abi.rs), [`src/l2/codec.rs`](../../../src/l2/codec.rs), [`src/l2/bridge.rs`](../../../src/l2/bridge.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-001** | Definisi Antarmuka ABI `L2SettlementBridge` | Antarmuka ABI smart contract AVM di L1 mencakup fungsi deposit vault, `verify_state_transition`, withdrawal Merkle proof, dan forced queue. | `L2-SETTLE-001..005` |
-| **L2-TSK-002** | Skema Serialisasi Canonical L2 Batch & DA | Format serialisasi biner transaksi batch terkompresi untuk diposting ke L1 dengan efisiensi ruang maksimal. | `L2-DA-001..002` |
-| **L2-TSK-003** | Sinkronisasi Matriks Spesifikasi L1 $\leftrightarrow$ L2 | Dokumen Rule 17 diratifikasi penuh; 10 requirement ID (`REQ-L2-01..10`) terpetakan 1:1 ke test plan. | `AUR-ARCH-001`, `L2-ARCH-001` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-001** | Definisi Antarmuka ABI `L2SettlementBridge` | Antarmuka ABI smart contract AVM di L1 (`01-L2-SETTLEMENT-BRIDGE-ABI-SPECIFICATION.md`), 4-byte Blake3 selector, decoder calldata kanonikal di `src/l2/abi.rs`. | `L2-SETTLE-001..005` | **DONE** |
+| **L2-TSK-002** | Skema Serialisasi Canonical L2 Batch & DA | Format serialisasi biner pembingkaian batch `AUL2` (`02-L2-BATCH-CALLDATA-COMPRESSION-SPECIFICATION.md`), header 102 byte, kompresi calldata di `src/l2/codec.rs`. | `L2-DA-001..002` | **DONE** |
+| **L2-TSK-003** | Sinkronisasi Matriks Spesifikasi L1 $\leftrightarrow$ L2 | Dokumen Rule 17 dan spesifikasi teknis L2-01 & L2-02 diratifikasi penuh; 10 requirement ID (`REQ-L2-01..10`) terpetakan 1:1; 88 unit test lulus 100%. | `AUR-ARCH-001`, `L2-ARCH-001` | **DONE** |
 
 ---
 

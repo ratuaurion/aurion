@@ -9,7 +9,9 @@
 //! - AUR-ARCH-011: Absolute Zero Unsafe Code (`#![forbid(unsafe_code)]`).
 //! - L2-ARCH-005: Algoritma kriptografi standar Aurion (Blake3 dan Ed25519).
 
+pub mod abi;
 pub mod bridge;
+pub mod codec;
 pub mod relayer;
 pub mod sequencer;
 pub mod state;
