@@ -295,6 +295,45 @@ Siklus hidup pengembangan Aurion mengikuti tahapan formal yang bertingkat dan ti
                   (Peluncuran Blok Genesis Kanonikal)
 ```
 
+### Horizon Evolusi Arsitektur Aurion (L1 s/d L5 Evolution Domains)
+
+Roadmap jangka panjang Aurion tidak memandang "L" sebagai blockchain terpisah secara sembarangan, melainkan sebagai **Aurion Evolution Domains** dengan pemisahan peran arsitektural yang tegas:
+
+| Layer / Domain | Peran Utama | Status Arsitektur | Cakupan Aturan |
+| :--- | :--- | :---: | :--- |
+| **L1 — Sovereign Core** | Sovereign blockchain, konsensus BFT, settlement, native execution, smart contract AVM, state, storage redb | **Core / Active** | Dokumen 00 s/d 16 |
+| **L2 — Scaling Layer** | Scaling & high-throughput execution, rollup, data availability, validity/fraud proofs | **Planned** | Dokumen 17 |
+| **L3 — Specialized Execution** | Specialized application execution domains (App-chains, microsecond DeFi, gaming, privacy ZK, AI compute) | **Planned** | Dokumen 18 |
+| **L4 — Interoperability Layer** | Cross-chain messaging, asset/state/proof/identity interoperability, cross-domain settlement, external adapters | **Future** | Dokumen 19 |
+| **L5 — Global Infrastructure** | Global distributed infrastructure (Decentralized compute, distributed storage, decentralized DA, indexing, M2M economy) | **Long-term** | Dokumen 20 |
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│                    AURION EVOLUTION                        │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│ L1  Sovereign Core                                         │
+│     Consensus / State / Storage / VM / Smart Contract      │
+│                                                            │
+│ L2  Scaling                                                │
+│     High-throughput / Rollup / DA / Proof                  │
+│                                                            │
+│ L3  Specialized Execution                                  │
+│     App-specific / Privacy / Specialized Domains           │
+│                                                            │
+│ L4  Interoperability                                       │
+│     Cross-chain / Cross-domain / Messaging / Assets        │
+│                                                            │
+│ L5  Global Infrastructure                                  │
+│     Compute / Storage / Data / Identity / Services         │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+#### Model Pengukuran Progres Bertahap (*Phased Progress Model*)
+Setiap layer diukur secara bertahap tanpa melompati tahap validasi:
+$$\text{DESIGN} \longrightarrow \text{RULES} \longrightarrow \text{REQUIREMENTS} \longrightarrow \text{BUILD} \longrightarrow \text{TEST} \longrightarrow \text{AUDIT} \longrightarrow \text{DONE}$$
+
 ---
 
 ## 7. Peta Indeks Dokumentasi Resmi
@@ -331,6 +370,13 @@ Dokumentasi lengkap protokol Aurion terbagi ke dalam dua pilar utama:
 12. [`11-INTEGRATION-RULES.md`](docs/Application-Rules-Layer/application/11-INTEGRATION-RULES.md): Integrasi Bursa Kripto, Custody, Mutex Penarikan.
 13. [`12-OPERATIONAL-RULES.md`](docs/Application-Rules-Layer/application/12-OPERATIONAL-RULES.md): Topologi Sentry Node, Health Check, Observabilitas.
 14. [`13-COMPATIBILITY-VERSIONING.md`](docs/Application-Rules-Layer/application/13-COMPATIBILITY-VERSIONING.md): Matriks Kompatibilitas 4-Dimensi & Siklus Depresiasi.
+15. [`14-STORAGE-PERSISTENCE-SPECIFICATION.md`](docs/Application-Rules-Layer/application/14-STORAGE-PERSISTENCE-SPECIFICATION.md): Mesin Penyimpanan & Persistensi murni Rust `redb 4.3`.
+16. [`15-UNIFIED-CLI-SPECIFICATION.md`](docs/Application-Rules-Layer/application/15-UNIFIED-CLI-SPECIFICATION.md): Unified CLI & Application Control Plane (`/bin/aurion`).
+17. [`16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md`](docs/Application-Rules-Layer/application/16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md): Smart Contract & Execution Layer (AVM).
+18. [`17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md`](docs/Application-Rules-Layer/application/17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md): Blueprint L2 Scaling & Settlement.
+19. [`18-L3-ECOSYSTEM-EXPANSION-BLUEPRINT.md`](docs/Application-Rules-Layer/application/18-L3-ECOSYSTEM-EXPANSION-BLUEPRINT.md): Blueprint L3 Ecosystem Expansion.
+20. [`19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md`](docs/Application-Rules-Layer/application/19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md): Blueprint L4 Interoperability & Cross-Domain Ecosystem.
+21. [`20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md`](docs/Application-Rules-Layer/application/20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md): Blueprint L5 Global Distributed Infrastructure.
 
 ---
 

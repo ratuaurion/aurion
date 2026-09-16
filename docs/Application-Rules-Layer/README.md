@@ -10,7 +10,7 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 
 ---
 
-## Indeks Spesifikasi Aturan Aplikasi (Dokumen 00 s/d 17)
+## Indeks Spesifikasi Aturan Aplikasi (Dokumen 00 s/d 20)
 
 ### Bagian I: Aturan Aplikasi & Integrasi Klien (Dokumen 00 s/d 13)
 | Dokumen | Judul | Fokus Utama |
@@ -37,27 +37,69 @@ Sesuai dengan prinsip **Single Ecosystem / Single Binary Architecture**, aturan-
 | **[15-UNIFIED-CLI-SPECIFICATION.md](application/15-UNIFIED-CLI-SPECIFICATION.md)** | Unified CLI & Application Control Plane | Antarmuka operasional tunggal `/bin/aurion` mengontrol node, validator, wallet, storage, account, block, genesis, dan conformance dengan output ganda (Human Text & Machine JSON `--output json`). |
 | **[16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md](application/16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md)** | Smart Contract & Execution Layer (AVM) | Aurion Native Virtual Machine (AVM) 256-bit word stack, 48 opcodes deterministik, zero float, gas metering integer exact, verifier bytecode statis, dan rollback state atomik. |
 
-### Bagian III: Blueprint Arsitektur Evolusi & Horizon L2/L3 (Dokumen 17)
-| Dokumen | Judul | Fokus Utama |
-| :--- | :--- | :--- |
-| **[17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md](application/17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L2 Scaling & Settlement | Ekstensi kapasitas eksekusi horizontal, kompresi batch, L1 Settlement Bridge pada AVM, Data Availability (DA), Validity/Fraud proofs, invariant `L2-*`, kriteria transisi gerbang, dan model pengukuran progres multi-layer terukur. |
+### Bagian III: Blueprint Arsitektur Evolusi L2, L3, L4, & L5 (Dokumen 17 s/d 20)
+| Dokumen | Judul | Domain Evolusi | Fokus Utama |
+| :--- | :--- | :--- | :--- |
+| **[17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md](application/17-L2-EVOLUTION-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L2 Scaling & Settlement | **L2 Scaling** | Ekstensi kapasitas eksekusi horizontal, kompresi batch, L1 Settlement Bridge pada AVM, Data Availability (DA), Validity/Fraud proofs, invariant `L2-*`, kriteria transisi gerbang, dan model pengukuran progres multi-layer terukur. |
+| **[18-L3-ECOSYSTEM-EXPANSION-BLUEPRINT.md](application/18-L3-ECOSYSTEM-EXPANSION-BLUEPRINT.md)** | Blueprint L3 Ecosystem Expansion | **L3 Specialized Execution** | Domain eksekusi terspesialisasi (App-chains, DeFi mikro-detik, Gaming, Privasi ZK, AI compute), runtime L3, perpesanan dua arah hierarkis L1↔L2↔L3, 5 model keamanan L3, invariant `AUR-L3-*`, dan matriks pengukuran evolusi. |
+| **[19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md](application/19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md)** | Blueprint L4 Interoperability & Cross-Domain Ecosystem | **L4 Interoperability** | Hub interoperabilitas berdaulat tanpa ketergantungan konsensus eksternal: cross-chain messaging, aset, state, proof, dan identitas lintas rantai, adapter protokol eksternal, model keamanan bridge, dan invariant `AUR-L4-*`. |
+| **[20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md](application/20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md)** | Blueprint L5 Global Distributed Infrastructure | **L5 Ecosystem Infrastructure** | Jaringan infrastruktur komputasi & data global: decentralized compute, distributed storage, decentralized DA, distributed indexing, identity mesh, service networks, M2M autonomous economy, dan invariant `AUR-L5-*`. |
 
 ---
 
-## Kerangka Kerja Tiga Cakupan (Multi-Layer Evolution Framework)
+## Kerangka Kerja Lima Horizon Evolusi (Aurion Evolution Domains)
+
+Sesuai konvensi terminologi arsitektur, **L1 s/d L5 didefinisikan sebagai Aurion Evolution Domains**, bukan sekadar rantai blok baru berurutan. Setiap layer memegang fungsi arsitektural yang unik dan independen:
 
 ```text
-                    APPLICATION RULES LAYER
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-     L1 RULES              L2 RULES              L3 RULES
-  (Current Scope)       (Planned Scope)       (Future Scope)
-  Dokumen 00 s/d 16       Dokumen 17          Horizon L3+
-        │                     │                     │
-  Reference Impl        L2 Architecture       App-Specific
-  64/64 Tests PASS       Blueprint 100%       Rollup Domains
+┌────────────────────────────────────────────────────────────┐
+│                    AURION EVOLUTION                        │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│ L1  Sovereign Core (Base Layer)                            │
+│     Consensus / State / Storage / VM / Smart Contract      │
+│     Dokumen 00 s/d 16  [STATUS: 100% SPEC | 100% IMPL]     │
+│                                                            │
+│ L2  Scaling Layer                                          │
+│     High-throughput / Rollup / DA / Proof                  │
+│     Dokumen 17         [STATUS: 100% SPEC (PLANNED)]       │
+│                                                            │
+│ L3  Specialized Execution Layer                            │
+│     App-specific / Privacy / Specialized Domains           │
+│     Dokumen 18         [STATUS: 100% SPEC (PLANNED)]       │
+│                                                            │
+│ L4  Interoperability Layer                                 │
+│     Cross-chain / Cross-domain / Messaging / Assets        │
+│     Dokumen 19         [STATUS: 100% SPEC (FUTURE)]        │
+│                                                            │
+│ L5  Ecosystem Infrastructure Layer                         │
+│     Global Compute / Storage / Data / Identity / M2M       │
+│     Dokumen 20         [STATUS: 100% SPEC (LONG-TERM)]     │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
 ```
+
+### Model Pengukuran Siklus Hidup Bertahap (*Phased Progress Lifecycle*)
+
+Setiap layer diukur dan dieksekusi secara independen melalui 7 tahapan formal:
+
+```text
+L1: DESIGN ──> RULES ──> REQUIREMENTS ──> BUILD ──> TEST ──> AUDIT ──> DONE (Active)
+                                                                          │
+                                                                          ▼
+L2: DESIGN ──> RULES ──> REQUIREMENTS ──> BUILD ──> TEST ──> AUDIT ──> DONE (Planned)
+                                                                          │
+                                                                          ▼
+L3: DESIGN ──> RULES ──> REQUIREMENTS ──> BUILD ──> TEST ──> AUDIT ──> DONE (Planned)
+                                                                          │
+                                                                          ▼
+L4: DESIGN ──> RULES ──> REQUIREMENTS ──> BUILD ──> TEST ──> AUDIT ──> DONE (Future)
+                                                                          │
+                                                                          ▼
+L5: DESIGN ──> RULES ──> REQUIREMENTS ──> BUILD ──> TEST ──> AUDIT ──> DONE (Long-term)
+```
+
+Dengan mengunci seluruh L1–L5 sebagai **roadmap normatif** di dalam Application Rules Layer, arsitektur jangka panjang Aurion terlindungi dari *architectural drift*, sementara tim rekayasa dapat menyelesaikan setiap boundary secara tuntas tanpa kehilangan arah.
 
 ---
 
