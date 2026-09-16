@@ -130,13 +130,14 @@
 ---
 
 ### Fase L2-5: Two-Way Relayer & Anti-Censorship Protection
-*File Target: `src/l2/relayer.rs`*
+*Status: 100% SELESAI (Two-Way Messaging Relayer, Forced Inclusion Queue, & Escape Hatch Unilateral Claims)*  
+*File Target:* [`src/l2/relayer.rs`](../../../src/l2/relayer.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-501** | Relayer Dua Arah L1 $\leftrightarrow$ L2 | Mekanisme deposit L1 $\to$ L2 (kunci & cetak) dan penarikan L2 $\to$ L1 (bakar & buka kunci via Merkle proof). | `L2-MSG-001`, `L2-MSG-002` |
-| **L2-TSK-502** | Forced Inclusion Queue di L1 | Pengguna dapat mengirim transaksi L2 langsung ke kontrak L1 jika sequencer melakukan sensor. | `L2-MSG-003` |
-| **L2-TSK-503** | Emergency Exit / Escape Hatch Mechanism | Penarikan dana mandiri sepihak oleh pengguna jika sequencer L2 berhenti $> 72$ jam. | `L2-LIFE-003` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-501** | Relayer Dua Arah L1 $\leftrightarrow$ L2 | Mekanisme deposit L1 $\to$ L2 (kunci vault L1 & cetak di L2) dan penarikan L2 $\to$ L1 (bakar di L2 & buka kunci vault L1 via Merkle proof `WithdrawalProof`). | `L2-MSG-001`, `L2-MSG-002` | **DONE** |
+| **L2-TSK-502** | Forced Inclusion Queue di L1 | Pengguna dapat mengirim transaksi L2 langsung ke kontrak L1 jika sequencer melakukan sensor, dengan batas waktu toleransi blok sebelum freeze. | `L2-MSG-003` | **DONE** |
+| **L2-TSK-503** | Emergency Exit / Escape Hatch Mechanism | Penarikan dana mandiri sepihak oleh pengguna jika sequencer L2 berhenti atau membeku, dibuktikan dengan bukti keanggotaan SMT Blake3 256-bit `L2AccountProof`. | `L2-LIFE-003` | **DONE** |
 
 ---
 
