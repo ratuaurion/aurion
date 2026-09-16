@@ -91,13 +91,15 @@
 ---
 
 ### Fase L2-2: L2 Execution Engine & Rollup Runtime
-*File Target: `src/l2/vm.rs`*
+*Status: 100% SELESAI (STF Throughput Tinggi, Zero-Float Gas Metering, Fee Split 80/20, & Atomic Rollback)*  
+*File Target:* [`src/l2/vm.rs`](../../../src/l2/vm.rs), [`src/l2/state.rs`](../../../src/l2/state.rs)
 
-| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant |
-| :--- | :--- | :--- | :---: |
-| **L2-TSK-201** | Mesin Eksekusi Transaksi Throughput Tinggi L2 | State Transition Function (STF) L2: $\sigma_{L2}' = \Upsilon_{L2}(\sigma_{L2}, B_{L2})$ untuk transfer berkecepatan tinggi. | `L2-ARCH-001`, `L2-EXEC-001` |
-| **L2-TSK-202** | Gas Metering & Fee Calculation L2 | Perhitungan gas integer exact, diskon eksekusi L2, pembagian fee sequencer & L1 settlement cost. | `L2-ARCH-003`, `AUR-ARCH-012` |
-| **L2-TSK-203** | Revert Semantics & Atomic Batch Rollback | Proteksi atomik mutasi state L2 jika salah satu transaksi dalam batch gagal memenuhi invariant. | `AUR-VM-005`, `L2-PROOF-003` |
+| Task ID | Nama Tugas | Kriteria Keberhasilan (*Acceptance Criteria*) | Invariant | Status |
+| :--- | :--- | :--- | :---: | :---: |
+| **L2-TSK-201** | Mesin Eksekusi Transaksi Throughput Tinggi L2 | State Transition Function (STF) L2: $\sigma_{L2}' = \Upsilon_{L2}(\sigma_{L2}, B_{L2})$ untuk transfer berkecepatan tinggi dengan validasi komitmen state root deterministik. | `L2-ARCH-001`, `L2-EXEC-001` | **DONE** |
+| **L2-TSK-202** | Gas Metering & Fee Calculation L2 | Perhitungan gas integer exact (10.000 gas dasar + 4 gas/byte payload), harga minimum 1 Quanta, pembagian fee 80% Sequencer & 20% L1 settlement cost. | `L2-ARCH-003`, `AUR-ARCH-012` | **DONE** |
+| **L2-TSK-203** | Revert Semantics & Atomic Batch Rollback | Proteksi atomik mutasi state L2 melalui mekanisme checkpoint & snapshot jika salah satu transaksi dalam batch gagal memenuhi invariant. | `AUR-VM-005`, `L2-PROOF-003` | **DONE** |
+
 
 ---
 

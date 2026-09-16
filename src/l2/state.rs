@@ -232,6 +232,25 @@ impl L2StateStore {
     pub fn is_empty(&self) -> bool {
         self.accounts.is_empty()
     }
+
+    /// Mengambil snapshot status L2 saat ini untuk rollback atomik jika eksekusi gagal
+    #[must_use]
+    pub fn checkpoint(&self) -> L2StateSnapshot {
+        L2StateSnapshot {
+            accounts: self.accounts.clone(),
+        }
+    }
+
+    /// Memulihkan status akun L2 ke kondisi snapshot sebelumnya
+    pub fn rollback(&mut self, snapshot: L2StateSnapshot) {
+        self.accounts = snapshot.accounts;
+    }
+}
+
+/// Salinan status akun L2 untuk mekanisme rollback atomik
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct L2StateSnapshot {
+    accounts: BTreeMap<Address, L2Account>,
 }
 
 #[cfg(test)]
@@ -299,5 +318,23 @@ mod tests {
     fn test_empty_store_root_is_zero() {
         let store = L2StateStore::new();
         assert_eq!(store.compute_state_root(), Hash256::ZERO);
+    }
+
+    #[test]
+    fn test_checkpoint_and_rollback() {
+        let mut store = L2StateStore::new();
+        let addr = Address::from_bytes([0x99; 32]);
+        store.set_account(L2Account::new(addr, Quantum::new(500), 1));
+
+        let snapshot = store.checkpoint();
+
+        // Mutasikan state
+        store.set_account(L2Account::new(addr, Quantum::new(9999), 5));
+        assert_eq!(store.get_account(&addr).unwrap().balance, Quantum::new(9999));
+
+        // Rollback ke snapshot
+        store.rollback(snapshot);
+        assert_eq!(store.get_account(&addr).unwrap().balance, Quantum::new(500));
+        assert_eq!(store.get_account(&addr).unwrap().nonce, 1);
     }
 }
