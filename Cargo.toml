@@ -1,6 +1,6 @@
 [package]
 name = "aurion"
-version = "1.0.0"
+version = "1.0.0-rc1"
 edition = "2021"
 authors = ["Aurion Core Contributors (Ratu)"]
 description = "Aurion Sovereign Cryptocurrency & Blockchain Ecosystem (Single Binary)"

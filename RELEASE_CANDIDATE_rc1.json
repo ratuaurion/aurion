@@ -1,18 +1,29 @@
 {
   "artifact": "aurion",
   "version": "1.0.0-rc1",
+  "release_tag": "v1.0.0-rc1",
+  "status": "RELEASE_CANDIDATE_FREEZE",
   "target_binary": "aurion.exe",
   "size_bytes": 1955328,
   "sha256": "17d6a47eb37289b5320f23afa7097242ff4adbcbfdc63cab7540d00ff3a07666",
   "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
   "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
   "git_commit": "4605f7ca33c1bb06e229dd8b5d8cf975b49ab66e",
-  "git_dirty": false,
   "build_profile": "release",
   "codegen_units": 1,
   "lto": "fat",
   "opt_level": 3,
+  "panic": "abort",
+  "strip": "symbols",
   "overflow_checks": true,
   "forbid_unsafe": true,
-  "deny_float": true
+  "deny_float": true,
+  "invariants_enforced": [
+    "AUR-ARCH-001",
+    "AUR-ARCH-005",
+    "AUR-ARCH-006",
+    "AUR-ARCH-009",
+    "AUR-ARCH-011",
+    "AUR-ARCH-012"
+  ]
 }

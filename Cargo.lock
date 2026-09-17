@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "aurion"
-version = "1.0.0"
+version = "1.0.0-rc1"
 dependencies = [
  "bech32",
  "blake3",

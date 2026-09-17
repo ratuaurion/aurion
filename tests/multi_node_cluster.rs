@@ -644,8 +644,9 @@ fn test_multi_node_real_binary_cli_execution() {
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
+    let expected_ver = env!("CARGO_PKG_VERSION");
     assert!(
-        stdout.contains("1.0.0") && stdout.to_lowercase().contains("aurion"),
+        stdout.contains(expected_ver) && stdout.to_lowercase().contains("aurion"),
         "Binary version string must match"
     );
 
@@ -658,7 +659,7 @@ fn test_multi_node_real_binary_cli_execution() {
     assert!(output_json.status.success());
     let parsed_ver: serde_json::Value = serde_json::from_slice(&output_json.stdout)
         .expect("Valid JSON output from version command");
-    assert_eq!(parsed_ver.get("version").and_then(|v| v.as_str()), Some("1.0.0"));
+    assert_eq!(parsed_ver.get("version").and_then(|v| v.as_str()), Some(expected_ver));
     assert_eq!(parsed_ver.get("application").and_then(|v| v.as_str()), Some("aurion"));
 
     // 3. Eksekusi /bin/aurion genesis inspect --output json

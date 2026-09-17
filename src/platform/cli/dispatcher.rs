@@ -276,7 +276,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
         CliCommand::Version => {
             let info = VersionInfo {
                 application: "aurion",
-                version: "1.0.0",
+                version: env!("CARGO_PKG_VERSION"),
                 architecture: "Single Sovereign Primary Binary (/bin/aurion)",
                 hard_cap_aur: 66_000_000,
                 quantum_scale: "10^8 (1 AUR = 100,000,000 Quanta)",
@@ -285,7 +285,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 signatures: "Ed25519 (Strict Anti-Malleability)",
             };
             format.print(&info, || {
-                println!("Aurion Sovereign Blockchain v1.0.0");
+                println!("Aurion Sovereign Blockchain v{}", info.version);
                 println!("Architecture: Single Sovereign Binary (/bin/aurion)");
                 println!("Invariant: #![forbid(unsafe_code)], Zero-Float exact Quantum (u128)");
                 println!("Hard Cap: 66,000,000 AUR | Genesis: 23,100,000 AUR (35%)");
