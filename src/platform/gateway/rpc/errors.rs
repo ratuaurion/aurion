@@ -47,3 +47,8 @@ pub fn finality_not_reached(height: u64) -> JsonRpcError {
         None,
     )
 }
+
+pub fn internal_error(reason: impl Into<String>) -> JsonRpcError {
+    JsonRpcError::new(ERR_INTERNAL_ERROR, reason, None)
+}
+

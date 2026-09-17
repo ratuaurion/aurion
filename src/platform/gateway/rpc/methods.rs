@@ -6,6 +6,7 @@ use crate::consensus::certificate::CommitCertificate;
 use crate::consensus::header::BlockHeader;
 use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::decode_address_bech32m;
+use crate::gateway::faucet::FaucetDispenser;
 use crate::gateway::rpc::consistency::ConsistencySelector;
 use crate::gateway::rpc::errors::*;
 use crate::gateway::rpc::types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
@@ -25,6 +26,7 @@ pub struct RpcContext {
     pub accounts: Arc<Mutex<HashMap<Address, Account>>>,
     pub headers: Arc<Mutex<HashMap<u64, BlockHeader>>>,
     pub certificates: Arc<Mutex<HashMap<u64, CommitCertificate>>>,
+    pub faucet: Arc<Mutex<Option<FaucetDispenser>>>,
 }
 
 impl RpcContext {
@@ -37,7 +39,13 @@ impl RpcContext {
             accounts: Arc::new(Mutex::new(HashMap::new())),
             headers: Arc::new(Mutex::new(HashMap::new())),
             certificates: Arc::new(Mutex::new(HashMap::new())),
+            faucet: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn attach_faucet(&self, dispenser: FaucetDispenser) {
+        let mut f = self.faucet.lock().unwrap();
+        *f = Some(dispenser);
     }
 
     /// Dispatcher tunggal memproses request JSON-RPC 2.0 dan mengembalikan response.
@@ -62,6 +70,10 @@ impl RpcContext {
             "aur_getBalance" => self.handle_get_balance(&request.params),
             "aur_getNonce" => self.handle_get_nonce(&request.params),
             "aur_getAccount" => self.handle_get_account(&request.params),
+
+            // Modul Komunitas & Testnet (NET-012)
+            "aur_getNetworkStats" => self.handle_get_network_stats(),
+            "aur_requestFaucet" => self.handle_request_faucet(&request.params, current_time),
 
             _ => Err(method_not_found(&request.method)),
         };
@@ -326,5 +338,46 @@ impl RpcContext {
             acc.balance.as_u128(),
             acc.nonce
         ))
+    }
+
+    // --- Handlers Komunitas & Testnet (NET-012) ---
+
+    fn handle_get_network_stats(&self) -> Result<String, JsonRpcError> {
+        let height = self.current_height.load(Ordering::SeqCst);
+        let finalized = self.finalized_height.load(Ordering::SeqCst);
+        let mempool_size = self.mempool.lock().unwrap().entries.len();
+        let accounts_count = self.accounts.lock().unwrap().len();
+        let headers_count = self.headers.lock().unwrap().len();
+        let faucet_active = self.faucet.lock().unwrap().is_some();
+
+        Ok(format!(
+            r#"{{"chain_id":{},"current_height":{},"finalized_height":{},"mempool_size":{},"accounts_count":{},"headers_count":{},"faucet_active":{}}}"#,
+            self.chain_id, height, finalized, mempool_size, accounts_count, headers_count, faucet_active
+        ))
+    }
+
+    fn handle_request_faucet(
+        &self,
+        params: &[String],
+        current_time: u64,
+    ) -> Result<String, JsonRpcError> {
+        if params.is_empty() {
+            return Err(invalid_params("Missing recipient address parameter"));
+        }
+        let recipient_addr = decode_address_bech32m(&params[0], "aur")
+            .map_err(|e| invalid_params(format!("Invalid bech32m address '{}': {e}", params[0])))?;
+
+        let mut faucet_guard = self.faucet.lock().unwrap();
+        if let Some(faucet) = faucet_guard.as_mut() {
+            let accounts = self.accounts.lock().unwrap();
+            let mut mempool = self.mempool.lock().unwrap();
+            let (tx_hash, _tx) = faucet
+                .dispense(&recipient_addr, &accounts, &mut mempool, current_time)
+                .map_err(|e| internal_error(format!("Faucet error: {e}")))?;
+
+            Ok(format!("\"0x{}\"", hex::encode(tx_hash.as_bytes())))
+        } else {
+            Err(internal_error("Faucet is not enabled on this node"))
+        }
     }
 }

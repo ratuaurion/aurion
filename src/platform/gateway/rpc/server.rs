@@ -140,11 +140,102 @@ async fn handle_connection(
         }
     }
 
+    // Penanganan CORS Preflight OPTIONS (NET-012)
+    if method == "OPTIONS" {
+        let response = "HTTP/1.1 204 No Content\r\n\
+Access-Control-Allow-Origin: *\r\n\
+Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
+Access-Control-Max-Age: 86400\r\n\
+Content-Length: 0\r\n\
+Connection: close\r\n\r\n";
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
     // Endpoint Health Check HTTP
     if method == "GET" && (path == "/healthz" || path == "/healthz/deep") {
         let body = r#"{"status":"OK","service":"aurion-rpc"}"#;
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint Sandbox UI & Explorer Dashboard (NET-012)
+    if method == "GET" && (path == "/sandbox" || path == "/explorer") {
+        let html = crate::gateway::explorer::render_sandbox_html(context.chain_id);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            html.len(),
+            html
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint REST Explorer Stats (NET-012)
+    if method == "GET" && (path == "/explorer/stats" || path == "/explorer/summary") {
+        let body = crate::gateway::explorer::render_explorer_stats(&context);
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint REST Explorer Block (NET-012)
+    if method == "GET" && path.starts_with("/explorer/block/") {
+        let target = &path["/explorer/block/".len()..];
+        let height = if target == "latest" {
+            Some(context.current_height.load(std::sync::atomic::Ordering::SeqCst))
+        } else {
+            target.parse::<u64>().ok()
+        };
+
+        if let Some(h) = height {
+            if let Some(body) = crate::gateway::explorer::render_block_by_height(&context, h) {
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                    body.len(),
+                    body
+                );
+                stream.write_all(response.as_bytes()).await?;
+                return Ok(());
+            }
+        }
+
+        let body = r#"{"error":"Block not found"}"#;
+        let response = format!(
+            "HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint REST Explorer Transaction (NET-012)
+    if method == "GET" && path.starts_with("/explorer/tx/") {
+        let tx_hash = &path["/explorer/tx/".len()..];
+        if let Some(body) = crate::gateway::explorer::render_tx_by_hash(&context, tx_hash) {
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).await?;
+            return Ok(());
+        }
+
+        let body = r#"{"error":"Transaction not found in mempool"}"#;
+        let response = format!(
+            "HTTP/1.1 404 Not Found\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body
         );
@@ -185,7 +276,7 @@ async fn handle_connection(
         };
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             response_payload.len(),
             response_payload
         );
@@ -194,7 +285,7 @@ async fn handle_connection(
     }
 
     // Default: Method Not Allowed
-    let not_allowed = "HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+    let not_allowed = "HTTP/1.1 405 Method Not Allowed\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
     stream.write_all(not_allowed.as_bytes()).await?;
     Ok(())
 }

@@ -420,3 +420,66 @@ async fn test_cli_dispatch_testnet_and_snapshot_subcommands() {
     ]).await;
     assert!(res.is_ok());
 }
+
+#[tokio::test]
+async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
+    // 1. Faucet Status & Request (Text & JSON)
+    let res = dispatch(CliCommand::Faucet(vec!["status".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Faucet(vec!["status".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(
+        CliCommand::Faucet(vec![
+            "request".to_string(),
+            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+        ]),
+        OutputFormat::Text,
+    ).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(
+        CliCommand::Faucet(vec![
+            "request".to_string(),
+            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+        ]),
+        OutputFormat::Json,
+    ).await;
+    assert!(res.is_ok());
+
+    // 2. Explorer Summary & Serve (Text & JSON)
+    let res = dispatch(CliCommand::Explorer(vec!["summary".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Explorer(vec!["summary".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(CliCommand::Explorer(vec!["serve".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 3. Command parser
+    assert_eq!(
+        CliCommand::parse(&["faucet".to_string(), "status".to_string()]),
+        CliCommand::Faucet(vec!["status".to_string()])
+    );
+    assert_eq!(
+        CliCommand::parse(&["explorer".to_string(), "summary".to_string()]),
+        CliCommand::Explorer(vec!["summary".to_string()])
+    );
+
+    let res = run_cli(&[
+        "faucet".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+
+    let res = run_cli(&[
+        "explorer".to_string(),
+        "summary".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
+

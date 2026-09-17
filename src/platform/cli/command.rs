@@ -23,6 +23,8 @@ pub enum CliCommand {
     Devnet(Vec<String>),
     Testnet(Vec<String>),
     Snapshot(Vec<String>),
+    Faucet(Vec<String>),
+    Explorer(Vec<String>),
     Version,
     Help,
 }
@@ -54,6 +56,8 @@ impl CliCommand {
             "devnet" => Self::Devnet(args[1..].to_vec()),
             "testnet" => Self::Testnet(args[1..].to_vec()),
             "snapshot" => Self::Snapshot(args[1..].to_vec()),
+            "faucet" => Self::Faucet(args[1..].to_vec()),
+            "explorer" => Self::Explorer(args[1..].to_vec()),
             "version" | "-v" | "--version" => Self::Version,
             "help" | "-h" | "--help" => Self::Help,
             _ => Self::Help,
