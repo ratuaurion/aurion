@@ -1857,6 +1857,54 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             Ok(())
         }
 
+        CliCommand::Audit(args) => {
+            let sub = args.first().map(|s| s.as_str()).unwrap_or("run");
+            match sub {
+                "summary" => {
+                    let report = crate::platform::audit::SecurityAuditRunner::run_full_audit();
+                    let pass_pct = (report.passed_checks * 100) / report.total_checks.max(1);
+                    format.print(&report, || {
+                        println!("==================================================================");
+                        println!("             AURION SECURITY AUDIT SUMMARY (PRD-013)              ");
+                        println!("==================================================================");
+                        println!("  Version:          {}", report.version);
+                        println!("  Total Checks:     {}", report.total_checks);
+                        println!("  Passed Checks:    {} ({}%)", report.passed_checks, pass_pct);
+                        println!("  Failed Checks:    {}", report.failed_checks);
+                        println!("  Readiness Status: {}", report.readiness_verdict);
+                        println!("==================================================================");
+                    });
+                }
+                _ => {
+                    let report = crate::platform::audit::SecurityAuditRunner::run_full_audit();
+                    let pass_pct = (report.passed_checks * 100) / report.total_checks.max(1);
+                    format.print(&report, || {
+                        println!("================================================================================");
+                        println!("  AURION COMPREHENSIVE EXTERNAL SECURITY AUDIT & PENETRATION HARNESS (PRD-013)  ");
+                        println!("================================================================================");
+                        println!("  Version:           {}", report.version);
+                        println!("  Timestamp:         {}", report.timestamp);
+                        println!("  Total Checks:      {}", report.total_checks);
+                        println!("  Passed Checks:     {} ({}%)", report.passed_checks, pass_pct);
+                        println!("  Failed Checks:     {}", report.failed_checks);
+                        println!("  Readiness Verdict: {}", report.readiness_verdict);
+                        println!("--------------------------------------------------------------------------------");
+                        for chk in &report.results {
+                            println!(
+                                "  [{}] {:<50} {:<12} [{}]",
+                                chk.id,
+                                chk.name,
+                                format!("({})", chk.category.as_str()),
+                                chk.status.as_str()
+                            );
+                        }
+                        println!("================================================================================");
+                    });
+                }
+            }
+            Ok(())
+        }
+
         CliCommand::Tx(_) | CliCommand::Network(_) | CliCommand::Query(_) => {
             println!("Subsystem active and integrated in protocol runtime.");
             println!("Use JSON-RPC or dedicated subcommands for full interaction.");
@@ -1904,6 +1952,7 @@ fn print_master_help() {
     println!("  snapshot    Export, inspect, and verify state snapshots for fast-sync (NET-011)");
     println!("  faucet      Request testnet tokens or inspect testnet faucet status (NET-012)");
     println!("  explorer    Inspect testnet blocks, stats, and serve sandbox UI dashboard (NET-012)");
+    println!("  audit       Run formal external security audit & penetration verification (PRD-013)");
     println!("  rpc         Run standalone JSON-RPC 2.0 & WebSocket gateway");
     println!("  version     Display atomic version, compiler, and invariant compliance");
     println!();

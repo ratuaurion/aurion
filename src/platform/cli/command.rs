@@ -25,6 +25,7 @@ pub enum CliCommand {
     Snapshot(Vec<String>),
     Faucet(Vec<String>),
     Explorer(Vec<String>),
+    Audit(Vec<String>),
     Version,
     Help,
 }
@@ -58,6 +59,7 @@ impl CliCommand {
             "snapshot" => Self::Snapshot(args[1..].to_vec()),
             "faucet" => Self::Faucet(args[1..].to_vec()),
             "explorer" => Self::Explorer(args[1..].to_vec()),
+            "audit" => Self::Audit(args[1..].to_vec()),
             "version" | "-v" | "--version" => Self::Version,
             "help" | "-h" | "--help" => Self::Help,
             _ => Self::Help,

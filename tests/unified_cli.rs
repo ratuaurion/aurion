@@ -483,3 +483,34 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
     assert!(res.is_ok());
 }
 
+#[tokio::test]
+async fn test_cli_dispatch_audit_subcommands() {
+    // 1. Audit Run (Text & JSON)
+    let res = dispatch(CliCommand::Audit(vec!["run".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Audit(vec!["run".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 2. Audit Summary (Text & JSON)
+    let res = dispatch(CliCommand::Audit(vec!["summary".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Audit(vec!["summary".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    // 3. Command parser
+    assert_eq!(
+        CliCommand::parse(&["audit".to_string(), "run".to_string()]),
+        CliCommand::Audit(vec!["run".to_string()])
+    );
+
+    // 4. Run CLI entrypoint
+    let res = run_cli(&[
+        "audit".to_string(),
+        "summary".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
+
+
