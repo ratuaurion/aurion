@@ -20,6 +20,7 @@ pub enum CliCommand {
     Specialized(Vec<String>),
     L4(Vec<String>),
     L5(Vec<String>),
+    Devnet(Vec<String>),
     Version,
     Help,
 }
@@ -48,6 +49,7 @@ impl CliCommand {
             "specialized" | "l3" => Self::Specialized(args[1..].to_vec()),
             "interop" | "l4" => Self::L4(args[1..].to_vec()),
             "infra" | "l5" => Self::L5(args[1..].to_vec()),
+            "devnet" => Self::Devnet(args[1..].to_vec()),
             "version" | "-v" | "--version" => Self::Version,
             "help" | "-h" | "--help" => Self::Help,
             _ => Self::Help,

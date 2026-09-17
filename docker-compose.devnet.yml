@@ -1,0 +1,203 @@
+# ==============================================================================
+# AURION DEVNET CONTINUOUS DEPLOYMENT — DOCKER COMPOSE TOPOLOGY (NET-010)
+# ==============================================================================
+# Multi-node cluster with isolated storage and network ports.
+# Storage can be mounted on disk D via environment variable:
+#   AURION_DATA_DIR=D:/aurion-devnet/data docker compose -f docker-compose.devnet.yml up -d
+# ==============================================================================
+
+version: '3.8'
+
+networks:
+  aurion-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+services:
+  # ----------------------------------------------------------------------------
+  # Validator 1: BFT Proposer (Initial Block Leader)
+  # ----------------------------------------------------------------------------
+  aurion-val-1:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-val-1
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - val-1
+      - --role
+      - validator
+      - --p2p-bind
+      - 0.0.0.0:19401
+      - --rpc-bind
+      - 0.0.0.0:19501
+      - --data-dir
+      - /data/val-1.redb
+    ports:
+      - "19401:19401"
+      - "19501:19501"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/val-1:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.11
+
+  # ----------------------------------------------------------------------------
+  # Validator 2: BFT Consensus Peer
+  # ----------------------------------------------------------------------------
+  aurion-val-2:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-val-2
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - val-2
+      - --role
+      - validator
+      - --p2p-bind
+      - 0.0.0.0:19402
+      - --rpc-bind
+      - 0.0.0.0:19502
+      - --data-dir
+      - /data/val-2.redb
+    ports:
+      - "19402:19402"
+      - "19502:19502"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/val-2:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.12
+
+  # ----------------------------------------------------------------------------
+  # Validator 3: BFT Consensus Peer
+  # ----------------------------------------------------------------------------
+  aurion-val-3:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-val-3
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - val-3
+      - --role
+      - validator
+      - --p2p-bind
+      - 0.0.0.0:19403
+      - --rpc-bind
+      - 0.0.0.0:19503
+      - --data-dir
+      - /data/val-3.redb
+    ports:
+      - "19403:19403"
+      - "19503:19503"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/val-3:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.13
+
+  # ----------------------------------------------------------------------------
+  # Validator 4: BFT Consensus Peer
+  # ----------------------------------------------------------------------------
+  aurion-val-4:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-val-4
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - val-4
+      - --role
+      - validator
+      - --p2p-bind
+      - 0.0.0.0:19404
+      - --rpc-bind
+      - 0.0.0.0:19504
+      - --data-dir
+      - /data/val-4.redb
+    ports:
+      - "19404:19404"
+      - "19504:19504"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/val-4:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.14
+
+  # ----------------------------------------------------------------------------
+  # Sentry Node: Anti-DDoS Edge Proxy
+  # ----------------------------------------------------------------------------
+  aurion-sentry:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-sentry
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - sentry-1
+      - --role
+      - sentry
+      - --p2p-bind
+      - 0.0.0.0:19405
+      - --rpc-bind
+      - 0.0.0.0:19505
+      - --data-dir
+      - /data/sentry-1.redb
+    ports:
+      - "19405:19405"
+      - "19505:19505"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/sentry-1:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.21
+
+  # ----------------------------------------------------------------------------
+  # JSON-RPC Gateway: Public Interface for Wallets & Explorers
+  # ----------------------------------------------------------------------------
+  aurion-rpc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aurion-rpc
+    restart: unless-stopped
+    command:
+      - devnet
+      - start
+      - --node-id
+      - rpc-gateway
+      - --role
+      - rpc
+      - --p2p-bind
+      - 0.0.0.0:19406
+      - --rpc-bind
+      - 0.0.0.0:8545
+      - --data-dir
+      - /data/rpc-gateway.redb
+    ports:
+      - "8545:8545"
+      - "19406:19406"
+    volumes:
+      - "${AURION_DATA_DIR:-./data/devnet}/rpc-gateway:/data"
+    networks:
+      aurion-net:
+        ipv4_address: 172.28.0.31

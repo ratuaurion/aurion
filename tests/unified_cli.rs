@@ -349,5 +349,35 @@ async fn test_cli_dispatch_l5_subcommands_text_and_json() {
     assert!(res.is_ok());
 }
 
+#[tokio::test]
+async fn test_cli_dispatch_devnet_subcommands_text_and_json() {
+    // 1. Devnet Init (Text & JSON)
+    let res = dispatch(CliCommand::Devnet(vec!["init".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Devnet(vec!["init".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
 
+    // 2. Devnet Status (Text & JSON)
+    let res = dispatch(CliCommand::Devnet(vec!["status".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Devnet(vec!["status".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
 
+    // 3. Devnet Help
+    let res = dispatch(CliCommand::Devnet(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 4. CLI entrypoint parsing for devnet
+    assert_eq!(
+        CliCommand::parse(&["devnet".to_string(), "init".to_string()]),
+        CliCommand::Devnet(vec!["init".to_string()])
+    );
+
+    let res = run_cli(&[
+        "devnet".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}
