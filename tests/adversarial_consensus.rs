@@ -676,6 +676,20 @@ fn test_adversarial_byzantine_network_simulator_multi_round() {
             net.corrupted_nodes.remove(&1);
         }
 
+        // Sinkronkan simpul yang baru online dengan riwayat blok final dari peer
+        for node_idx in 0..4 {
+            if !net.dropped_links.contains(&(node_idx, (node_idx + 1) % 4)) {
+                for (past_b, past_m) in &history {
+                    let cur_h = cluster.ledgers[node_idx as usize].latest_height();
+                    if past_b.height() == cur_h + 1 {
+                        cluster.ledgers[node_idx as usize]
+                            .apply_block(past_b.clone(), past_m)
+                            .expect("Catchup block apply");
+                    }
+                }
+            }
+        }
+
         // Jika proposer terpilih sedang terputus (offline), pacemaker BFT memicu timeout
         // dan menaikkan putaran ke round berikutnya secara deterministik hingga proposer online
         let mut proposer = BftEngine::select_proposer(&cluster.validator_set, height, round, &prev_hash);
