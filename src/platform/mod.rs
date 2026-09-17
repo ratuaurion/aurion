@@ -8,5 +8,6 @@ pub mod conformance;
 pub mod gateway;
 pub mod runtime;
 pub mod storage;
+pub mod telemetry;
 pub mod wallet;
 pub mod wire;

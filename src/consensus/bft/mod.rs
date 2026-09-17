@@ -4,6 +4,7 @@ pub mod block;
 pub mod certificate;
 pub mod engine;
 pub mod epoch;
+pub mod governance;
 pub mod header;
 pub mod vote;
 
@@ -16,5 +17,6 @@ pub use epoch::{
     compute_epoch_id, is_epoch_boundary, rotate_validator_set, EpochError, EpochInfo,
     EpochTransition, DEFAULT_EPOCH_BLOCKS,
 };
+pub use governance::{GovernanceEngine, ProposalStatus, ProposalSummary, UpgradeProposal};
 pub use header::{BlockHeader, BLOCK_HEADER_BYTES};
 pub use vote::{Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE, VOTE_BYTES};

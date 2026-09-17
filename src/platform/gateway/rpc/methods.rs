@@ -27,6 +27,8 @@ pub struct RpcContext {
     pub headers: Arc<Mutex<HashMap<u64, BlockHeader>>>,
     pub certificates: Arc<Mutex<HashMap<u64, CommitCertificate>>>,
     pub faucet: Arc<Mutex<Option<FaucetDispenser>>>,
+    pub metrics: Arc<crate::platform::telemetry::MetricsRegistry>,
+    pub health: Arc<crate::platform::telemetry::HealthReporter>,
 }
 
 impl RpcContext {
@@ -40,6 +42,12 @@ impl RpcContext {
             headers: Arc::new(Mutex::new(HashMap::new())),
             certificates: Arc::new(Mutex::new(HashMap::new())),
             faucet: Arc::new(Mutex::new(None)),
+            metrics: Arc::new(crate::platform::telemetry::MetricsRegistry::new(chain_id)),
+            health: Arc::new(crate::platform::telemetry::HealthReporter::new(
+                chain_id,
+                crate::runtime::config::NodeRole::FullNode,
+                0,
+            )),
         }
     }
 

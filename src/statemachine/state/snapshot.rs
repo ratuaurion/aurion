@@ -119,24 +119,30 @@ impl StateSnapshot {
         }
 
         // Terapkan seluruh akun ke database storage
-        if let Some(cert) = &self.certificate {
-            let dummy_block = crate::consensus::block::Block::new(
-                crate::consensus::header::BlockHeader {
-                    version: 1,
-                    height: self.height,
-                    round: 0,
-                    timestamp: 1773534000,
-                    prev_block_hash: Hash256::from_bytes([0u8; 32]),
-                    tx_merkle_root: Hash256::from_bytes([0u8; 32]),
-                    state_root: self.state_root,
-                },
-                Vec::new(),
-                Some(cert.clone()),
-            );
-            store
-                .commit_block_atomic(&dummy_block, cert, &self.accounts)
-                .map_err(|e| SnapshotError::Storage(e.to_string()))?;
-        }
+        let cert = self.certificate.clone().unwrap_or_else(|| {
+            CommitCertificate {
+                height: self.height,
+                round: 0,
+                block_hash: self.block_hash,
+                precommits: Vec::new(),
+            }
+        });
+        let dummy_block = crate::consensus::block::Block::new(
+            crate::consensus::header::BlockHeader {
+                version: 1,
+                height: self.height,
+                round: 0,
+                timestamp: 1773534000,
+                prev_block_hash: Hash256::from_bytes([0u8; 32]),
+                tx_merkle_root: Hash256::from_bytes([0u8; 32]),
+                state_root: self.state_root,
+            },
+            Vec::new(),
+            Some(cert.clone()),
+        );
+        store
+            .commit_block_atomic(&dummy_block, &cert, &self.accounts)
+            .map_err(|e| SnapshotError::Storage(e.to_string()))?;
 
         Ok(())
     }

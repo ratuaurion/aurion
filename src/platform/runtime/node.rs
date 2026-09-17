@@ -171,6 +171,7 @@ impl AurionNode {
         );
 
         // 2. Komit blok ke dalam ledger dan bersihkan mempool
+        let cert_round = cert.round;
         bft_guard.commit_block(
             &mut ledger_guard,
             &mut mempool_guard,
@@ -200,7 +201,14 @@ impl AurionNode {
             .unwrap()
             .insert(block_height, block_header.clone());
 
-        // 4. Siarkan notifikasi real-time via WebSocket
+        // 4. Siarkan notifikasi real-time via WebSocket dan perbarui metrik
+        self.rpc_context.metrics.record_block(
+            block_height,
+            cert_round,
+            block.transactions.len() as u64,
+            0,
+            1,
+        );
         self.pubsub.notify_new_head(&block_header);
         self.pubsub.notify_finalized_head(&block_header);
 

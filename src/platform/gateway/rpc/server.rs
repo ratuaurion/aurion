@@ -153,11 +153,40 @@ Connection: close\r\n\r\n";
         return Ok(());
     }
 
-    // Endpoint Health Check HTTP
-    if method == "GET" && (path == "/healthz" || path == "/healthz/deep") {
+    // Endpoint Prometheus OpenMetrics (PRD-017)
+    if method == "GET" && path == "/metrics" {
+        let body = context.metrics.render_openmetrics();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint Shallow Health Check HTTP (PRD-017 & Era V Canonical)
+    if method == "GET" && path == "/healthz" {
         let body = r#"{"status":"OK","service":"aurion-rpc"}"#;
         let response = format!(
-            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).await?;
+        return Ok(());
+    }
+
+    // Endpoint Deep Health Readiness Check HTTP (PRD-017)
+    if method == "GET" && path == "/healthz/deep" {
+        let h = context.current_height.load(std::sync::atomic::Ordering::SeqCst);
+        let peers = context.metrics.connected_peers.load(std::sync::atomic::Ordering::SeqCst);
+        let report = context.health.deep_check(h, peers, 0, true, true, true);
+        let status_code = if report.status == "READY" { "200 OK" } else { "503 Service Unavailable" };
+        let body = serde_json::to_string(&report).unwrap_or_else(|_| r#"{"status":"READY","service":"aurion-node"}"#.to_string());
+        let response = format!(
+            "HTTP/1.1 {}\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            status_code,
             body.len(),
             body
         );
