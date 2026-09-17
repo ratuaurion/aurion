@@ -11,6 +11,7 @@ use crate::consensus::certificate::ValidatorEntry;
 use crate::core::Address;
 use crate::crypto::{derive_address_from_pubkey, Keypair};
 use crate::genesis::builder::build_genesis;
+use crate::genesis::ceremony::{CanonicalCeremonyKeypairs, CeremonyTranscript};
 use crate::runtime::config::NodeConfig;
 use crate::runtime::AurionNode;
 use crate::storage::{RedbStorageEngine, StateStore};
@@ -295,6 +296,139 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
         CliCommand::Genesis(args) => {
             let sub = args.first().map(|s| s.as_str()).unwrap_or("inspect");
+
+            if sub == "ceremony" {
+                let action = args.get(1).map(|s| s.as_str()).unwrap_or("inspect");
+                let keys = CanonicalCeremonyKeypairs::new_deterministic();
+
+                match action {
+                    "run" => {
+                        let transcript = CeremonyTranscript::build_and_seal(&keys)
+                            .map_err(|e| format!("Genesis ceremony execution failed: {e}"))?;
+                        let report = transcript.verify()
+                            .map_err(|e| format!("Ceremony verification failed: {e}"))?;
+
+                        let export_path = args.windows(2).find(|w| w[0] == "--export").map(|w| w[1].as_str());
+                        if let Some(path) = export_path {
+                            let json_str = transcript.to_json_pretty()
+                                .map_err(|e| format!("Failed to serialize ceremony transcript: {e}"))?;
+                            std::fs::write(path, json_str)
+                                .map_err(|e| format!("Failed to write ceremony transcript to {path}: {e}"))?;
+                        }
+
+                        if format == OutputFormat::Json {
+                            println!("{}", transcript.to_json_pretty().map_err(|e| e.to_string())?);
+                        } else {
+                            println!("==================================================================");
+                            println!("           AURION DETERMINISTIC GENESIS CEREMONY (PRD-015)        ");
+                            println!("==================================================================");
+                            println!("  Status:                   SEALED & VERIFIED");
+                            println!("  Ceremony Transcript Hash: {}", transcript.ceremony_hash);
+                            println!("  Genesis Block Hash (H=0): {}", transcript.genesis_block_hash);
+                            println!("  Initial State Root (σ0):  {}", transcript.state_root);
+                            println!("  Chain ID:                 {}", transcript.chain_id);
+                            println!("  Genesis Timestamp:        {}", transcript.timestamp);
+                            println!("  Hard Cap:                 {} AUR", transcript.hard_cap_aur);
+                            println!("  Initial Supply (35%):     {} AUR", transcript.initial_supply_aur);
+                            println!("  Creator Allocation:       {} AUR (30%)", transcript.creator_allocation_aur);
+                            println!("  Developer Allocation:     {} AUR (5%)", transcript.developer_allocation_aur);
+                            println!("  Participants:             {} (Creator, Dev, 4 Validators)", transcript.participants.len());
+                            println!("  Attestations Collected:   {}/{}", transcript.attestations.len(), transcript.participants.len());
+                            println!("  Validator Quorum Power:   {}/{} (Threshold: {})",
+                                transcript.attested_validator_power,
+                                transcript.total_validator_power,
+                                transcript.quorum_threshold);
+                            println!("  BFT Quorum Status:        {}", report.quorum_status);
+                            println!("  Monetary Audit:           {}", report.monetary_audit_status);
+                            println!("==================================================================");
+                            if let Some(p) = export_path {
+                                println!("  Artifact Exported To:     {p}");
+                            }
+                        }
+                    }
+                    "verify" => {
+                        let file_path = args.windows(2).find(|w| w[0] == "--file").map(|w| w[1].as_str());
+                        let transcript = if let Some(path) = file_path {
+                            let data = std::fs::read_to_string(path)
+                                .map_err(|e| format!("Failed to read ceremony transcript from {path}: {e}"))?;
+                            CeremonyTranscript::from_json_str(&data)
+                                .map_err(|e| format!("Failed to parse ceremony transcript: {e}"))?
+                        } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
+                            let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
+                                .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
+                            CeremonyTranscript::from_json_str(&data)
+                                .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?
+                        } else {
+                            CeremonyTranscript::build_and_seal(&keys)
+                                .map_err(|e| format!("Genesis ceremony seal failed: {e}"))?
+                        };
+
+                        let report = transcript.verify()
+                            .map_err(|e| format!("Genesis ceremony verification failed: {e}"))?;
+
+                        if format == OutputFormat::Json {
+                            println!("{}", serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?);
+                        } else {
+                            println!("==================================================================");
+                            println!("        AURION GENESIS CEREMONY VERIFICATION REPORT (PRD-015)     ");
+                            println!("==================================================================");
+                            println!("  Overall Verdict:          {}", report.overall_status);
+                            println!("  Ceremony Transcript Hash: {}", report.ceremony_hash);
+                            println!("  Genesis Block Hash (H=0): {}", report.genesis_block_hash);
+                            println!("  State Root (σ0):          {}", report.state_root);
+                            println!("  Total Attestations:       {}", report.total_attestations);
+                            println!("  Validator Quorum:         {}", report.quorum_status);
+                            println!("  Monetary Policy Audit:    {}", report.monetary_audit_status);
+                            println!("==================================================================");
+                        }
+                    }
+                    _ => {
+                        let file_path = args.windows(2).find(|w| w[0] == "--file").map(|w| w[1].as_str());
+                        let transcript = if let Some(path) = file_path {
+                            let data = std::fs::read_to_string(path)
+                                .map_err(|e| format!("Failed to read ceremony transcript from {path}: {e}"))?;
+                            CeremonyTranscript::from_json_str(&data)
+                                .map_err(|e| format!("Failed to parse ceremony transcript: {e}"))?
+                        } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
+                            let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
+                                .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
+                            CeremonyTranscript::from_json_str(&data)
+                                .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?
+                        } else {
+                            CeremonyTranscript::build_and_seal(&keys)
+                                .map_err(|e| format!("Genesis ceremony seal failed: {e}"))?
+                        };
+
+                        if format == OutputFormat::Json {
+                            println!("{}", transcript.to_json_pretty().map_err(|e| e.to_string())?);
+                        } else {
+                            println!("==================================================================");
+                            println!("           AURION GENESIS CEREMONY TRANSCRIPT INSPECTOR           ");
+                            println!("==================================================================");
+                            println!("  Ceremony Hash:       {}", transcript.ceremony_hash);
+                            println!("  Genesis Block Hash:  {}", transcript.genesis_block_hash);
+                            println!("  State Root:          {}", transcript.state_root);
+                            println!("  Quorum Achieved:     {} ({}/{})",
+                                transcript.quorum_achieved,
+                                transcript.attested_validator_power,
+                                transcript.total_validator_power);
+                            println!("  Participants ({}):", transcript.participants.len());
+                            for p in &transcript.participants {
+                                println!("    - [{:?}] {} (Weight: {})", p.role, p.name, p.voting_weight);
+                            }
+                            println!("  Attestations ({}):", transcript.attestations.len());
+                            for a in &transcript.attestations {
+                                let sig_prefix = if a.signature_hex.len() >= 16 { &a.signature_hex[..16] } else { &a.signature_hex };
+                                println!("    - [{:?}] {} | Sig: {}...",
+                                    a.role, a.participant_name, sig_prefix);
+                            }
+                            println!("==================================================================");
+                        }
+                    }
+                }
+                return Ok(());
+            }
+
             let creator_addr = Address::from_bytes([1u8; 32]);
             let dev_addr = Address::from_bytes([2u8; 32]);
             let val_entry = ValidatorEntry {

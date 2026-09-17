@@ -46,6 +46,8 @@ pub fn build_genesis(
 
     let validator_set = ValidatorSet::new(validators);
 
+    let state_root = crate::state::smt::compute_accounts_state_root(&accounts);
+
     let header = BlockHeader {
         version: 1,
         height: 0,
@@ -53,7 +55,7 @@ pub fn build_genesis(
         timestamp: GENESIS_TIMESTAMP,
         prev_block_hash: Hash256::ZERO,
         tx_merkle_root: Hash256::ZERO,
-        state_root: Hash256::ZERO,
+        state_root,
     };
 
     GenesisInitialization {

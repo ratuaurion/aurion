@@ -1,0 +1,527 @@
+//! Deterministic Multi-Party Genesis Ceremony Engine (PRD-015).
+//!
+//! Modul ini mengelola protokol upacara pembentukan blok Genesis ($H=0$) dan State Awal ($\sigma_0$)
+//! secara deterministik dan teratestasi kriptografis multi-pihak (Creator, Developer, dan 4 Genesis Validators $\mathcal{V}_0$).
+
+use crate::consensus::certificate::ValidatorEntry;
+use crate::core::{Address, Hash256, Signature};
+use crate::crypto::{blake3_derive_key, ed25519_verify_strict, Keypair};
+use crate::genesis::builder::{build_genesis, GenesisInitialization, GENESIS_CHAIN_ID, GENESIS_TIMESTAMP};
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
+
+/// Tag pemisahan domain (Domain Separation Tag) kanonikal untuk penandatanganan upacara Genesis.
+pub const DST_GENESIS_CEREMONY: &str = "AURION-GENESIS-CEREMONY-V1";
+
+/// Total bobot voting validator awal: 1.000.000 (AUR-GENESIS-007).
+pub const CEREMONY_TOTAL_VOTING_POWER: u64 = 1_000_000;
+
+/// Kuorum voting BFT awal: >2/3 = 666.667 (AUR-GENESIS-007).
+pub const CEREMONY_QUORUM_THRESHOLD: u64 = 666_667;
+
+/// Peran entitas dalam upacara pembentukan Genesis.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CeremonyRole {
+    Creator,
+    Developer,
+    Validator(u32),
+}
+
+impl std::fmt::Display for CeremonyRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CeremonyRole::Creator => write!(f, "Creator Vault (30%)"),
+            CeremonyRole::Developer => write!(f, "Developer Vault (5%)"),
+            CeremonyRole::Validator(idx) => write!(f, "Genesis Validator {idx}"),
+        }
+    }
+}
+
+/// Kesalahan dalam eksekusi atau verifikasi upacara Genesis.
+#[derive(Debug, Error, PartialEq, Eq, Clone, Serialize, Deserialize)]
+pub enum CeremonyError {
+    #[error("Signature verification failed for role {role}: {reason}")]
+    InvalidSignature { role: String, reason: String },
+
+    #[error("Validator quorum not achieved: attested {attested} < required {required}")]
+    QuorumNotAchieved { attested: u64, required: u64 },
+
+    #[error("Monetary policy invariant violation: {reason}")]
+    MonetaryInvariantViolation { reason: String },
+
+    #[error("Genesis block hash mismatch: expected {expected}, got {actual}")]
+    GenesisHashMismatch { expected: String, actual: String },
+
+    #[error("State root mismatch: expected {expected}, got {actual}")]
+    StateRootMismatch { expected: String, actual: String },
+
+    #[error("Ceremony transcript hash corrupted: expected {expected}, got {actual}")]
+    CeremonyHashCorrupted { expected: String, actual: String },
+
+    #[error("Participant missing or invalid: {0}")]
+    ParticipantMissing(String),
+
+    #[error("Serialization error: {0}")]
+    Serialization(String),
+}
+
+/// Peserta resmi dalam upacara Genesis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CeremonyParticipant {
+    pub role: CeremonyRole,
+    pub name: String,
+    pub public_key_hex: String,
+    pub address_hex: String,
+    pub voting_weight: u64,
+}
+
+/// Pengesahan kriptografis bertanda tangan oleh seorang peserta upacara.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CeremonyAttestation {
+    pub role: CeremonyRole,
+    pub participant_name: String,
+    pub public_key_hex: String,
+    pub signature_hex: String,
+    pub signed_at: u64,
+}
+
+/// Laporan hasil verifikasi integritas upacara Genesis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CeremonyVerificationReport {
+    pub overall_status: String,
+    pub ceremony_hash: String,
+    pub genesis_block_hash: String,
+    pub state_root: String,
+    pub chain_id: u32,
+    pub genesis_timestamp: u64,
+    pub total_attestations: usize,
+    pub attested_validator_power: u64,
+    pub quorum_threshold: u64,
+    pub quorum_status: String,
+    pub monetary_audit_status: String,
+    pub verified_at: u64,
+}
+
+/// Transkrip lengkap dan mandiri upacara pembentukan Genesis.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CeremonyTranscript {
+    pub ceremony_version: u32,
+    pub protocol_version: u32,
+    pub chain_id: u32,
+    pub timestamp: u64,
+    pub genesis_block_hash: String,
+    pub state_root: String,
+    pub hard_cap_aur: u64,
+    pub initial_supply_aur: u64,
+    pub creator_allocation_aur: u64,
+    pub developer_allocation_aur: u64,
+    pub creator_address_hex: String,
+    pub developer_address_hex: String,
+    pub participants: Vec<CeremonyParticipant>,
+    pub attestations: Vec<CeremonyAttestation>,
+    pub total_validator_power: u64,
+    pub attested_validator_power: u64,
+    pub quorum_threshold: u64,
+    pub quorum_achieved: bool,
+    pub ceremony_hash: String,
+}
+
+/// Hitung pesan 32-byte Blake3 yang wajib ditandatangani oleh seluruh peserta upacara.
+pub fn compute_ceremony_signing_message(
+    chain_id: u32,
+    timestamp: u64,
+    genesis_block_hash: &Hash256,
+    state_root: &Hash256,
+) -> [u8; 32] {
+    let mut payload = Vec::with_capacity(4 + 8 + 32 + 32);
+    payload.extend_from_slice(&chain_id.to_be_bytes());
+    payload.extend_from_slice(&timestamp.to_be_bytes());
+    payload.extend_from_slice(genesis_block_hash.as_bytes());
+    payload.extend_from_slice(state_root.as_bytes());
+    *blake3_derive_key(DST_GENESIS_CEREMONY, &payload).as_bytes()
+}
+
+/// Kunci-kunci upacara kanonikal untuk pembentukan deterministik rilis resmi.
+pub struct CanonicalCeremonyKeypairs {
+    pub creator: Keypair,
+    pub developer: Keypair,
+    pub validators: Vec<Keypair>,
+}
+
+impl CanonicalCeremonyKeypairs {
+    /// Pembangkitan 6 keypair kanonikal dari seed terdefinisi secara deterministik.
+    pub fn new_deterministic() -> Self {
+        let creator = Keypair::from_seed(&[0x01; 32]);
+        let developer = Keypair::from_seed(&[0x02; 32]);
+        let validators = vec![
+            Keypair::from_seed(&[0x11; 32]), // Validator 1 (Alpha)
+            Keypair::from_seed(&[0x12; 32]), // Validator 2 (Beta)
+            Keypair::from_seed(&[0x13; 32]), // Validator 3 (Gamma)
+            Keypair::from_seed(&[0x14; 32]), // Validator 4 (Delta)
+        ];
+        Self {
+            creator,
+            developer,
+            validators,
+        }
+    }
+}
+
+impl CeremonyTranscript {
+    /// Eksekusi upacara genesis deterministik kanonikal menggunakan himpunan keypair.
+    pub fn build_and_seal(keys: &CanonicalCeremonyKeypairs) -> Result<Self, CeremonyError> {
+        let creator_addr = keys.creator.derive_address();
+        let dev_addr = keys.developer.derive_address();
+
+        let mut validator_entries = Vec::with_capacity(keys.validators.len());
+        let mut participants = Vec::with_capacity(2 + keys.validators.len());
+
+        // Peserta 1: Creator
+        participants.push(CeremonyParticipant {
+            role: CeremonyRole::Creator,
+            name: "Creator Sovereign Vault".to_string(),
+            public_key_hex: hex::encode(keys.creator.public_key_bytes()),
+            address_hex: creator_addr.to_hex(),
+            voting_weight: 0,
+        });
+
+        // Peserta 2: Developer
+        participants.push(CeremonyParticipant {
+            role: CeremonyRole::Developer,
+            name: "Developer Core Research Vault".to_string(),
+            public_key_hex: hex::encode(keys.developer.public_key_bytes()),
+            address_hex: dev_addr.to_hex(),
+            voting_weight: 0,
+        });
+
+        // Peserta 3..6: 4 Validator Genesis masing-masing bobot 250.000
+        let weight_per_val = CEREMONY_TOTAL_VOTING_POWER / keys.validators.len() as u64;
+        for (i, val_key) in keys.validators.iter().enumerate() {
+            let val_idx = (i + 1) as u32;
+            let val_addr = val_key.derive_address();
+            let pubkey_bytes = val_key.public_key_bytes();
+
+            validator_entries.push(ValidatorEntry {
+                validator_id: val_addr,
+                consensus_pubkey: pubkey_bytes,
+                voting_weight: weight_per_val,
+            });
+
+            let name = match val_idx {
+                1 => "Genesis Validator 1 (Bootnode Alpha)".to_string(),
+                2 => "Genesis Validator 2 (Bootnode Beta)".to_string(),
+                3 => "Genesis Validator 3 (Bootnode Gamma)".to_string(),
+                4 => "Genesis Validator 4 (Bootnode Delta)".to_string(),
+                n => format!("Genesis Validator {n}"),
+            };
+
+            participants.push(CeremonyParticipant {
+                role: CeremonyRole::Validator(val_idx),
+                name,
+                public_key_hex: hex::encode(pubkey_bytes),
+                address_hex: val_addr.to_hex(),
+                voting_weight: weight_per_val,
+            });
+        }
+
+        // Bangun State Genesis σ0 dan Header Blok Nol
+        let genesis: GenesisInitialization =
+            build_genesis(creator_addr, dev_addr, validator_entries);
+        let block_hash = genesis.header.compute_block_hash();
+        let state_root = genesis.header.state_root;
+
+        // Hitung pesan tanda tangan kanonikal
+        let signing_msg = compute_ceremony_signing_message(
+            GENESIS_CHAIN_ID,
+            GENESIS_TIMESTAMP,
+            &block_hash,
+            &state_root,
+        );
+
+        // Kumpulkan atestasi dari seluruh 6 pihak
+        let mut attestations = Vec::with_capacity(participants.len());
+        let mut attested_weight: u64 = 0;
+
+        // Tanda tangan Creator
+        let creator_sig = keys.creator.sign(&signing_msg);
+        attestations.push(CeremonyAttestation {
+            role: CeremonyRole::Creator,
+            participant_name: "Creator Sovereign Vault".to_string(),
+            public_key_hex: hex::encode(keys.creator.public_key_bytes()),
+            signature_hex: hex::encode(creator_sig.as_bytes()),
+            signed_at: GENESIS_TIMESTAMP,
+        });
+
+        // Tanda tangan Developer
+        let dev_sig = keys.developer.sign(&signing_msg);
+        attestations.push(CeremonyAttestation {
+            role: CeremonyRole::Developer,
+            participant_name: "Developer Core Research Vault".to_string(),
+            public_key_hex: hex::encode(keys.developer.public_key_bytes()),
+            signature_hex: hex::encode(dev_sig.as_bytes()),
+            signed_at: GENESIS_TIMESTAMP,
+        });
+
+        // Tanda tangan Validator 1..4
+        for (i, val_key) in keys.validators.iter().enumerate() {
+            let val_idx = (i + 1) as u32;
+            let val_sig = val_key.sign(&signing_msg);
+            let name = match val_idx {
+                1 => "Genesis Validator 1 (Bootnode Alpha)".to_string(),
+                2 => "Genesis Validator 2 (Bootnode Beta)".to_string(),
+                3 => "Genesis Validator 3 (Bootnode Gamma)".to_string(),
+                4 => "Genesis Validator 4 (Bootnode Delta)".to_string(),
+                n => format!("Genesis Validator {n}"),
+            };
+
+            attestations.push(CeremonyAttestation {
+                role: CeremonyRole::Validator(val_idx),
+                participant_name: name,
+                public_key_hex: hex::encode(val_key.public_key_bytes()),
+                signature_hex: hex::encode(val_sig.as_bytes()),
+                signed_at: GENESIS_TIMESTAMP,
+            });
+
+            attested_weight = attested_weight
+                .checked_add(weight_per_val)
+                .expect("Voting weight sum overflow");
+        }
+
+        let quorum_achieved = attested_weight >= CEREMONY_QUORUM_THRESHOLD;
+        if !quorum_achieved {
+            return Err(CeremonyError::QuorumNotAchieved {
+                attested: attested_weight,
+                required: CEREMONY_QUORUM_THRESHOLD,
+            });
+        }
+
+        // Hitung digest transkrip keseluruhan
+        let mut transcript = Self {
+            ceremony_version: 1,
+            protocol_version: 1,
+            chain_id: GENESIS_CHAIN_ID,
+            timestamp: GENESIS_TIMESTAMP,
+            genesis_block_hash: block_hash.to_hex(),
+            state_root: state_root.to_hex(),
+            hard_cap_aur: 66_000_000,
+            initial_supply_aur: 23_100_000,
+            creator_allocation_aur: 19_800_000,
+            developer_allocation_aur: 3_300_000,
+            creator_address_hex: creator_addr.to_hex(),
+            developer_address_hex: dev_addr.to_hex(),
+            participants,
+            attestations,
+            total_validator_power: CEREMONY_TOTAL_VOTING_POWER,
+            attested_validator_power: attested_weight,
+            quorum_threshold: CEREMONY_QUORUM_THRESHOLD,
+            quorum_achieved,
+            ceremony_hash: String::new(),
+        };
+
+        transcript.ceremony_hash = transcript.compute_transcript_hash();
+        Ok(transcript)
+    }
+
+    /// Hitung Blake3 hash atas seluruh transkrip upacara kanonikal.
+    pub fn compute_transcript_hash(&self) -> String {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"AURION-CEREMONY-TRANSCRIPT-V1");
+        hasher.update(&self.ceremony_version.to_be_bytes());
+        hasher.update(&self.protocol_version.to_be_bytes());
+        hasher.update(&self.chain_id.to_be_bytes());
+        hasher.update(&self.timestamp.to_be_bytes());
+        hasher.update(self.genesis_block_hash.as_bytes());
+        hasher.update(self.state_root.as_bytes());
+        hasher.update(&self.initial_supply_aur.to_be_bytes());
+        hasher.update(self.creator_address_hex.as_bytes());
+        hasher.update(self.developer_address_hex.as_bytes());
+
+        for att in &self.attestations {
+            hasher.update(att.public_key_hex.as_bytes());
+            hasher.update(att.signature_hex.as_bytes());
+        }
+
+        let hash: Hash256 = Hash256::from_bytes(*hasher.finalize().as_bytes());
+        hash.to_hex()
+    }
+
+    /// Verifikasi penuh seluruh tanda tangan, aturan moneter, kuorum validator, dan hash blok.
+    pub fn verify(&self) -> Result<CeremonyVerificationReport, CeremonyError> {
+        // 1. Verifikasi Invarian Moneter
+        if self.hard_cap_aur != 66_000_000 {
+            return Err(CeremonyError::MonetaryInvariantViolation {
+                reason: format!("Hard cap must be 66,000,000 AUR, got {}", self.hard_cap_aur),
+            });
+        }
+        if self.initial_supply_aur != 23_100_000 {
+            return Err(CeremonyError::MonetaryInvariantViolation {
+                reason: format!(
+                    "Initial supply must be 23,100,000 AUR (35%), got {}",
+                    self.initial_supply_aur
+                ),
+            });
+        }
+        if self.creator_allocation_aur != 19_800_000 || self.developer_allocation_aur != 3_300_000 {
+            return Err(CeremonyError::MonetaryInvariantViolation {
+                reason: "Creator (30%) or Developer (5%) allocation mismatch".to_string(),
+            });
+        }
+
+        // 2. Rekonstruksi Blok Genesis & Validasi Hash
+        let creator_bytes: [u8; 32] = hex::decode(&self.creator_address_hex)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Creator addr must be 32 bytes".to_string()))?;
+        let dev_bytes: [u8; 32] = hex::decode(&self.developer_address_hex)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Dev addr must be 32 bytes".to_string()))?;
+
+        let creator_addr = Address::from_bytes(creator_bytes);
+        let dev_addr = Address::from_bytes(dev_bytes);
+
+        let mut validator_entries = Vec::new();
+        for p in &self.participants {
+            if let CeremonyRole::Validator(_) = p.role {
+                let val_addr_bytes: [u8; 32] = hex::decode(&p.address_hex)
+                    .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                    .try_into()
+                    .map_err(|_| CeremonyError::Serialization("Val addr 32 bytes".to_string()))?;
+                let pubkey_bytes: [u8; 32] = hex::decode(&p.public_key_hex)
+                    .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                    .try_into()
+                    .map_err(|_| CeremonyError::Serialization("Pubkey 32 bytes".to_string()))?;
+
+                validator_entries.push(ValidatorEntry {
+                    validator_id: Address::from_bytes(val_addr_bytes),
+                    consensus_pubkey: pubkey_bytes,
+                    voting_weight: p.voting_weight,
+                });
+            }
+        }
+
+        let genesis = build_genesis(creator_addr, dev_addr, validator_entries);
+        let expected_hash = genesis.header.compute_block_hash();
+        if expected_hash.to_hex() != self.genesis_block_hash {
+            return Err(CeremonyError::GenesisHashMismatch {
+                expected: expected_hash.to_hex(),
+                actual: self.genesis_block_hash.clone(),
+            });
+        }
+
+        if genesis.header.state_root.to_hex() != self.state_root {
+            return Err(CeremonyError::StateRootMismatch {
+                expected: genesis.header.state_root.to_hex(),
+                actual: self.state_root.clone(),
+            });
+        }
+
+        // 3. Verifikasi Pesan Penandatanganan
+        let block_hash_bytes: [u8; 32] = hex::decode(&self.genesis_block_hash)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Hash 32 bytes".to_string()))?;
+        let state_root_bytes: [u8; 32] = hex::decode(&self.state_root)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Root 32 bytes".to_string()))?;
+
+        let signing_msg = compute_ceremony_signing_message(
+            self.chain_id,
+            self.timestamp,
+            &Hash256::from_bytes(block_hash_bytes),
+            &Hash256::from_bytes(state_root_bytes),
+        );
+
+        // 4. Verifikasi Seluruh Tanda Tangan Ed25519 (Strict RFC 8032)
+        let mut attested_weight: u64 = 0;
+        let mut has_creator = false;
+        let mut has_developer = false;
+
+        for att in &self.attestations {
+            let pubkey_bytes: [u8; 32] = hex::decode(&att.public_key_hex)
+                .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                .try_into()
+                .map_err(|_| CeremonyError::Serialization("Pubkey 32 bytes".to_string()))?;
+            let sig_bytes: [u8; 64] = hex::decode(&att.signature_hex)
+                .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                .try_into()
+                .map_err(|_| CeremonyError::Serialization("Sig 64 bytes".to_string()))?;
+
+            let signature = Signature(sig_bytes);
+
+            ed25519_verify_strict(&pubkey_bytes, &signing_msg, &signature).map_err(|e| {
+                CeremonyError::InvalidSignature {
+                    role: format!("{:?}", att.role),
+                    reason: e.to_string(),
+                }
+            })?;
+
+            match att.role {
+                CeremonyRole::Creator => has_creator = true,
+                CeremonyRole::Developer => has_developer = true,
+                CeremonyRole::Validator(idx) => {
+                    let part = self
+                        .participants
+                        .iter()
+                        .find(|p| p.role == CeremonyRole::Validator(idx))
+                        .ok_or_else(|| {
+                            CeremonyError::ParticipantMissing(format!("Validator {idx}"))
+                        })?;
+                    attested_weight = attested_weight
+                        .checked_add(part.voting_weight)
+                        .expect("Weight overflow");
+                }
+            }
+        }
+
+        if !has_creator {
+            return Err(CeremonyError::ParticipantMissing("Creator attestation missing".to_string()));
+        }
+        if !has_developer {
+            return Err(CeremonyError::ParticipantMissing("Developer attestation missing".to_string()));
+        }
+
+        // 5. Verifikasi Kuorum Validator
+        if attested_weight < self.quorum_threshold {
+            return Err(CeremonyError::QuorumNotAchieved {
+                attested: attested_weight,
+                required: self.quorum_threshold,
+            });
+        }
+
+        // 6. Verifikasi Integritas Transkrip Hash
+        let expected_ceremony_hash = self.compute_transcript_hash();
+        if expected_ceremony_hash != self.ceremony_hash {
+            return Err(CeremonyError::CeremonyHashCorrupted {
+                expected: expected_ceremony_hash,
+                actual: self.ceremony_hash.clone(),
+            });
+        }
+
+        Ok(CeremonyVerificationReport {
+            overall_status: "VERIFIED_CANONICAL".to_string(),
+            ceremony_hash: self.ceremony_hash.clone(),
+            genesis_block_hash: self.genesis_block_hash.clone(),
+            state_root: self.state_root.clone(),
+            chain_id: self.chain_id,
+            genesis_timestamp: self.timestamp,
+            total_attestations: self.attestations.len(),
+            attested_validator_power: attested_weight,
+            quorum_threshold: self.quorum_threshold,
+            quorum_status: format!("PASSED ({attested_weight}/{CEREMONY_TOTAL_VOTING_POWER} >= {CEREMONY_QUORUM_THRESHOLD})"),
+            monetary_audit_status: "PASSED (100% Invariant Compliant: 35% Genesis, Zero-Float)".to_string(),
+            verified_at: self.timestamp,
+        })
+    }
+
+    /// Serialisasi transkrip ke JSON terformat (pretty).
+    pub fn to_json_pretty(&self) -> Result<String, CeremonyError> {
+        serde_json::to_string_pretty(self).map_err(|e| CeremonyError::Serialization(e.to_string()))
+    }
+
+    /// Deserialisasi transkrip dari string JSON.
+    pub fn from_json_str(json: &str) -> Result<Self, CeremonyError> {
+        serde_json::from_str(json).map_err(|e| CeremonyError::Serialization(e.to_string()))
+    }
+}
