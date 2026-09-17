@@ -378,6 +378,33 @@ Dokumentasi lengkap protokol Aurion terbagi ke dalam dua pilar utama:
 20. [`19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md`](docs/Application-Rules-Layer/application/19-L4-INTEROPERABILITY-ARCHITECTURE-BLUEPRINT.md): Blueprint L4 Interoperability & Cross-Domain Ecosystem.
 21. [`20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md`](docs/Application-Rules-Layer/application/20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md): Blueprint L5 Global Distributed Infrastructure.
 
+### C. Operational Runbooks & Deployment Guides (`docs/operations/`)
+1. [`DEVNET_DEPLOYMENT_GUIDE.md`](docs/operations/DEVNET_DEPLOYMENT_GUIDE.md): Panduan Continuous Deployment Devnet 6-Simpul.
+2. [`MULTI_REGION_TESTNET_GUIDE.md`](docs/operations/MULTI_REGION_TESTNET_GUIDE.md): Panduan Testnet Multi-Region Lintas-Benua & Fast-Sync.
+3. [`PUBLIC_TESTNET_GUIDE.md`](docs/operations/PUBLIC_TESTNET_GUIDE.md): Panduan Publik, Sandbox Web Dashboard & Faucet.
+4. [`RELEASE_CANDIDATE_GUIDE.md`](docs/operations/RELEASE_CANDIDATE_GUIDE.md): Prosedur Verifikasi Release Candidate `v1.0.0-rc1`.
+5. [`GENESIS_CEREMONY_GUIDE.md`](docs/operations/GENESIS_CEREMONY_GUIDE.md): Tata Cara Upacara Genesis & Multi-Party Attestation.
+6. [`MAINNET_LAUNCH_GUIDE.md`](docs/operations/MAINNET_LAUNCH_GUIDE.md): Runbook Peluncuran Produksi Mainnet Aurion.
+7. [`POST_MAINNET_OPERATIONS_GUIDE.md`](docs/operations/POST_MAINNET_OPERATIONS_GUIDE.md): Panduan Operasional Pasca-Peluncuran & Tata Kelola On-Chain.
+8. [`CAPACITY_MODEL.md`](docs/operations/CAPACITY_MODEL.md): Model Pengukuran Empiris Throughput & Latensi BFT.
+9. [`CONFORMANCE_MATRIX.md`](docs/operations/CONFORMANCE_MATRIX.md): Matriks Kepatuhan 54 Pilar Multi-Layer L1–L5.
+10. [`METRICS_SPECIFICATION.md`](docs/operations/METRICS_SPECIFICATION.md): Kamus Metrik Prometheus OpenMetrics & Scraping Config.
+
+### D. Comprehensive Security Audit Dossier (`docs/audit/`)
+1. [`00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md`](docs/audit/00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md): Ringkasan Eksekutif, Ruang Lingkup, & Matriks Temuan (100% Pass).
+2. [`01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md`](docs/audit/01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md): Audit Kriptografi Blake3, RFC 8032 Non-Malleability, BIP-39.
+3. [`02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md`](docs/audit/02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md): Audit Konsensus Single-Slot BFT, Ekuivokasi, Kuorum $>2/3$.
+4. [`03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md`](docs/audit/03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md): Audit STF, Batasan 66M Cap, Pembagian Fee 20/80, SMT Blake3.
+5. [`04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md`](docs/audit/04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md): Audit AVM Sandbox, Batas Memori 1MB, Stack 1024, Gas Metering.
+6. [`05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md`](docs/audit/05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md): Audit Framing `AUR0`, Batas Ukuran Payload, Isolasi Sentry.
+7. [`06-STORAGE-AND-ACID-PERSISTENCE-AUDIT.md`](docs/audit/06-STORAGE-AND-ACID-PERSISTENCE-AUDIT.md): Audit Storage Murni Rust `redb 4.3`, Komit Atomik, Crash Recovery.
+8. [`07-SCALING-AND-L2-ROLLUP-AUDIT.md`](docs/audit/07-SCALING-AND-L2-ROLLUP-AUDIT.md): Audit Sequencer L2, Komitmen DA Blake3, Konservasi Vault Bridge.
+9. [`08-SPECIALIZED-L3-AND-CROSS-CHAIN-L4-AUDIT.md`](docs/audit/08-SPECIALIZED-L3-AND-CROSS-CHAIN-L4-AUDIT.md): Audit L3 Domains, Universal Messaging L4 `AUL4`, Multi-Prover 2-of-3.
+10. [`09-GLOBAL-INFRASTRUCTURE-L5-AUDIT.md`](docs/audit/09-GLOBAL-INFRASTRUCTURE-L5-AUDIT.md): Audit 2D Reed-Solomon DAS, CAS PoR, Sovereign DIDs, Payment Channels.
+11. [`10-SECURITY-HARDENING-AND-THREAT-MODEL.md`](docs/audit/10-SECURITY-HARDENING-AND-THREAT-MODEL.md): Model Ancaman Formal STRIDE/DREAD & Kebersihan Zeroize Memori.
+12. [`11-EXTERNAL-SECURITY-AUDIT-ATTESTATION.md`](docs/audit/11-EXTERNAL-SECURITY-AUDIT-ATTESTATION.md): Dokumen Atestasi Independen 10 Vektor Eksploitasi Adversarial.
+13. [`12-AUTOMATED-AUDIT-SUITE-AND-TEST-EVIDENCE.md`](docs/audit/12-AUTOMATED-AUDIT-SUITE-AND-TEST-EVIDENCE.md): Bukti Empiris Eksekusi Test Runner Internal & 260+ Tests PASS.
+
 ---
 
 ## 8. Panduan Kompilasi & Verifikasi
