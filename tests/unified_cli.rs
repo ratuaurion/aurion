@@ -381,3 +381,42 @@ async fn test_cli_dispatch_devnet_subcommands_text_and_json() {
     ]).await;
     assert!(res.is_ok());
 }
+
+#[tokio::test]
+async fn test_cli_dispatch_testnet_and_snapshot_subcommands() {
+    // 1. Testnet Init & Status (Text & JSON)
+    let res = dispatch(CliCommand::Testnet(vec!["init".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Testnet(vec!["init".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(CliCommand::Testnet(vec!["status".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+    let res = dispatch(CliCommand::Testnet(vec!["status".to_string()]), OutputFormat::Json).await;
+    assert!(res.is_ok());
+
+    let res = dispatch(CliCommand::Testnet(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 2. Snapshot Help
+    let res = dispatch(CliCommand::Snapshot(vec!["help".to_string()]), OutputFormat::Text).await;
+    assert!(res.is_ok());
+
+    // 3. CLI parsing
+    assert_eq!(
+        CliCommand::parse(&["testnet".to_string(), "status".to_string()]),
+        CliCommand::Testnet(vec!["status".to_string()])
+    );
+    assert_eq!(
+        CliCommand::parse(&["snapshot".to_string(), "inspect".to_string()]),
+        CliCommand::Snapshot(vec!["inspect".to_string()])
+    );
+
+    let res = run_cli(&[
+        "testnet".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ]).await;
+    assert!(res.is_ok());
+}

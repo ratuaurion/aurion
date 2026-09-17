@@ -3,6 +3,7 @@
 pub mod block;
 pub mod certificate;
 pub mod engine;
+pub mod epoch;
 pub mod header;
 pub mod vote;
 
@@ -11,5 +12,9 @@ pub use certificate::{
     CertificateError, CommitCertificate, ValidatorEntry, ValidatorSet, VALIDATOR_ENTRY_BYTES,
 };
 pub use engine::{BftEngine, BftEngineError};
+pub use epoch::{
+    compute_epoch_id, is_epoch_boundary, rotate_validator_set, EpochError, EpochInfo,
+    EpochTransition, DEFAULT_EPOCH_BLOCKS,
+};
 pub use header::{BlockHeader, BLOCK_HEADER_BYTES};
 pub use vote::{Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE, VOTE_BYTES};
