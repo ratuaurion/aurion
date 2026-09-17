@@ -189,19 +189,60 @@ impl MempoolEngine {
     }
 
     /// Mengemas transaksi berprioritas fee tertinggi untuk dijadikan kandidat blok.
+    /// Memastikan transaksi dari pengirim yang sama dieksekusi dengan urutan nonce menaik,
+    /// dan antrean antar-pengirim diprioritaskan berdasarkan fee tertinggi secara deterministik.
     pub fn pack_block_candidate(&self, max_payload_bytes: usize) -> Vec<Transaction> {
-        let mut sorted_entries: Vec<&MempoolEntry> = self.entries.values().collect();
-        // Urutkan dari fee tertinggi ke terendah
-        sorted_entries.sort_by_key(|a| std::cmp::Reverse(a.tx.fee));
+        // Kelompokkan transaksi per pengirim
+        let mut per_sender: std::collections::BTreeMap<Address, Vec<Transaction>> =
+            std::collections::BTreeMap::new();
+        for entry in self.entries.values() {
+            per_sender
+                .entry(entry.tx.sender)
+                .or_default()
+                .push(entry.tx.clone());
+        }
+
+        // Urutkan setiap antrean pengirim berdasarkan nonce menaik
+        // Disimpan dalam urutan reverse agar pop() mengambil nonce terkecil terlebih dahulu (O(1))
+        for queue in per_sender.values_mut() {
+            queue.sort_by_key(|tx| std::cmp::Reverse(tx.nonce));
+        }
 
         let mut candidate_txs = Vec::new();
         let mut current_bytes = 0;
 
-        for entry in sorted_entries {
-            let tx_size = 148 + entry.tx.payload.len();
+        loop {
+            // Cari pengirim dengan transaksi terdepan (head) ber-fee tertinggi secara deterministik
+            let mut best_sender: Option<Address> = None;
+            let mut best_fee = Quantum::ZERO;
+
+            for (sender, queue) in &per_sender {
+                if let Some(head_tx) = queue.last() {
+                    let is_better = match best_sender {
+                        None => true,
+                        Some(_) => head_tx.fee > best_fee,
+                    };
+                    if is_better {
+                        best_sender = Some(*sender);
+                        best_fee = head_tx.fee;
+                    }
+                }
+            }
+
+            let sender = match best_sender {
+                Some(s) => s,
+                None => break,
+            };
+
+            let queue = per_sender.get_mut(&sender).unwrap();
+            let next_tx = queue.pop().unwrap();
+
+            let tx_size = 148 + next_tx.payload.len();
             if current_bytes + tx_size <= max_payload_bytes {
-                candidate_txs.push(entry.tx.clone());
                 current_bytes += tx_size;
+                candidate_txs.push(next_tx);
+            } else {
+                break;
             }
         }
 
