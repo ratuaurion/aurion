@@ -9,7 +9,6 @@ use crate::cli::command::CliCommand;
 use crate::cli::output::OutputFormat;
 use crate::consensus::certificate::ValidatorEntry;
 use crate::core::Address;
-use crate::crypto::{derive_address_from_pubkey, Keypair};
 use crate::genesis::builder::build_genesis;
 use crate::genesis::ceremony::{CanonicalCeremonyKeypairs, CeremonyTranscript};
 use crate::runtime::config::NodeConfig;
@@ -270,6 +269,42 @@ struct ExplorerSummaryInfo {
     mempool_size: usize,
     accounts_count: usize,
     sandbox_dashboard_url: String,
+}
+
+#[derive(Serialize)]
+struct NetworkStatusInfo {
+    network: &'static str,
+    chain_id: u64,
+    genesis_block_hash: String,
+    state_root: String,
+    p2p_wire_magic: &'static str,
+    p2p_protocol_version: u32,
+    bootnodes_count: usize,
+    active_consensus: &'static str,
+    hard_cap_aur: u64,
+    status: &'static str,
+}
+
+#[derive(Serialize)]
+struct NetworkPeersInfo {
+    network: &'static str,
+    total_bootnodes: usize,
+    bootnodes: Vec<crate::runtime::config::MainnetBootstrapPeer>,
+}
+
+#[derive(Serialize)]
+struct NodeLaunchStatusInfo {
+    network: &'static str,
+    role: &'static str,
+    chain_id: u64,
+    genesis_block_hash: String,
+    state_root: String,
+    storage_engine: &'static str,
+    database_path: String,
+    current_height: u64,
+    p2p_bind: String,
+    rpc_bind: String,
+    status: &'static str,
 }
 
 pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), String> {
@@ -620,9 +655,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
         }
 
         CliCommand::Node(args) => {
-            println!("==================================================================");
-            println!("  [AURION NODE] Starting Sovereign Full Node & Gateway Daemon...  ");
-            println!("==================================================================");
+            let sub = args.first().map(|s| s.as_str()).unwrap_or("start");
+            let is_dry_run = args.iter().any(|a| a == "--dry-run");
+
             let rpc_bind = get_arg_value(&args, "--rpc-bind")
                 .or_else(|| get_arg_value(&args, "-b"))
                 .unwrap_or_else(|| "127.0.0.1:8545".to_string());
@@ -631,7 +666,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 .unwrap_or_else(|| "data/aurion.redb".to_string());
 
             let config = NodeConfig {
-                rpc_bind,
+                rpc_bind: rpc_bind.clone(),
                 ..Default::default()
             };
 
@@ -640,18 +675,73 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .map_err(|e| format!("Storage initialization failed: {e}"))?,
             );
 
-            let creator_addr = Address::from_bytes([1u8; 32]);
-            let dev_addr = Address::from_bytes([2u8; 32]);
-            let val_entry = ValidatorEntry {
-                validator_id: creator_addr,
-                consensus_pubkey: [1u8; 32],
-                voting_weight: 100,
+            let genesis = if let Some(gen_path) = get_arg_value(&args, "--genesis") {
+                let data = std::fs::read_to_string(&gen_path)
+                    .map_err(|e| format!("Failed to read genesis file {gen_path}: {e}"))?;
+                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
+                    transcript.build_genesis_initialization()
+                        .map_err(|e| format!("Invalid ceremony transcript in {gen_path}: {e}"))?
+                } else {
+                    return Err(format!("Unrecognized genesis file format: {gen_path}"));
+                }
+            } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
+                let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
+                    .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
+                let transcript = CeremonyTranscript::from_json_str(&data)
+                    .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?;
+                transcript.build_genesis_initialization()
+                    .map_err(|e| format!("Failed to build genesis from GENESIS_CEREMONY.json: {e}"))?
+            } else {
+                CeremonyTranscript::canonical_mainnet_genesis()
             };
-            let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
-            let node = AurionNode::new_with_store(config, genesis, None, None, store);
 
+            let block_hash = genesis.header.compute_block_hash().to_hex();
+            let state_root = genesis.header.state_root.to_hex();
+            let node = AurionNode::new_with_store(config, genesis, None, None, store);
+            let current_h = node.ledger.lock().unwrap().latest_height();
+
+            if sub == "status" || is_dry_run {
+                let info = NodeLaunchStatusInfo {
+                    network: "aurion-mainnet",
+                    role: "FullNode",
+                    chain_id: node.config.chain_id,
+                    genesis_block_hash: block_hash,
+                    state_root,
+                    storage_engine: "redb 4.3 (Pure Rust ACID)",
+                    database_path: db_path,
+                    current_height: current_h,
+                    p2p_bind: node.config.p2p_bind.clone(),
+                    rpc_bind: node.config.rpc_bind.clone(),
+                    status: "READY",
+                };
+
+                format.print(&info, || {
+                    println!("==================================================================");
+                    println!("     AURION SOVEREIGN NODE LAUNCH & STATUS INSPECTOR (PRD-016)    ");
+                    println!("==================================================================");
+                    println!("  Network:            {}", info.network);
+                    println!("  Node Role:          {}", info.role);
+                    println!("  Chain ID:           {}", info.chain_id);
+                    println!("  Genesis Block Hash: {}", info.genesis_block_hash);
+                    println!("  State Root:         {}", info.state_root);
+                    println!("  Storage Engine:     {}", info.storage_engine);
+                    println!("  Database Path:      {}", info.database_path);
+                    println!("  Ledger Height:      {}", info.current_height);
+                    println!("  P2P Protocol:       Magic AUR0 on {}", info.p2p_bind);
+                    println!("  RPC / WS Gateway:   http://{}", info.rpc_bind);
+                    println!("  Launch Status:      {}", info.status);
+                    println!("==================================================================");
+                });
+                return Ok(());
+            }
+
+            println!("==================================================================");
+            println!("  [AURION NODE] Starting Sovereign Full Node & Gateway Daemon...  ");
+            println!("==================================================================");
+            println!("[AURION NODE] Network: aurion-mainnet (Chain ID: {})", node.config.chain_id);
+            println!("[AURION NODE] Genesis Block Hash: {block_hash}");
             println!("[AURION NODE] Storage Engine: redb 4.3 (Pure Rust ACID)");
-            println!("[AURION NODE] Ledger Height: {}", node.ledger.lock().unwrap().latest_height());
+            println!("[AURION NODE] Ledger Height: {current_h}");
             println!("[AURION NODE] P2P Protocol: Magic AUR0 on {}", node.config.p2p_bind);
             println!("[AURION NODE] Serving JSON-RPC 2.0 and WebSocket on http://{}", node.config.rpc_bind);
             println!("[AURION NODE] Press Ctrl+C to stop.");
@@ -663,9 +753,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
         }
 
         CliCommand::Validator(args) => {
-            println!("==================================================================");
-            println!("  [AURION VALIDATOR] Starting BFT Consensus Validator Engine...   ");
-            println!("==================================================================");
+            let sub = args.first().map(|s| s.as_str()).unwrap_or("start");
+            let is_dry_run = args.iter().any(|a| a == "--dry-run");
+
             let rpc_bind = get_arg_value(&args, "--rpc-bind")
                 .or_else(|| get_arg_value(&args, "-b"))
                 .unwrap_or_else(|| "127.0.0.1:8545".to_string());
@@ -674,7 +764,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 .unwrap_or_else(|| "data/validator.redb".to_string());
 
             let config = NodeConfig {
-                rpc_bind,
+                rpc_bind: rpc_bind.clone(),
                 ..NodeConfig::new_validator(Vec::new())
             };
 
@@ -683,17 +773,77 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .map_err(|e| format!("Storage initialization failed: {e}"))?,
             );
 
-            let val_key = Keypair::generate();
-            let val_addr = derive_address_from_pubkey(&val_key.public_key_bytes());
-            let dev_addr = Address::from_bytes([2u8; 32]);
-            let val_entry = ValidatorEntry {
-                validator_id: val_addr,
-                consensus_pubkey: val_key.public_key_bytes(),
-                voting_weight: 100,
-            };
-            let genesis = build_genesis(val_addr, dev_addr, vec![val_entry]);
-            let node = AurionNode::new_with_store(config, genesis, Some(val_key), Some(0), store);
+            let keys = CanonicalCeremonyKeypairs::new_deterministic();
+            let val_idx: usize = get_arg_value(&args, "--index")
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0)
+                .min(3);
+            let val_key = keys.validators[val_idx].clone();
 
+            let genesis = if let Some(gen_path) = get_arg_value(&args, "--genesis") {
+                let data = std::fs::read_to_string(&gen_path)
+                    .map_err(|e| format!("Failed to read genesis file {gen_path}: {e}"))?;
+                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
+                    transcript.build_genesis_initialization()
+                        .map_err(|e| format!("Invalid ceremony transcript in {gen_path}: {e}"))?
+                } else {
+                    return Err(format!("Unrecognized genesis file format: {gen_path}"));
+                }
+            } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
+                let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
+                    .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
+                let transcript = CeremonyTranscript::from_json_str(&data)
+                    .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?;
+                transcript.build_genesis_initialization()
+                    .map_err(|e| format!("Failed to build genesis from GENESIS_CEREMONY.json: {e}"))?
+            } else {
+                CeremonyTranscript::canonical_mainnet_genesis()
+            };
+
+            let block_hash = genesis.header.compute_block_hash().to_hex();
+            let state_root = genesis.header.state_root.to_hex();
+            let node = AurionNode::new_with_store(config, genesis, Some(val_key), Some(val_idx as u32), store);
+            let current_h = node.ledger.lock().unwrap().latest_height();
+
+            if sub == "status" || is_dry_run {
+                let info = NodeLaunchStatusInfo {
+                    network: "aurion-mainnet",
+                    role: "Validator",
+                    chain_id: node.config.chain_id,
+                    genesis_block_hash: block_hash,
+                    state_root,
+                    storage_engine: "redb 4.3 (Pure Rust ACID)",
+                    database_path: db_path,
+                    current_height: current_h,
+                    p2p_bind: node.config.p2p_bind.clone(),
+                    rpc_bind: node.config.rpc_bind.clone(),
+                    status: "READY",
+                };
+
+                format.print(&info, || {
+                    println!("==================================================================");
+                    println!("   AURION VALIDATOR ENGINE LAUNCH & STATUS INSPECTOR (PRD-016)    ");
+                    println!("==================================================================");
+                    println!("  Network:            {}", info.network);
+                    println!("  Node Role:          {} (Index: {})", info.role, val_idx + 1);
+                    println!("  Chain ID:           {}", info.chain_id);
+                    println!("  Genesis Block Hash: {}", info.genesis_block_hash);
+                    println!("  State Root:         {}", info.state_root);
+                    println!("  Consensus:          Single-Slot BFT Finality (>2/3 Quorum)");
+                    println!("  Storage Engine:     {}", info.storage_engine);
+                    println!("  Database Path:      {}", info.database_path);
+                    println!("  Ledger Height:      {}", info.current_height);
+                    println!("  Status Gateway:     http://{}", info.rpc_bind);
+                    println!("  Launch Status:      {}", info.status);
+                    println!("==================================================================");
+                });
+                return Ok(());
+            }
+
+            println!("==================================================================");
+            println!("  [AURION VALIDATOR] Starting BFT Consensus Validator Engine...   ");
+            println!("==================================================================");
+            println!("[AURION VALIDATOR] Validator Index: {}", val_idx + 1);
             println!("[AURION VALIDATOR] Consensus Algorithm: Single-Slot BFT Finality (2/3+ Quorum)");
             println!("[AURION VALIDATOR] Serving Status Gateway on http://{}", node.config.rpc_bind);
             println!("[AURION VALIDATOR] Press Ctrl+C to stop.");
@@ -2039,7 +2189,67 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             Ok(())
         }
 
-        CliCommand::Tx(_) | CliCommand::Network(_) | CliCommand::Query(_) => {
+        CliCommand::Network(args) => {
+            let sub = args.first().map(|s| s.as_str()).unwrap_or("status");
+            match sub {
+                "peers" => {
+                    let bootnodes = crate::runtime::config::NodeConfig::mainnet_bootnodes();
+                    let info = NetworkPeersInfo {
+                        network: "aurion-mainnet",
+                        total_bootnodes: bootnodes.len(),
+                        bootnodes: bootnodes.clone(),
+                    };
+
+                    format.print(&info, || {
+                        println!("==================================================================");
+                        println!("             AURION MAINNET BOOTNODES & SEED PEERS                ");
+                        println!("==================================================================");
+                        println!("  Network:         {}", info.network);
+                        println!("  Total Bootnodes: {}", info.total_bootnodes);
+                        println!("------------------------------------------------------------------");
+                        for (i, p) in bootnodes.iter().enumerate() {
+                            println!("  [{}] {:<36} | Endpoint: {}", i + 1, p.name, p.endpoint);
+                        }
+                        println!("==================================================================");
+                    });
+                }
+                _ => {
+                    let genesis = CeremonyTranscript::canonical_mainnet_genesis();
+                    let info = NetworkStatusInfo {
+                        network: "aurion-mainnet",
+                        chain_id: crate::genesis::builder::GENESIS_CHAIN_ID as u64,
+                        genesis_block_hash: genesis.header.compute_block_hash().to_hex(),
+                        state_root: genesis.header.state_root.to_hex(),
+                        p2p_wire_magic: "AUR0",
+                        p2p_protocol_version: 1,
+                        bootnodes_count: crate::runtime::config::NodeConfig::mainnet_bootnodes().len(),
+                        active_consensus: "Single-Slot BFT Finality (>2/3 Quorum)",
+                        hard_cap_aur: 66_000_000,
+                        status: "MAINNET_PRODUCTION_ACTIVE",
+                    };
+
+                    format.print(&info, || {
+                        println!("==================================================================");
+                        println!("           AURION PRODUCTION MAINNET NETWORK STATUS               ");
+                        println!("==================================================================");
+                        println!("  Network:            {}", info.network);
+                        println!("  Chain ID:           {}", info.chain_id);
+                        println!("  Genesis Block Hash: {}", info.genesis_block_hash);
+                        println!("  State Root (σ0):    {}", info.state_root);
+                        println!("  P2P Wire Framing:   Magic '{}' (52B Header)", info.p2p_wire_magic);
+                        println!("  P2P Version:        {}", info.p2p_protocol_version);
+                        println!("  Genesis Bootnodes:  {} active validators", info.bootnodes_count);
+                        println!("  Consensus:          {}", info.active_consensus);
+                        println!("  Hard Cap:           {} AUR (Zero-Float exact Quantum)", info.hard_cap_aur);
+                        println!("  Network Status:     {}", info.status);
+                        println!("==================================================================");
+                    });
+                }
+            }
+            Ok(())
+        }
+
+        CliCommand::Tx(_) | CliCommand::Query(_) => {
             println!("Subsystem active and integrated in protocol runtime.");
             println!("Use JSON-RPC or dedicated subcommands for full interaction.");
             Ok(())

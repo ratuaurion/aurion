@@ -524,4 +524,52 @@ impl CeremonyTranscript {
     pub fn from_json_str(json: &str) -> Result<Self, CeremonyError> {
         serde_json::from_str(json).map_err(|e| CeremonyError::Serialization(e.to_string()))
     }
+
+    /// Merekonstruksi `GenesisInitialization` lengkap dari transkrip yang terverifikasi.
+    pub fn build_genesis_initialization(&self) -> Result<GenesisInitialization, CeremonyError> {
+        let creator_bytes: [u8; 32] = hex::decode(&self.creator_address_hex)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Creator addr must be 32 bytes".to_string()))?;
+        let dev_bytes: [u8; 32] = hex::decode(&self.developer_address_hex)
+            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+            .try_into()
+            .map_err(|_| CeremonyError::Serialization("Dev addr must be 32 bytes".to_string()))?;
+
+        let creator_addr = Address::from_bytes(creator_bytes);
+        let dev_addr = Address::from_bytes(dev_bytes);
+
+        let mut validator_entries = Vec::new();
+        for p in &self.participants {
+            if let CeremonyRole::Validator(_) = p.role {
+                let val_addr_bytes: [u8; 32] = hex::decode(&p.address_hex)
+                    .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                    .try_into()
+                    .map_err(|_| CeremonyError::Serialization("Val addr 32 bytes".to_string()))?;
+                let pubkey_bytes: [u8; 32] = hex::decode(&p.public_key_hex)
+                    .map_err(|e| CeremonyError::Serialization(e.to_string()))?
+                    .try_into()
+                    .map_err(|_| CeremonyError::Serialization("Pubkey 32 bytes".to_string()))?;
+
+                validator_entries.push(ValidatorEntry {
+                    validator_id: Address::from_bytes(val_addr_bytes),
+                    consensus_pubkey: pubkey_bytes,
+                    voting_weight: p.voting_weight,
+                });
+            }
+        }
+
+        let genesis = build_genesis(creator_addr, dev_addr, validator_entries);
+        Ok(genesis)
+    }
+
+    /// Membangun inisialisasi Mainnet kanonikal dari kunci seremonial bawaan.
+    pub fn canonical_mainnet_genesis() -> GenesisInitialization {
+        let keys = CanonicalCeremonyKeypairs::new_deterministic();
+        let transcript = CeremonyTranscript::build_and_seal(&keys)
+            .expect("Deterministic ceremony sealing must not fail");
+        transcript
+            .build_genesis_initialization()
+            .expect("Deterministic genesis reconstruction must succeed")
+    }
 }

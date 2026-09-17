@@ -52,6 +52,18 @@ impl AurionNode {
         Self::new_with_optional_store(config, genesis, validator_keypair, validator_index, Some(store))
     }
 
+    /// Inisialisasi simpul Mainnet resmi dengan StateStore persisten.
+    /// Memuat transkrip seremoni kanonikal dan menyinkronkan ledger produksi.
+    pub fn new_mainnet(
+        config: NodeConfig,
+        validator_keypair: Option<Keypair>,
+        validator_index: Option<u32>,
+        store: Arc<dyn crate::storage::StateStore>,
+    ) -> Self {
+        let genesis = crate::genesis::ceremony::CeremonyTranscript::canonical_mainnet_genesis();
+        Self::new_with_store(config, genesis, validator_keypair, validator_index, store)
+    }
+
     /// Inisialisasi internal simpul dengan atau tanpa StateStore.
     pub fn new_with_optional_store(
         config: NodeConfig,

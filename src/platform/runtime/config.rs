@@ -1,7 +1,9 @@
 //! Konfigurasi runtime terpadu Aurion dan Topologi Sentry Node.
 //! Mematuhi Dokumen 12 (12-OPERATIONAL-RULES.md).
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeRole {
     /// Simpul publik standar penerima lalu lintas P2P dan RPC.
     FullNode,
@@ -11,7 +13,14 @@ pub enum NodeRole {
     Validator,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MainnetBootstrapPeer {
+    pub name: String,
+    pub endpoint: String,
+    pub public_key_hex: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub chain_id: u64,
     pub role: NodeRole,
@@ -27,7 +36,7 @@ pub struct NodeConfig {
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
-            chain_id: 1, // Mainnet
+            chain_id: 1001, // Canonical Mainnet Chain ID (matching GENESIS_CHAIN_ID)
             role: NodeRole::FullNode,
             p2p_bind: "0.0.0.0:9000".to_string(),
             rpc_bind: "127.0.0.1:8545".to_string(),
@@ -63,5 +72,31 @@ impl NodeConfig {
 
     pub fn is_sentry(&self) -> bool {
         self.role == NodeRole::Sentry
+    }
+
+    /// Daftar simpul bootstrap / genesis validator bootnodes resmi Mainnet.
+    pub fn mainnet_bootnodes() -> Vec<MainnetBootstrapPeer> {
+        vec![
+            MainnetBootstrapPeer {
+                name: "Genesis Validator 1 (Bootnode Alpha)".to_string(),
+                endpoint: "seed1.aurion.network:9000".to_string(),
+                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737".to_string(),
+            },
+            MainnetBootstrapPeer {
+                name: "Genesis Validator 2 (Bootnode Beta)".to_string(),
+                endpoint: "seed2.aurion.network:9000".to_string(),
+                public_key_hex: "204040e364c10f2bec9c1fe500a1cd4c247c89d650a01ed7e82caba867877c21".to_string(),
+            },
+            MainnetBootstrapPeer {
+                name: "Genesis Validator 3 (Bootnode Gamma)".to_string(),
+                endpoint: "seed3.aurion.network:9000".to_string(),
+                public_key_hex: "66cd608b928b88e50e0efeaa33faf1c43cefe07294b0b87e9fe0aba6a3cf7633".to_string(),
+            },
+            MainnetBootstrapPeer {
+                name: "Genesis Validator 4 (Bootnode Delta)".to_string(),
+                endpoint: "seed4.aurion.network:9000".to_string(),
+                public_key_hex: "20828bf5c5bdcacb684863336c202fb5599da48be5596615742170705beca9f7".to_string(),
+            },
+        ]
     }
 }

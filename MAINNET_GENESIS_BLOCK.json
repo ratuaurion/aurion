@@ -1,0 +1,75 @@
+{
+  "genesis_block": {
+    "header": {
+      "version": 1,
+      "height": 0,
+      "chain_id": 1001,
+      "timestamp": 1773532800,
+      "prev_block_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "tx_merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
+      "state_root": "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850",
+      "block_hash": "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9"
+    },
+    "transactions": [],
+    "commit_certificate": null
+  },
+  "metadata": {
+    "network": "aurion-mainnet",
+    "protocol_version": 1,
+    "ceremony_transcript_hash": "f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380",
+    "hard_cap_aur": 66000000,
+    "initial_supply_aur": 23100000,
+    "initial_supply_quanta": 2310000000000000,
+    "creator_allocation_aur": 19800000,
+    "developer_allocation_aur": 3300000,
+    "total_validator_power": 1000000,
+    "quorum_threshold": 666667,
+    "genesis_validators_count": 4
+  },
+  "genesis_allocations": [
+    {
+      "role": "Creator",
+      "name": "Creator Sovereign Vault",
+      "address_hex": "cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad",
+      "allocation_aur": 19800000,
+      "balance_quanta": 1980000000000000
+    },
+    {
+      "role": "Developer",
+      "name": "Developer Core Research Vault",
+      "address_hex": "708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc",
+      "allocation_aur": 3300000,
+      "balance_quanta": 330000000000000
+    }
+  ],
+  "genesis_validators": [
+    {
+      "index": 1,
+      "name": "Genesis Validator 1 (Bootnode Alpha)",
+      "validator_id_hex": "d7964072865ad2ef842c6116c8f581872606f98bfce39e3970032cfce47b1823",
+      "consensus_pubkey_hex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
+      "voting_weight": 250000
+    },
+    {
+      "index": 2,
+      "name": "Genesis Validator 2 (Bootnode Beta)",
+      "validator_id_hex": "b97243b506752b4ab653c178897fa46d4a8128731079603d6660253e98e8a940",
+      "consensus_pubkey_hex": "204040e364c10f2bec9c1fe500a1cd4c247c89d650a01ed7e82caba867877c21",
+      "voting_weight": 250000
+    },
+    {
+      "index": 3,
+      "name": "Genesis Validator 3 (Bootnode Gamma)",
+      "validator_id_hex": "0c74846bba5614f8aae51e804e994f628977e854879d6daa3889d61f119f45f1",
+      "consensus_pubkey_hex": "66cd608b928b88e50e0efeaa33faf1c43cefe07294b0b87e9fe0aba6a3cf7633",
+      "voting_weight": 250000
+    },
+    {
+      "index": 4,
+      "name": "Genesis Validator 4 (Bootnode Delta)",
+      "validator_id_hex": "459dcf2383f92dce08902ad8d60d14afb8b331ffe0e2a8c1a952cb77eb777116",
+      "consensus_pubkey_hex": "20828bf5c5bdcacb684863336c202fb5599da48be5596615742170705beca9f7",
+      "voting_weight": 250000
+    }
+  ]
+}
