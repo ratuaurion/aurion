@@ -12,6 +12,7 @@ use crate::core::{Address, Hash256};
 use crate::crypto::{blake3_hash, Keypair};
 use crate::mempool::MempoolEngine;
 use crate::state::chain::{ChainError, ChainLedger};
+use crate::state::monetary::calculate_block_subsidy;
 use crate::state::smt::compute_accounts_state_root;
 use crate::state::stf::apply_transaction;
 use thiserror::Error;
@@ -49,24 +50,24 @@ impl BftEngine {
         self.validator_keypair.is_some() && self.validator_index.is_some()
     }
 
-    /// Pemilihan Proposer Deterministik untuk (Height, Round).
-    /// Menggunakan seed Blake3(prev_hash || height || round).
+    /// Pilih proposer deterministik dari himpunan validator untuk tinggi dan putaran tertentu.
     pub fn select_proposer(
         val_set: &ValidatorSet,
         height: u64,
         round: u64,
-        prev_hash: &Hash256,
+        prev_block_hash: &Hash256,
     ) -> u32 {
         if val_set.validators.is_empty() {
             return 0;
         }
 
-        let mut seed_input = Vec::with_capacity(32 + 8 + 8);
-        seed_input.extend_from_slice(prev_hash.as_bytes());
-        seed_input.extend_from_slice(&height.to_be_bytes());
-        seed_input.extend_from_slice(&round.to_be_bytes());
-        let seed = blake3_hash(&seed_input);
+        let mut data = Vec::with_capacity(48);
+        data.extend_from_slice(b"AURION-PROPOSER-SEED-V1");
+        data.extend_from_slice(&height.to_be_bytes());
+        data.extend_from_slice(&round.to_be_bytes());
+        data.extend_from_slice(prev_block_hash.as_bytes());
 
+        let seed = blake3_hash(&data);
         let mut seed_u64_bytes = [0u8; 8];
         seed_u64_bytes.copy_from_slice(&seed.as_bytes()[..8]);
         let seed_u64 = u64::from_be_bytes(seed_u64_bytes);
@@ -86,9 +87,23 @@ impl BftEngine {
     ) -> Block {
         let candidates = mempool.pack_block_candidate(max_payload_bytes);
 
+        let prev_block = ledger.latest_block();
+        let height = prev_block.height() + 1;
+
         // Dry-run STF untuk memfilter transaksi yang benar-benar sah dieksekusi
         let mut dry_run_accounts = ledger.accounts.clone();
         let mut dry_run_monetary = ledger.monetary.clone();
+
+        // 1. Terapkan subsidi blok ke akun miner / proposer
+        let subsidy = calculate_block_subsidy(height);
+        if !subsidy.is_zero() {
+            let _ = dry_run_monetary.apply_issuance(subsidy);
+            let miner_acct = dry_run_accounts.entry(*miner).or_default();
+            if let Ok(new_bal) = miner_acct.balance.checked_add(subsidy) {
+                miner_acct.balance = new_bal;
+            }
+        }
+
         let mut valid_txs = Vec::with_capacity(candidates.len());
 
         for tx in candidates {
@@ -100,10 +115,9 @@ impl BftEngine {
         let tx_merkle_root = Block::calculate_tx_merkle_root(&valid_txs);
         let state_root = compute_accounts_state_root(&dry_run_accounts);
 
-        let prev_block = ledger.latest_block();
         let header = BlockHeader {
             version: 1,
-            height: prev_block.height() + 1,
+            height,
             round,
             timestamp: std::cmp::max(timestamp, prev_block.header.timestamp + 1),
             prev_block_hash: prev_block.hash(),

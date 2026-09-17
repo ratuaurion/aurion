@@ -88,6 +88,11 @@ impl Quantum {
         self.0
     }
 
+    #[inline]
+    pub const fn is_zero(&self) -> bool {
+        self.0 == 0
+    }
+
 
     #[inline]
     pub fn checked_add(self, other: Quantum) -> Result<Quantum, MonetaryError> {

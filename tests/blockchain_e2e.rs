@@ -181,14 +181,22 @@ fn test_end_to_end_blockchain_lifecycle() {
     );
     assert_eq!(ledger_guard.get_nonce(&creator_addr), 1);
 
-    // Alokasi Fee 20% Burn (2 AUR) dan 80% Miner (8 AUR)
+    // Penerbitan Subsidi Blok Mining (10 AUR di Era 0) + Alokasi Fee 80% Miner (8 AUR) = 18 AUR
+    assert_eq!(
+        ledger_guard.get_balance(&miner_addr),
+        Quantum::from_aur(18).unwrap()
+    );
+
+    // Alokasi Fee 20% Burn (2 AUR)
     assert_eq!(
         ledger_guard.monetary.total_burned,
         Quantum::from_aur(2).unwrap()
     );
+
+    // Total pasokan diterbitkan: Genesis (23.100.000 AUR) + Blok 1 Subsidy (10 AUR)
     assert_eq!(
-        ledger_guard.get_balance(&miner_addr),
-        Quantum::from_aur(8).unwrap()
+        ledger_guard.monetary.total_issued,
+        Quantum::from_aur(23_100_010).unwrap()
     );
 
     // Mempool wajib kosong karena transaksi telah difinalisasi

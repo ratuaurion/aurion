@@ -71,7 +71,7 @@ Pada blok genesis ($H=0$), hak atas suplai dialokasikan menjadi tiga pilar tertu
   CREATOR ALLOCATION           DEVELOPER ALLOCATION            COMMUNITY / PUBLIC
 19.800.000 AUR (30,00%)        3.300.000 AUR (5,00%)        42.900.000 AUR (65,00%)
 1.980.000.000.000.000 Q          330.000.000.000.000 Q        4.290.000.000.000.000 Q
- (Infrastruktur & Ops)       (R&D, Testnet, Sumber Faucet)      (Pure PoW Block Mining)
+ (Infrastruktur & Ops)       (R&D, Testnet, Sumber Faucet)      (Pure BFT Block Mining / Production)
 ```
 
 ### 2.3 Rincian Pembagian Genesis
@@ -138,26 +138,26 @@ R_0 \gg e(H) = \left\lfloor \dfrac{1.000.000.000}{2^{e(H)}} \right\rfloor \text{
 | **$\ge 30$** | $\ge 64.350.001$ | $0,00000000$ | $0$ | $0$ | $0$ | $\le 4.290.000.000.000.000$ | $100,000\%$ |
 
 ### 3.5 Bukti Ketidaklampauan Batas (Proof of Finite Convergence)
-Karena sifat pembagian bilangan bulat yang membuang sisa pecahan (*truncation toward zero*), jumlah kumulatif seluruh emisi subsidi penambangan memenuhi batas ketat:
+Karena sifat pembagian bilangan bulat yang membuang sisa pecahan (*truncation toward zero / bit shift right*), jumlah kumulatif seluruh emisi subsidi penambangan memenuhi batas ketat:
 
-$$\sum_{H=1}^{\infty} \mathcal{S}(H) = \sum_{e=0}^{29} \left( \left\lfloor \frac{10^9}{2^e} \right\rfloor \times 2.145.000 \right) = 4.289.999.999.989.275\ Q$$
+$$\sum_{H=1}^{\infty} \mathcal{S}(H) = \sum_{e=0}^{29} \left( \left\lfloor \frac{10^9}{2^e} \right\rfloor \times 2.145.000 \right) = 4.289.999.972.115.000\ Q$$
 
 $$\sum_{H=1}^{\infty} \mathcal{S}(H) < 4.290.000.000.000.000\ Q\ (42.900.000\ \text{AUR})$$
 
-$$\text{Selisih Sisa Unmintable} = 4.290.000.000.000.000 - 4.289.999.999.989.275 = 10.725\ Q\ (0,00010725\ \text{AUR})$$
+$$\text{Selisih Sisa Unmintable} = 4.290.000.000.000.000 - 4.289.999.972.115.000 = 27.885.000\ Q\ (0,27885\ \text{AUR})$$
 
-Selisih sebesar $10.725\ Q$ adalah sisa fraksional yang secara matematis tidak pernah dicetak (*permanently unminted dust*). Hal ini membuktikan secara formal bahwa suplai penambangan **mustahil melampaui $42.900.000\ \text{AUR}$**.
+Selisih sebesar $27.885.000\ Q$ adalah sisa fraksional yang secara matematis tidak pernah dicetak (*permanently unminted dust*). Hal ini membuktikan secara formal bahwa suplai penambangan **mustahil melampaui $42.900.000\ \text{AUR}$**.
 
 ---
 
 ## 4. Struktur Hadiah Blok, Biaya Transaksi, dan Pembakaran Fee
 
-### 4.1 Struktur Transaksi Coinbase
-Setiap blok yang valid ($H \ge 1$) wajib memuat tepat **satu transaksi Coinbase** yang ditempatkan pada indeks transaksi pertama (`index = 0`).
-1. **Input Coinbase:** Wajib memiliki tepat satu input kosong (`null outpoint`) dengan identifier hash bernilai nol dan indeks `0xFFFFFFFF`.
-2. **Kematangan Hadiah (Coinbase Maturity):** Output transaksi coinbase **TIDAK DAPAT DIBELANJAKAN** sebelum melewati ambang konfirmasi:
+### 4.1 Mekanisme Penerbitan Hadiah Blok (Coinbase / Proposer Reward)
+Setiap blok yang valid ($H \ge 1$) menerbitkan hak atas hadiah blok kepada Produser Blok (*Proposer/Miner*) yang terpilih mengeksekusi konsensus BFT.
+1. **Penerbitan Deterministik STF:** Hadiah blok diterbitkan secara langsung oleh fungsi transisi state (`STF`) dan dikreditkan ke saldo akun produser blok yang sah tanpa memerlukan transaksi transfer dari pihak ketiga.
+2. **Kematangan Hadiah (Coinbase Maturity):** Hak atas hadiah produser blok dikenakan ambang batas kematangan konsensus:
    $$\text{Maturity Threshold} = 100\ \text{blok}$$
-   Sebuah output coinbase pada blok $H$ hanya sah digunakan sebagai input pada blok $H' \ge H + 100$.
+   Hadiah blok yang dicetak pada tinggi blok $H$ baru dapat dibelanjakan secara sah pada tinggi blok $H' \ge H + 100$.
 
 ### 4.2 Formulasi Hadiah Produser Blok (Miner / Validator Reward)
 Total nilai output yang sah pada transaksi coinbase blok $H$, dinotasikan sebagai $\mathcal{V}_{\text{coinbase}}(H)$, dibatasi oleh jumlah subsidi resmi ditambah biaya transaksi yang dialokasikan:
@@ -172,13 +172,13 @@ Di mana:
 > Jika produser blok membuat output coinbase dengan nilai lebih kecil dari hak maksimum ($\mathcal{V}_{\text{coinbase}} < \mathcal{S}(H) + \mathcal{F}_{\text{miner}}$), selisih yang tidak diklaim dianggap **hangus secara permanen (*permanently unminted*)** dan tidak dapat diklaim pada blok-blok berikutnya.
 
 ### 4.3 Biaya Transaksi (Transaction Fee Accounting)
-Untuk setiap transaksi non-coinbase $T_x$, biaya transaksi $\text{Fee}(T_x)$ dihitung secara ketat melalui prinsip konservasi input-output:
-
-$$\text{Fee}(T_x) = \sum_{i \in \text{Inputs}} \text{Value}(i) - \sum_{j \in \text{Outputs}} \text{Value}(j)$$
+Untuk setiap transaksi non-coinbase $T_x$, biaya transaksi $\text{Fee}(T_x) \ge 0$ dideklarasikan secara eksplisit dalam struktur transaksi.
+Beban total akun pengirim didebet melalui prinsip konservasi:
+$$\text{TotalDebit}(T_x) = T_x.\text{amount}.\text{checked\_add}(T_x.\text{fee})$$
 
 Syarat Validitas Transaksi:
-$$\sum_{i \in \text{Inputs}} \text{Value}(i) \ge \sum_{j \in \text{Outputs}} \text{Value}(j) \implies \text{Fee}(T_x) \ge 0$$
-Transaksi dengan $\text{Fee}(T_x) < 0$ dianggap tidak sah dan ditolak langsung oleh konsensus.
+$$\mathcal{A}[\text{sender}].\text{balance} \ge \text{TotalDebit}(T_x) \implies \text{Saldo Mencukupi}$$
+Transaksi dengan saldo tidak mencukupi atau fee negatif dianggap tidak sah dan ditolak langsung oleh konsensus.
 
 ### 4.4 Mekanisme Pembakaran Biaya (Fee Burning Architecture)
 Aurion mengadopsi kebijakan deflasi berbasis pembakaran biaya transaksi parsial untuk mengimbangi laju sirkulasi dan memberikan tekanan deflasi proporsional terhadap volume aktivitas jaringan:
@@ -194,7 +194,7 @@ Aurion mengadopsi kebijakan deflasi berbasis pembakaran biaya transaksi parsial 
    $$\mathcal{F}_{\text{miner}}(H) = \mathcal{F}_{\text{total}}(H) - \mathcal{F}_{\text{burned}}(H)$$
 
 > **Prinsip Pembakaran Nyata:**  
-> Nilai $\mathcal{F}_{\text{burned}}(H)$ tidak dialihkan ke akun apa pun. Nilai tersebut ditiadakan dari state UTXO jaringan, sehingga mengurangi pasokan beredar secara absolut tanpa melanggar konservasi total koin yang pernah diterbitkan.
+> Nilai $\mathcal{F}_{\text{burned}}(H)$ tidak dialihkan ke akun apa pun. Nilai tersebut ditiadakan dari state akun jaringan (burned), sehingga mengurangi pasokan beredar secara absolut tanpa melanggar konservasi total koin yang pernah diterbitkan.
 
 ---
 
@@ -205,7 +205,7 @@ Protokol Aurion membedakan secara tegas tiga terminologi suplai:
 1. **Total Suplai Maksimum ($S_{\max}$):** Batas plafon absolut yaitu $6.600.000.000.000.000\ Q$.
 2. **Suplai Diterbitkan Kumulatif ($S_{\text{emitted}}(H)$):** Total seluruh Quantum yang pernah diciptakan secara sah sejak genesis hingga blok $H$:
    $$S_{\text{emitted}}(H) = S_{\text{creator}} + S_{\text{developer}} + \sum_{h=1}^{H} \mathcal{S}_{\text{claimed}}(h)$$
-3. **Suplai Beredar Aktif ($S_{\text{circulating}}(H)$):** Total seluruh Quantum yang ada dan dapat dibelanjakan pada state UTXO aktif saat blok $H$:
+3. **Suplai Beredar Aktif ($S_{\text{circulating}}(H)$):** Total seluruh Quantum yang ada dan dapat dibelanjakan pada state akun aktif saat blok $H$:
    $$S_{\text{circulating}}(H) = S_{\text{emitted}}(H) - \sum_{h=1}^{H} \mathcal{F}_{\text{burned}}(h)$$
 
 ### 5.2 Fungsi Transisi State Blok (Block Monetary State Transition)
@@ -222,7 +222,7 @@ $$\begin{aligned}
 \mathbf{[INV-03]}\quad & S_{\text{creator}} = 1.980.000.000.000.000\ Q \quad (\text{Locked at Genesis}) \\
 \mathbf{[INV-04]}\quad & S_{\text{developer}} = 330.000.000.000.000\ Q \quad (\text{Locked at Genesis}) \\
 \mathbf{[INV-05]}\quad & \sum_{h=1}^{H} \mathcal{S}_{\text{actual}}(h) \le 4.290.000.000.000.000\ Q, \quad \forall H \ge 1 \\
-\mathbf{[INV-06]}\quad & \text{Balance}(\text{UTXO Set at } H) = S_{\text{circulating}}(H)
+\mathbf{[INV-06]}\quad & \sum_{\alpha} \mathcal{A}[\alpha].\text{balance} = S_{\text{circulating}}(H)
 \end{aligned}$$
 
 Jika salah satu dari keenam invarian di atas dilanggar, blok dinyatakan mengalami **Integrity Fault** dan seluruh simpul wajib melakukan penolakan serta penghentian eksekusi (*fail-stop*).
@@ -242,7 +242,7 @@ Jika salah satu dari keenam invarian di atas dilanggar, blok dinyatakan mengalam
    - `checked_sub`
    - `checked_mul`
    - `checked_div`
-2. **Larangan Wrapping dan Saturasi:** Operasi aritmetika moneter konsensus **DILARANG KERAS** menggunakan aritmetika wrapping (`wrapping_*`) maupun saturasi (`saturating_*`) pada mutasi saldo rekening/UTXO.
+2. **Larangan Wrapping dan Saturasi:** Operasi aritmetika moneter konsensus **DILARANG KERAS** menggunakan aritmetika wrapping (`wrapping_*`) maupun saturasi (`saturating_*`) pada mutasi saldo rekening/akun.
 3. **Konsekuensi Kegagalan Aritmetika:**
    - Kegagalan `checked_sub` pada saldo mengindikasikan percobaan *double-spend* atau penarikan dana melebihi saldo $\rightarrow$ **Transaksi Ditolak**.
    - Terjadinya luapan `checked_add` pada total suplai mengindikasikan kerusakan integritas state $\rightarrow$ **Node Fail-Stop Lockout**.

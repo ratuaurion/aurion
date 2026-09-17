@@ -2,7 +2,8 @@
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::{
-    MonetaryError, Quantum, FEE_BURN_PERCENTAGE, FEE_MINER_PERCENTAGE, MAX_SUPPLY_QUANTA,
+    MonetaryError, Quantum, FEE_BURN_PERCENTAGE, FEE_MINER_PERCENTAGE, HALVING_INTERVAL_BLOCKS,
+    INITIAL_BLOCK_SUBSIDY_QUANTA, MAX_HALVING_ERAS, MAX_SUPPLY_QUANTA,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +37,25 @@ impl CanonicalDecode for MonetaryState {
             total_burned,
         })
     }
+}
+
+/// Menghitung subsidi blok deterministik pada tinggi blok `height` sesuai jadwal emisi resmi.
+///
+/// Formula emisi (AURION-MONETARY-POLICY-SPECIFICATION.md Bab 3):
+/// - Blok 0 (Genesis): 0 Quantum
+/// - Era e = (height - 1) / HALVING_INTERVAL_BLOCKS
+/// - Jika e >= MAX_HALVING_ERAS: 0 Quantum
+/// - Jika e < MAX_HALVING_ERAS: INITIAL_BLOCK_SUBSIDY_QUANTA >> e
+pub fn calculate_block_subsidy(height: u64) -> Quantum {
+    if height == 0 {
+        return Quantum::ZERO;
+    }
+    let era = (height - 1) / HALVING_INTERVAL_BLOCKS;
+    if era >= MAX_HALVING_ERAS {
+        return Quantum::ZERO;
+    }
+    let subsidy = INITIAL_BLOCK_SUBSIDY_QUANTA >> (era as u32);
+    Quantum::new(subsidy)
 }
 
 impl MonetaryState {
@@ -78,5 +98,55 @@ impl MonetaryState {
         }
         self.total_issued = next;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_block_subsidy_schedule() {
+        // Blok 0 (Genesis) tidak menerbitkan subsidi reguler
+        assert_eq!(calculate_block_subsidy(0), Quantum::ZERO);
+
+        // Era 0 (1 .. 2_145_000): 10 AUR = 1_000_000_000 Q
+        let era0_subsidy = Quantum::new(1_000_000_000);
+        assert_eq!(calculate_block_subsidy(1), era0_subsidy);
+        assert_eq!(calculate_block_subsidy(100), era0_subsidy);
+        assert_eq!(calculate_block_subsidy(2_145_000), era0_subsidy);
+
+        // Era 1 (2_145_001 .. 4_290_000): 5 AUR = 500_000_000 Q
+        let era1_subsidy = Quantum::new(500_000_000);
+        assert_eq!(calculate_block_subsidy(2_145_001), era1_subsidy);
+        assert_eq!(calculate_block_subsidy(4_290_000), era1_subsidy);
+
+        // Era 2: 2.5 AUR = 250_000_000 Q
+        assert_eq!(calculate_block_subsidy(4_290_001), Quantum::new(250_000_000));
+
+        // Era 29: 1 Quantum
+        let era29_start = 29 * HALVING_INTERVAL_BLOCKS + 1;
+        assert_eq!(calculate_block_subsidy(era29_start), Quantum::new(1));
+
+        // Era >= 30: 0 Quantum
+        let era30_start = 30 * HALVING_INTERVAL_BLOCKS + 1;
+        assert_eq!(calculate_block_subsidy(era30_start), Quantum::ZERO);
+        assert_eq!(calculate_block_subsidy(100_000_000), Quantum::ZERO);
+    }
+
+    #[test]
+    fn test_finite_convergence_under_cap() {
+        // Total akumulasi subsidi untuk 30 era wajib <= 4_290_000_000_000_000 Q
+        let mut total_mined: u128 = 0;
+        for era in 0..30 {
+            let subsidy = INITIAL_BLOCK_SUBSIDY_QUANTA >> era;
+            let era_total = subsidy * (HALVING_INTERVAL_BLOCKS as u128);
+            total_mined += era_total;
+        }
+
+        // Nilai terpotong bilangan bulat eksak: 4.289.999.972.115.000 Q
+        // Sisa unmintable dust yang tidak pernah dicetak = 27.885.000 Q (0,27885 AUR)
+        assert_eq!(total_mined, 4_289_999_972_115_000);
+        assert!(total_mined < 4_290_000_000_000_000);
     }
 }

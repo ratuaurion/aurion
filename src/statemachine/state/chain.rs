@@ -9,7 +9,7 @@ use crate::consensus::header::BlockHeader;
 use crate::core::{Address, Hash256, Quantum};
 use crate::genesis::builder::GenesisInitialization;
 use crate::state::account::Account;
-use crate::state::monetary::MonetaryState;
+use crate::state::monetary::{calculate_block_subsidy, MonetaryState};
 use crate::state::smt::compute_accounts_state_root;
 use crate::state::stf::{apply_transaction, StateTransitionError};
 use std::collections::HashMap;
@@ -241,10 +241,26 @@ impl ChainLedger {
         cert.verify(&self.validator_set)
             .map_err(ChainError::InvalidCommitCertificate)?;
 
-        // 6. Eksekusi State Transition Function (STF) untuk semua transaksi
+        // 6. Eksekusi State Transition Function (STF)
         let mut accounts_clone = self.accounts.clone();
         let mut monetary_clone = self.monetary.clone();
 
+        // 6a. Penerbitan subsidi blok mining S(H) ke produser blok / miner
+        let height = block.height();
+        let subsidy = calculate_block_subsidy(height);
+        if !subsidy.is_zero() {
+            monetary_clone
+                .apply_issuance(subsidy)
+                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+
+            let miner_acct = accounts_clone.entry(*miner).or_default();
+            miner_acct.balance = miner_acct
+                .balance
+                .checked_add(subsidy)
+                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+        }
+
+        // 6b. Eksekusi transaksi di dalam blok
         for tx in &block.transactions {
             apply_transaction(&mut accounts_clone, &mut monetary_clone, miner, tx)
                 .map_err(ChainError::StateTransition)?;
