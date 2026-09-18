@@ -1,0 +1,32 @@
+# ==============================================================================
+# AURION DOCKER BUILD CONTEXT EXCLUSIONS
+# Prevent shipping bulky artifacts (12+ GB target/) and sensitive/private trees
+# into the Docker build context. Safe for DOCKER DEPLOYMENT ONLY (not runtime).
+# ==============================================================================
+
+# Compile & runtime artifacts
+/target
+/data
+*.pdb
+*.d
+
+# Private internal task tracking (never published)
+/internal-tasks
+.agents
+
+# Deprecated tree (AUR-DIR-001: never ship or reference aurion.old)
+aurion.old
+
+# Version control & editor
+.git
+.vscode
+
+# Secrets & keystores (never enter an image)
+*.keystore.json
+*.pem
+*.key
+
+# Replaced / duplicate deployment configs in context
+Dockerfile
+docker-compose*.yml
+docker-compose.*.yml
