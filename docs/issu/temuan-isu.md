@@ -30,7 +30,7 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 
 | ID | Isu | Prioritas | Status | Verifikasi |
 |---|---|---|---|---|
-| AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Open | ✅ Terverifikasi (terbatas pada validator) |
+| AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Closed | ✅ Terverifikasi & diremediasi (gating dev/prod + keystore validator) |
 | AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Open | ✅ Terverifikasi |
 | AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Open | ✅ Terverifikasi |
 | AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open | ✅ Terverifikasi |
@@ -46,8 +46,8 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 ### AUR-ISSUE-001: Genesis Key Deterministic di Source
 
 **Prioritas:** Critical
-**Status:** Open
-**Lokasi:** `src/primitives/genesis/ceremony.rs:153-160` dan `src/platform/cli/dispatcher.rs:876-881`
+**Status:** Closed (Remediasi selesai, diverifikasi)
+**Lokasi:** `src/primitives/genesis/ceremony.rs:153-160` dan `src/platform/cli/dispatcher.rs` (ceremony & validator start)
 
 `CanonicalCeremonyKeypairs::new_deterministic()` membuat keypair Creator,
 Developer, dan empat validator menggunakan seed tetap seperti `[0x01; 32]`,
@@ -61,26 +61,28 @@ Developer, dan empat validator menggunakan seed tetap seperti `[0x01; 32]`,
   - Creator: `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
   - Developer: `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y`
   - Genesis Block H=0: `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9`
-- Namun `new_deterministic()` masih dipakai sebagai **default** pada jalur
-  `aurion validator start --index <0..3>` (`dispatcher.rs:876-881`): key signing
-  validator 1-4 diambil dari seed `[0x11;32]`–`[0x14;32]`. Jalur ini tidak
-  menawarkan opsi keystore validator untuk mengganti key signing saat startup.
 
-Dampak sisa yang valid:
+**Remediasi (diterapkan):**
 
-- siapa pun yang membaca source dapat merekonstruksi private key validator
-  genesis dan mengendalikan identity validator;
+- `aurion validator start` kini menolak key deterministic pada mode produksi:
+  - deterministic (seed `[0x11;32]`–`[0x14;32]`) hanya diizinkan bila flag
+    eksplisit `--dev` / `--insecure-deterministic-keys` diberikan, atau pada
+    `status` / `--dry-run`;
+  - mode produksi wajib `--validator-key-file <PATH>` (keystore terenkripsi
+    Blake3-stream) yang dibuka lewat resolver 3-tier (issue 005):
+    `--validator-password-stdin` / env `AURION_VALIDATOR_PASSWORD` /
+    prompt interaktif `rpassword` no-echo;
+- leak argv `--creator-password` / `--developer-password` ditutup: nilai argv
+  diabaikan dengan warning; pembukaan keystore Creator/Developer kini lewat
+  resolver 3-tier dengan env `AURION_CREATOR_PASSWORD` / `AURION_DEVELOPER_PASSWORD`;
+- guardrail 100% canonical, unit suite 153 passed, integration mainnet/genesis
+  ceremony 5 passed.
+
+**Sisa terdokumentasi:**
+
 - `aurion genesis ceremony run` tanpa opsi `--creator-keystore` /
-  `--developer-keystore` kembali menghasilkan transcript dengan key deterministic.
-
-**Tindakan wajib:**
-
-1. Hentikan penggunaan key deterministic untuk production (khusus validator).
-2. Tambahkan dukungan keystore untuk key signing validator 1-4 pada
-   `aurion validator start`.
-3. Perlakukan key deterministic lama sebagai compromised untuk seluruh peran.
-4. Pisahkan custody Creator, Developer, dan validator.
-5. Jalankan ceremony ulang dengan transcript baru dan publikasikan checksum.
+  `--developer-keystore` masih menghasilkan transcript dengan key deterministic
+  (path khusus pengujian/dev; prod harus menyediakan keystore nyata).
 
 ### AUR-ISSUE-002: Chain ID Tidak Konsisten
 

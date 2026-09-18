@@ -19,6 +19,7 @@ use crate::runtime::config::NodeConfig;
 use crate::runtime::AurionNode;
 use crate::storage::{RedbStorageEngine, StateStore};
 use crate::wallet::keystore::Keystore;
+use crate::wallet::password::resolve_password;
 
 #[derive(Serialize)]
 struct VersionInfo {
@@ -358,26 +359,36 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let action = args.get(1).map(|s| s.as_str()).unwrap_or("inspect");
                 let mut keys = CanonicalCeremonyKeypairs::new_deterministic();
 
+                if args.windows(2).any(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase") {
+                    eprintln!("[AURION WARNING] Opsi --creator-password/--creator-passphrase pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --creator-password-stdin, env AURION_CREATOR_PASSWORD, atau prompt interaktif.");
+                }
                 let creator_keystore_arg = args.windows(2).find(|w| w[0] == "--creator-keystore").map(|w| w[1].as_str());
-                let creator_pw_arg = args.windows(2).find(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase").map(|w| w[1].as_str()).unwrap_or("");
                 if let Some(path) = creator_keystore_arg {
                     let content = std::fs::read_to_string(path)
                         .map_err(|e| format!("Failed to read creator keystore from {path}: {e}"))?;
                     let ks = Keystore::from_json_str(&content)
                         .map_err(|e| format!("Failed to parse creator keystore: {e}"))?;
-                    let sk = ks.decrypt(creator_pw_arg)
+                    let creator_stdin = args.iter().any(|a| a == "--creator-password-stdin" || a == "--creator-passphrase-stdin");
+                    let creator_pw = resolve_password(creator_stdin, Some("AURION_CREATOR_PASSWORD"), "Masukkan password Creator key", false)
+                        .map_err(|e| format!("Gagal memperoleh password Creator key: {e}"))?;
+                    let sk = ks.decrypt(&creator_pw)
                         .map_err(|e| format!("Failed to decrypt creator keystore: {e}"))?;
                     keys.creator = Keypair::from_seed(&sk.to_bytes());
                 }
 
+                if args.windows(2).any(|w| w[0] == "--developer-password" || w[0] == "--dev-password") {
+                    eprintln!("[AURION WARNING] Opsi --developer-password/--dev-password pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --developer-password-stdin, env AURION_DEVELOPER_PASSWORD, atau prompt interaktif.");
+                }
                 let dev_keystore_arg = args.windows(2).find(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore").map(|w| w[1].as_str());
-                let dev_pw_arg = args.windows(2).find(|w| w[0] == "--developer-password" || w[0] == "--dev-password").map(|w| w[1].as_str()).unwrap_or("");
                 if let Some(path) = dev_keystore_arg {
                     let content = std::fs::read_to_string(path)
                         .map_err(|e| format!("Failed to read developer keystore from {path}: {e}"))?;
                     let ks = Keystore::from_json_str(&content)
                         .map_err(|e| format!("Failed to parse developer keystore: {e}"))?;
-                    let sk = ks.decrypt(dev_pw_arg)
+                    let dev_stdin = args.iter().any(|a| a == "--developer-password-stdin" || a == "--dev-password-stdin");
+                    let dev_pw = resolve_password(dev_stdin, Some("AURION_DEVELOPER_PASSWORD"), "Masukkan password Developer key", false)
+                        .map_err(|e| format!("Gagal memperoleh password Developer key: {e}"))?;
+                    let sk = ks.decrypt(&dev_pw)
                         .map_err(|e| format!("Failed to decrypt developer keystore: {e}"))?;
                     keys.developer = Keypair::from_seed(&sk.to_bytes());
                 }
@@ -873,12 +884,40 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .map_err(|e| format!("Storage initialization failed: {e}"))?,
             );
 
-            let keys = CanonicalCeremonyKeypairs::new_deterministic();
+            let is_status_or_dry = sub == "status" || is_dry_run;
+            let is_dev_mode = args.iter().any(|a| a == "--dev" || a == "--insecure-deterministic-keys");
+
             let val_idx: usize = get_arg_value(&args, "--index")
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0)
                 .min(3);
-            let val_key = keys.validators[val_idx].clone();
+
+            let val_key = if is_dev_mode {
+                let keys = CanonicalCeremonyKeypairs::new_deterministic();
+                keys.validators[val_idx].clone()
+            } else if is_status_or_dry {
+                let keys = CanonicalCeremonyKeypairs::new_deterministic();
+                keys.validators[val_idx].clone()
+            } else {
+                let key_path = get_arg_value(&args, "--validator-key-file")
+                    .or_else(|| get_arg_value(&args, "-k"))
+                    .ok_or_else(|| {
+                        "[AURION VALIDATOR] Kunci validator wajib disediakan di luar dev-mode. \
+                         Gunakan --validator-key-file <PATH> atau setujui hanya untuk pengujian via --dev.\n\
+                         [CATATAN] Deterministic seed (ISSUE-001) TIDAK diizinkan untuk start produksi."
+                            .to_string()
+                    })?;
+                let content = std::fs::read_to_string(&key_path)
+                    .map_err(|e| format!("Failed to read validator key file {key_path}: {e}"))?;
+                let ks = Keystore::from_json_str(&content)
+                    .map_err(|e| format!("Failed to parse validator keystore: {e}"))?;
+                let val_stdin = args.iter().any(|a| a == "--validator-password-stdin");
+                let val_pw = resolve_password(val_stdin, Some("AURION_VALIDATOR_PASSWORD"), "Masukkan password kunci validator", false)
+                    .map_err(|e| format!("Gagal memperoleh password kunci validator: {e}"))?;
+                let sk = ks.decrypt(&val_pw)
+                    .map_err(|e| format!("Failed to decrypt validator keystore: {e}"))?;
+                Keypair::from_seed(&sk.to_bytes())
+            };
 
             let genesis = if let Some(gen_path) = get_arg_value(&args, "--genesis") {
                 let data = std::fs::read_to_string(&gen_path)
