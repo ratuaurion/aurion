@@ -307,6 +307,7 @@ struct NodeLaunchStatusInfo {
     current_height: u64,
     p2p_bind: String,
     rpc_bind: String,
+    bootnode: Option<String>,
     status: &'static str,
 }
 
@@ -684,8 +685,21 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let db_path = get_arg_value(&args, "--data-dir")
                 .unwrap_or_else(|| "data/aurion.redb".to_string());
 
+            let bootnode_endpoint = get_arg_value(&args, "--bootnode")
+                .or_else(|| {
+                    if args.iter().any(|a| a == "--no-bootnode") {
+                        None
+                    } else {
+                        Some(crate::runtime::config::OFFICIAL_MAINNET_BOOTNODE.to_string())
+                    }
+                });
+
+            let locator = get_arg_value(&args, "--locator")
+                .unwrap_or_else(|| "tcp/127.0.0.1:9000".to_string());
+
             let config = NodeConfig {
                 rpc_bind: rpc_bind.clone(),
+                bootnode: bootnode_endpoint.clone(),
                 ..Default::default()
             };
 
@@ -731,6 +745,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     current_height: current_h,
                     p2p_bind: node.config.p2p_bind.clone(),
                     rpc_bind: node.config.rpc_bind.clone(),
+                    bootnode: bootnode_endpoint.clone(),
                     status: "READY",
                 };
 
@@ -748,6 +763,11 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("  Ledger Height:      {}", info.current_height);
                     println!("  P2P Protocol:       Magic AUR0 on {}", info.p2p_bind);
                     println!("  RPC / WS Gateway:   http://{}", info.rpc_bind);
+                    if let Some(bn) = &info.bootnode {
+                        println!("  Bootnode Peer:      {}", bn);
+                    } else {
+                        println!("  Bootnode Peer:      None (Standalone Offline)");
+                    }
                     println!("  Launch Status:      {}", info.status);
                     println!("==================================================================");
                 });
@@ -763,6 +783,41 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             println!("[AURION NODE] Ledger Height: {current_h}");
             println!("[AURION NODE] P2P Protocol: Magic AUR0 on {}", node.config.p2p_bind);
             println!("[AURION NODE] Serving JSON-RPC 2.0 and WebSocket on http://{}", node.config.rpc_bind);
+
+            // Inisialisasi koneksi PEX ke Bootnode di latar belakang jika aktif
+            if let Some(bn) = &bootnode_endpoint {
+                println!("[AURION NODE] Connecting to Bootnode Discovery: {bn}...");
+                let bn_target = bn.clone();
+                let loc_target = locator.clone();
+                tokio::spawn(async move {
+                    let transport_cfg = crate::wire::TransportConfig {
+                        chain_id: 1001,
+                        is_peer: true,
+                        listen_endpoints: vec![],
+                        connect_endpoints: vec![bn_target.clone()],
+                    };
+
+                    match crate::wire::ZenohTransport::new(transport_cfg).await {
+                        Ok(transport) => {
+                            println!("[AURION P2P] Connected to Bootnode: {bn_target}");
+                            println!("[AURION P2P] Registered locator: {loc_target} (Role: fullnode)");
+                            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                            loop {
+                                interval.tick().await;
+                                if let Err(e) = transport.announce_peer(&loc_target, "fullnode").await {
+                                    eprintln!("[AURION P2P] Failed to send heartbeat to bootnode: {e}");
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[AURION P2P] Bootnode connection warning: {e} (Continuing in standalone mode)");
+                        }
+                    }
+                });
+            } else {
+                println!("[AURION NODE] Operating in standalone/offline mode (No bootnode connected).");
+            }
+
             println!("[AURION NODE] Press Ctrl+C to stop.");
 
             if let Err(e) = node.run_rpc_server(None).await {
@@ -836,6 +891,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     current_height: current_h,
                     p2p_bind: node.config.p2p_bind.clone(),
                     rpc_bind: node.config.rpc_bind.clone(),
+                    bootnode: None,
                     status: "READY",
                 };
 

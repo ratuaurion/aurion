@@ -170,6 +170,45 @@ impl ZenohTransport {
         Ok(())
     }
 
+    /// Mendaftarkan node ke bootnode via PEX (Peer Exchange) heartbeat announce.
+    pub async fn announce_peer(&self, locator: &str, role: &str) -> Result<(), TransportError> {
+        let payload = serde_json::json!({
+            "locator": locator,
+            "role": role,
+        });
+        let payload_bytes = payload.to_string().into_bytes();
+        let key_expr: KeyExpr = self.keys.peer_announce
+            .as_str()
+            .try_into()
+            .map_err(|e| TransportError::KeyExpr(format!("{e:?}")))?;
+
+        self.session.put(key_expr, payload_bytes).await?;
+        Ok(())
+    }
+
+    /// Mengambil daftar peer aktif dari bootnode.
+    pub async fn query_active_peers(&self) -> Result<Vec<String>, TransportError> {
+        let key_expr: KeyExpr = self.keys.peer_list
+            .as_str()
+            .try_into()
+            .map_err(|e| TransportError::KeyExpr(format!("{e:?}")))?;
+
+        let replies = self.session.get(key_expr).await?;
+        let mut result = Vec::new();
+        while let Ok(reply) = replies.recv_async().await {
+            if let Ok(sample) = reply.result() {
+                if let Ok(peers) = serde_json::from_slice::<Vec<serde_json::Value>>(&sample.payload().to_bytes()) {
+                    for p in peers {
+                        if let Some(loc) = p.get("locator").and_then(|l| l.as_str()) {
+                            result.push(loc.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        Ok(result)
+    }
+
     /// Dekode dan verifikasi integritas data frame jaringan yang masuk dari Zenoh.
     pub fn unpack_incoming_frame(raw_bytes: &[u8]) -> Result<(WireFrameHeader, &[u8]), WireError> {
         parse_network_frame(raw_bytes)

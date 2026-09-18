@@ -20,6 +20,9 @@ pub struct MainnetBootstrapPeer {
     pub public_key_hex: String,
 }
 
+/// Endpoint default Bootnode Resmi Aurion (VPS).
+pub const OFFICIAL_MAINNET_BOOTNODE: &str = "tcp/116.212.72.89:7447";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub chain_id: u64,
@@ -27,6 +30,7 @@ pub struct NodeConfig {
     pub p2p_bind: String,
     pub rpc_bind: String,
     pub metrics_bind: String,
+    pub bootnode: Option<String>,
     pub sentry_peers: Vec<String>,
     pub max_tx_rate: u32,
     pub max_sync_rate: u32,
@@ -41,6 +45,7 @@ impl Default for NodeConfig {
             p2p_bind: "0.0.0.0:9000".to_string(),
             rpc_bind: "127.0.0.1:8545".to_string(),
             metrics_bind: "0.0.0.0:9100".to_string(),
+            bootnode: None,
             sentry_peers: Vec::new(),
             max_tx_rate: 200,
             max_sync_rate: 50,
@@ -77,6 +82,11 @@ impl NodeConfig {
     /// Daftar simpul bootstrap / genesis validator bootnodes resmi Mainnet.
     pub fn mainnet_bootnodes() -> Vec<MainnetBootstrapPeer> {
         vec![
+            MainnetBootstrapPeer {
+                name: "Official Sovereign Bootnode (VPS)".to_string(),
+                endpoint: "116.212.72.89:7447".to_string(),
+                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737".to_string(),
+            },
             MainnetBootstrapPeer {
                 name: "Genesis Validator 1 (Bootnode Alpha)".to_string(),
                 endpoint: "seed1.aurion.network:9000".to_string(),
