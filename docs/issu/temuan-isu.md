@@ -4,12 +4,16 @@ Dokumen ini mencatat temuan masalah pada kode, dokumentasi, artefak genesis,
 wallet, dan protokol wire Aurion. Fokus dokumen adalah isu teknis dan keamanan;
 temuan guardrail administratif tidak dibahas di sini.
 
+Setiap temuan pada dokumen ini telah diverifikasi ulang terhadap isi source code,
+dokumen konstitusi, dan artefak pada commit terakhir `dd34f7c` (09-2026-09-19).
+Kolom **verifikasi** menjelaskan bukti lokasi dan status akurasi temuan.
+
 ## 1. Status Audit
 
 Audit membandingkan source code, dokumen konstitusi, artefak genesis, wallet,
 transport, dan test library Aurion.
 
-Hasil pengujian library:
+Hasil pengujian library (verifikasi `cargo test --lib` pada commit `dd34f7c`):
 
 ```text
 150 passed
@@ -19,20 +23,23 @@ Hasil pengujian library:
 Test tersebut hanya membuktikan test yang tersedia. Ia belum membuktikan
 konsistensi lintas genesis, wallet, validator, mobile, bootnode, dan dokumentasi.
 
+Guardrail arsitektur (`python tools/guardrail.py`) tetap 100% PASS: zero unsafe
+code, zero floating-point, 38/38 dokumen spesifikasi hadir.
+
 ## 2. Ringkasan Isu
 
-| ID | Isu | Prioritas | Status |
-|---|---|---|---|
-| AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Open |
-| AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Open |
-| AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Open |
-| AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open |
-| AUR-ISSUE-005 | Password default wallet lemah | High | Open |
-| AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open |
-| AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Open |
-| AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Open |
-| AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Open |
-| AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Open |
+| ID | Isu | Prioritas | Status | Verifikasi |
+|---|---|---|---|---|
+| AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Open | ✅ Terverifikasi (terbatas pada validator) |
+| AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Open | ✅ Terverifikasi |
+| AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Open | ✅ Terverifikasi |
+| AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open | ✅ Terverifikasi |
+| AUR-ISSUE-005 | Password default wallet lemah | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
+| AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Open | ✅ Terverifikasi |
 
 ## 3. Temuan Detail
 
@@ -40,28 +47,40 @@ konsistensi lintas genesis, wallet, validator, mobile, bootnode, dan dokumentasi
 
 **Prioritas:** Critical
 **Status:** Open
-**Lokasi:** `src/primitives/genesis/ceremony.rs`
+**Lokasi:** `src/primitives/genesis/ceremony.rs:153-160` dan `src/platform/cli/dispatcher.rs:876-881`
 
 `CanonicalCeremonyKeypairs::new_deterministic()` membuat keypair Creator,
 Developer, dan empat validator menggunakan seed tetap seperti `[0x01; 32]`,
 `[0x02; 32]`, dan `[0x11; 32]` sampai `[0x14; 32]`.
 
-Jika key tersebut digunakan untuk production, siapa pun yang membaca source
-dapat merekonstruksi private key dan berpotensi:
+**Koreksi verifikasi (kondisi per commit `dd34f7c`):**
 
-- menandatangani transaksi Creator atau Developer;
-- mengendalikan identity validator genesis;
-- memalsukan attestation ceremony;
-- mengganggu operasi validator.
+- `GENESIS_CEREMONY.json` terbaru **tidak lagi** memakai key deterministic
+  untuk Creator dan Developer. Ceremony telah dijalankan ulang dengan wallet
+  keypair nyata pada commit `d3d54a4`:
+  - Creator: `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
+  - Developer: `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y`
+  - Genesis Block H=0: `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9`
+- Namun `new_deterministic()` masih dipakai sebagai **default** pada jalur
+  `aurion validator start --index <0..3>` (`dispatcher.rs:876-881`): key signing
+  validator 1-4 diambil dari seed `[0x11;32]`–`[0x14;32]`. Jalur ini tidak
+  menawarkan opsi keystore validator untuk mengganti key signing saat startup.
+
+Dampak sisa yang valid:
+
+- siapa pun yang membaca source dapat merekonstruksi private key validator
+  genesis dan mengendalikan identity validator;
+- `aurion genesis ceremony run` tanpa opsi `--creator-keystore` /
+  `--developer-keystore` kembali menghasilkan transcript dengan key deterministic.
 
 **Tindakan wajib:**
 
-1. Hentikan penggunaan key deterministic untuk production.
-2. Perlakukan key lama sebagai compromised.
-3. Buat key baru offline menggunakan CSPRNG atau HSM.
+1. Hentikan penggunaan key deterministic untuk production (khusus validator).
+2. Tambahkan dukungan keystore untuk key signing validator 1-4 pada
+   `aurion validator start`.
+3. Perlakukan key deterministic lama sebagai compromised untuk seluruh peran.
 4. Pisahkan custody Creator, Developer, dan validator.
-5. Jalankan ceremony ulang dengan transcript baru.
-6. Regenerasi genesis state, state root, block hash, dan artifact.
+5. Jalankan ceremony ulang dengan transcript baru dan publikasikan checksum.
 
 ### AUR-ISSUE-002: Chain ID Tidak Konsisten
 
@@ -69,14 +88,19 @@ dapat merekonstruksi private key dan berpotensi:
 **Status:** Open
 **Lokasi:** genesis, runtime, transport, wallet, dan dokumentasi
 
-Temuan nilai chain ID:
+Temuan nilai chain ID (terverifikasi pada commit `dd34f7c`):
 
-- `GENESIS_CHAIN_ID = 1001` pada `src/primitives/genesis/builder.rs`.
-- runtime default menggunakan `1001` pada `src/platform/runtime/config.rs`.
-- transport default menggunakan `1` pada `src/platform/wire/zenoh_transport.rs`.
-- wallet CLI default menggunakan `1` pada `src/platform/wallet/cli.rs`.
-- dokumentasi konstitusi masih menyebut mainnet `1`.
-- mainnet guide dan artifact genesis menggunakan `1001`.
+- `GENESIS_CHAIN_ID = 1001` pada `src/primitives/genesis/builder.rs:12`.
+- runtime default menggunakan `1001` pada `src/platform/runtime/config.rs:43`.
+- transport default menggunakan `1` pada `src/platform/wire/zenoh_transport.rs:39`.
+- wallet CLI default menggunakan `1` pada `src/platform/wallet/cli.rs:178`.
+- P2P bootnode hardcode `1001` pada `src/platform/cli/dispatcher.rs:820`.
+- `MAINNET_CONFIG.toml:9` menggunakan `1001`.
+- dokumentasi konstitusi masih menyebut mainnet `1`
+  (`AURION-TRANSACTION-SPECIFICATION.md:38`, `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md:118`).
+- **Ketidaksesuaian tipe:** genesis/ceremony/wallet memakai `chain_id: u32`,
+  sedangkan handshake, transport, snapshot, telemetry, dan health memakai
+  `u64`. Tidak ada satu tipe kanonikal tunggal.
 
 Dampaknya adalah transaksi dapat ditandatangani untuk network yang salah,
 topic Zenoh dapat terpisah, handshake dapat gagal, dan replay protection tidak
@@ -87,8 +111,9 @@ memiliki satu sumber kebenaran.
 1. Tetapkan satu chain ID production melalui keputusan protokol.
 2. Jadikan nilai tersebut satu-satunya sumber konfigurasi.
 3. Hapus default yang berbeda dari transport dan wallet.
-4. Regenerasi reference vector dan genesis artifact bila nilai berubah.
-5. Tambahkan test lintas genesis, runtime, transport, dan wallet.
+4. Seragamkan tipe `chain_id` menjadi satu tipe kanonikal.
+5. Regenerasi reference vector dan genesis artifact bila nilai berubah.
+6. Tambahkan test lintas genesis, runtime, transport, dan wallet.
 
 ### AUR-ISSUE-003: Format Transaksi Berbeda dari Spesifikasi
 
@@ -96,7 +121,7 @@ memiliki satu sumber kebenaran.
 **Status:** Open
 **Lokasi:** `src/statemachine/transaction/types.rs` dan dokumen transaksi
 
-Kode memakai field:
+Kode memakai field (terverifikasi pada `types.rs:44-58`):
 
 ```text
 version: u16
@@ -113,12 +138,15 @@ payload
 signature
 ```
 
-Dokumen transaksi mendeskripsikan `version: u32`, `chain_id: u64`, dan tidak
-memuat `tx_type`, `flags`, atau `valid_until`.
+Dokumen `AURION-TRANSACTION-SPECIFICATION.md:20-46` mendeskripsikan
+`version: u32`, `chain_id: u64`, dan tidak
+memuat `tx_type`, `flags`, atau `valid_until`; urutannya juga berbeda
+(versi, chain id, nonce, sender, recipient, amount, fee, payload_len,
+payload, signature).
 
 Dampaknya:
 
-- signature dapat tidak cocok;
+- signature dapat tidak cocok (signing preimage berbeda antara wallet dan validator);
 - TxID dapat berbeda;
 - transaksi lintas SDK tidak kompatibel;
 - validator dan mobile dapat membaca byte secara berbeda;
@@ -140,7 +168,10 @@ Dampaknya:
 
 Keystore menggunakan KDF Blake3 custom, XOR stream cipher custom, nonce yang
 diturunkan dari salt, dan salt pseudo-random berbasis waktu. Format ini belum
-setara dengan format keystore production yang diaudit.
+setara dengan format keystore production yang diaudit. Dokumen resmi
+`01-WALLET-RULES.md:27-28` justru mewajibkan **Argon2id** (memory >= 64 MB)
+atau scrypt untuk KDF dan **ChaCha20-Poly1305** atau AES-256-GCM untuk enkripsi;
+implementasi `keystore.rs` menggunakan cipher `blake3-stream-v1`.
 
 Risikonya mencakup perlindungan password yang tidak memadai, tidak adanya AEAD
 standar, parameter yang sulit diaudit, dan interoperabilitas wallet yang buruk.
@@ -158,10 +189,12 @@ standar, parameter yang sulit diaudit, dan interoperabilitas wallet yang buruk.
 
 **Prioritas:** High
 **Status:** Open
-**Lokasi:** `src/platform/wallet/cli.rs`
+**Lokasi:** `src/platform/wallet/cli.rs` (baris 31, 89, dan 172)
 
-Wallet CLI memakai `password123` sebagai default pada beberapa operasi wallet.
-Keystore yang dibuat tanpa perhatian operator dapat langsung ditebak.
+Wallet CLI memakai `password123` sebagai default pada operasi `create`,
+`import`, dan `sign-tx`. Keystore yang dibuat tanpa perhatian operator dapat
+langsung ditebak. CLI juga mencetak mnemonic dan menerima password melalui
+argumen command line (terekspos di history shell/process list).
 
 **Tindakan wajib:**
 
@@ -175,22 +208,29 @@ Keystore yang dibuat tanpa perhatian operator dapat langsung ditebak.
 
 **Prioritas:** High
 **Status:** Open
-**Lokasi:** `docs/Constitutions/AURION-GENESIS-SPECIFICATION.md`
+**Lokasi:** `docs/Constitutions/AURION-GENESIS-SPECIFICATION.md:88-89`
 
-Dokumen genesis menggunakan label seperti:
+Dokumen genesis masih menggunakan label placeholder:
 
 ```text
 aur1q_creator_vault_sovereign_mainnet_genesis_key_001
 aur1q_developer_vault_r_and_d_faucet_source_key_002
 ```
 
-Kode menghasilkan address dari public key melalui keypair ceremony. Label pada
-dokumen bukan address Bech32m kriptografis yang dapat diverifikasi.
+Label tersebut bukan address Bech32m kriptografis yang dapat diverifikasi.
+**Koreksi verifikasi:** nilai aktual sudah tersedia pada `GENESIS_CEREMONY.json`
+dan `MAINNET_GENESIS_BLOCK.json`:
+- Creator: `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
+- Developer: `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y`
+
+Dampak langsung adalah dokumentasi konstitusi tidak lagi sinkron dengan
+artifact genesis yang diratifikasi, sehingga konsumen dokumen dapat memakai
+label yang salah sebagai alamat.
 
 **Tindakan wajib:**
 
-1. Ganti placeholder dengan address Bech32m yang benar.
-2. Sertakan public key dan aturan derivasi.
+1. Ganti placeholder dengan address Bech32m yang benar (nilai sudah tersedia).
+2. Sertakan public key dan aturan derivasi (`m/44'/9999'/0'/0'/0'`).
 3. Cocokkan address dengan genesis state root.
 4. Publikasikan checksum artifact yang disetujui.
 
@@ -200,9 +240,12 @@ dokumen bukan address Bech32m kriptografis yang dapat diverifikasi.
 **Status:** Open
 **Lokasi:** codec, validator, wallet, wire limit, dan dokumentasi
 
-Kode mendefinisikan `TRANSACTION_BASE_BYTES = 184` dan payload maksimum 24 KiB.
-Dokumen transaksi mendeskripsikan `148 + N` byte dan payload maksimum 64 KiB.
-Wire message memberi batas transaction gossip 68 KiB.
+Kode mendefinisikan `TRANSACTION_BASE_BYTES = 184` dan payload maksimum 24 KiB
+(`src/statemachine/transaction/types.rs:6-7`).
+Dokumen `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md:113-128` mendeskripsikan
+`148 + N` byte dan payload maksimum 64 KiB (65.536 B).
+Wire message `MSG_TX_GOSSIP` dibatasi 68 KiB pada
+`src/platform/wire/messages.rs:49`.
 
 Dampaknya dapat berupa perbedaan fee calculation, penolakan transaksi valid,
 perbedaan buffer bootnode, dan test vector yang tidak sesuai kode.
@@ -218,12 +261,15 @@ validator, wallet, wire limits, bootnode limits, fee policy, dan dokumentasi.
 **Status:** Open
 **Lokasi:** consensus code dan wire specification
 
-Dokumen wire menggambarkan certificate sebagai `height`, `round`, `block_hash`,
-dan array `validator_index + signature`.
+Dokumen `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md:131-140` menggambarkan
+certificate sebagai `height`, `round`, `block_hash`, `signatures_count`, dan
+array `validator_index (u32) + signature (64B)` (sub-total 68 bytes/signature).
 
-Implementasi consensus menggunakan `precommits: Vec<Vote>`, sedangkan setiap
-`Vote` juga memuat phase, height, round, block hash, validator index, dan
-signature.
+Implementasi `CommitCertificate` pada
+`src/consensus/bft/certificate.rs:91-96` memakai
+`block_hash, height, round, precommits: Vec<Vote>`, dan setiap `Vote`
+(`src/consensus/bft/vote.rs:27-34`) juga memuat phase (u8), height, round,
+block hash, validator index, dan signature (total 117 bytes/vote).
 
 Dampaknya bootnode dan mobile dapat salah melakukan decoding atau filtering
 commitment.
@@ -242,8 +288,8 @@ commitment.
 **Status:** Open
 **Lokasi:** `src/platform/wire/frame.rs` dan `messages.rs`
 
-Kode menyediakan `max_payload_bound(message_type)`, tetapi
-`parse_network_frame()` hanya memeriksa batas global 8 MiB.
+Kode menyediakan `max_payload_bound(message_type)` pada `messages.rs:40`, tetapi
+`parse_network_frame()` (`frame.rs:114`) hanya memeriksa batas global 8 MiB.
 
 Parser juga belum menolak secara umum:
 
@@ -269,10 +315,17 @@ terlaksana.
 **Status:** Open
 **Lokasi:** source genesis, transcript, JSON artifact, runtime, dan dokumen
 
-Repository memiliki beberapa sumber parameter genesis: builder, ceremony
-transcript, JSON genesis, runtime configuration, dan dokumen konstitusi. Karena
-chain ID dan schema berbeda antar sumber, belum ada satu langkah verifikasi
-reproducible yang mengikat semuanya ke binary aktif.
+Repository memiliki beberapa sumber parameter genesis: builder
+(`src/primitives/genesis/builder.rs`), kanonikal `GENESIS_CEREMONY.json`
+(diimbuhkan via `include_str!` pada `ceremony.rs:567-568` sekaligus dibaca dari
+disk pada `canonical_mainnet_genesis()` `ceremony.rs:571-586`), runtime
+configuration, dan dokumen konstitusi. `canonical_mainnet_genesis()` justru
+**memprioritaskan file `GENESIS_CEREMONY.json` di disk** jika ada dan valid,
+sehingga binary dapat memproduksi genesis berbeda dari yang disegel.
+
+Karena chain ID dan schema berbeda antar sumber, belum ada satu langkah
+verifikasi reproducible yang mengikat semuanya ke binary aktif; startup juga
+belum menolak genesis mismatch terhadap nilai yang diratifikasi.
 
 **Tindakan wajib:**
 
