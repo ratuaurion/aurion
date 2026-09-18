@@ -31,8 +31,8 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | ID | Isu | Prioritas | Status | Verifikasi |
 |---|---|---|---|---|
 | AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Closed | ✅ Terverifikasi & diremediasi (gating dev/prod + keystore validator) |
-| AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Open | ✅ Terverifikasi |
-| AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Open | ✅ Terverifikasi |
+| AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Closed | ✅ Terverifikasi & diremediasi (u32 seragam, Mainnet=1001) |
+| AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Closed | ✅ Terverifikasi & diremediasi (dokumen mengikuti kode + golden test) |
 | AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open | ✅ Terverifikasi |
 | AUR-ISSUE-005 | Password default wallet lemah | High | Closed | ✅ Terverifikasi & sudah diremediasi |
 | AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
@@ -87,7 +87,7 @@ Developer, dan empat validator menggunakan seed tetap seperti `[0x01; 32]`,
 ### AUR-ISSUE-002: Chain ID Tidak Konsisten
 
 **Prioritas:** Critical
-**Status:** Open
+**Status:** Closed (Remediasi selesai, diverifikasi)
 **Lokasi:** genesis, runtime, transport, wallet, dan dokumentasi
 
 Temuan nilai chain ID (terverifikasi pada commit `dd34f7c`):
@@ -117,10 +117,26 @@ memiliki satu sumber kebenaran.
 5. Regenerasi reference vector dan genesis artifact bila nilai berubah.
 6. Tambahkan test lintas genesis, runtime, transport, dan wallet.
 
+**Remediasi (diterapkan):**
+
+- Keputusan protokol: **satu type kanonikal `chain_id: u32`** dan **Mainnet =
+  `1001`** (`GENESIS_CHAIN_ID`), diambil dari kesesuaian kode + `CONTEXT_ANCHOR`.
+- Seluruh 13 titik `u64` diseragamkan menjadi `u32`: `runtime/config.rs`,
+  `wire/zenoh_transport.rs`, `wire/handshake.rs` (HandshakeHello 188 B → 184 B),
+  `state/snapshot.rs`, `telemetry/metrics.rs`, `telemetry/health.rs`,
+  `gateway/explorer.rs`, `gateway/rpc/methods.rs`, dan DTO `cli/dispatcher.rs`.
+- Default divergen dihapus: transport (`1`) dan wallet CLI (`1`) kini memakai
+  `GENESIS_CHAIN_ID`; cast `GENESIS_CHAIN_ID as u64` dihapus.
+- Dokumentasi konstitusi/operasional disinkronkan: `AURION-GENESIS-SPECIFICATION.md`,
+  `AURION-TRANSACTION-SPECIFICATION.md`, `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md`,
+  `AURION-REFERENCE-TEST-VECTORS.md`, dan `MULTI_REGION_TESTNET_GUIDE.md`.
+- Golden test byte-level `tests/golden_vectors.rs` mengunci `chain_id = 1001`
+  pada transaksi, preimage, TxID, header, dan BlockHash.
+
 ### AUR-ISSUE-003: Format Transaksi Berbeda dari Spesifikasi
 
 **Prioritas:** Critical
-**Status:** Open
+**Status:** Closed (Remediasi selesai, diverifikasi)
 **Lokasi:** `src/statemachine/transaction/types.rs` dan dokumen transaksi
 
 Kode memakai field (terverifikasi pada `types.rs:44-58`):
@@ -161,6 +177,25 @@ Dampaknya:
 3. Buat test vector byte-level.
 4. Regenerasi wallet signing dan validator decoding.
 5. Jadikan bootnode relay opaque sampai schema final tersedia.
+
+**Remediasi (diterapkan):**
+
+- Keputusan protokol: **kode aktual + `CONTEXT_ANCHOR.md` menjadi skema resmi**
+  (`version u16`, `chain_id u32`, `tx_type u8`, `flags u8`, `sender`,
+  `recipient`, `nonce u64`, `amount u128`, `fee u128`, `valid_until u64`,
+  `payload`, `signature`; basis 184 Bytes + prefiks `payload_len` u32).
+- Preimage penandatanganan didokumentasikan sesuai kode: `DST_TX ("AURION-TX-V1")
+  || 0x00 ||` serialisasi kanonikal seluruh field (kecuali `signature`), dan
+  Ed25519 dibuat langsung atas preimage. `TxID` memakai
+  `Blake3DeriveKey("AURION-TX-ID-V1", EncodeCanonical(Tx))`.
+- `AURION-TRANSACTION-SPECIFICATION.md` dan
+  `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md` diperbarui ke Header 8B dan
+  payload maksimum 24 KiB.
+- `AURION-REFERENCE-TEST-VECTORS.md` diregenerasi (transaksi 188 B, preimage
+  137 B, TxID, header 124 B, BlockHash) dari kode.
+- Golden test byte-level `tests/golden_vectors.rs` mengunci canonical bytes,
+  preimage, hash preimage, tanda tangan, TxID, header, dan BlockHash, serta
+  memverifikasi signature lintas wallet/validator.
 
 ### AUR-ISSUE-004: Keystore Menggunakan Kriptografi Custom
 
@@ -263,6 +298,15 @@ perbedaan buffer bootnode, dan test vector yang tidak sesuai kode.
 
 Tetapkan formula ukuran berdasarkan schema final, lalu sinkronkan codec,
 validator, wallet, wire limits, bootnode limits, fee policy, dan dokumentasi.
+
+**Catatan remediasi (parsial):**
+
+- Sebagai bagian remediasi ISSUE-003: dokumentasi disinkronkan ke `184 + N`
+  Bytes + `payload_len` (bukan `148 + N`), dan hardcode `148` di
+  `src/consensus/mempool/engine.rs` diganti `TRANSACTION_BASE_BYTES + 4 + payload`.
+- Audit lanjutan yang masih perlu: keselarasan `MSG_TX_GOSSIP` (68 KiB) dengan
+  batas payload 24 KiB, serta kebijakan fee berbasis ukuran di STF. Status tetap
+  **Open** sampai audit wire/fee selesai.
 
 ### AUR-ISSUE-008: Format CommitCertificate Berbeda
 

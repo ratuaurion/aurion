@@ -5,7 +5,7 @@ use crate::core::{Address, Hash256, MonetaryError, Quantum};
 use crate::crypto::derive_address_from_pubkey;
 use crate::mempool::types::MempoolEntry;
 use crate::state::account::Account;
-use crate::transaction::types::Transaction;
+use crate::transaction::types::{Transaction, TRANSACTION_BASE_BYTES};
 use crate::transaction::validator::validate_transaction_stateless;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -237,7 +237,7 @@ impl MempoolEngine {
             let queue = per_sender.get_mut(&sender).unwrap();
             let next_tx = queue.pop().unwrap();
 
-            let tx_size = 148 + next_tx.payload.len();
+            let tx_size = TRANSACTION_BASE_BYTES + 4 + next_tx.payload.len();
             if current_bytes + tx_size <= max_payload_bytes {
                 current_bytes += tx_size;
                 candidate_txs.push(next_tx);

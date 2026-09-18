@@ -22,7 +22,7 @@ pub enum HandshakeError {
     #[error("Incompatible protocol version: expected {expected}, got {received}")]
     VersionMismatch { expected: u32, received: u32 },
     #[error("Incompatible chain ID: expected {expected}, got {received}")]
-    ChainIdMismatch { expected: u64, received: u64 },
+    ChainIdMismatch { expected: u32, received: u32 },
     #[error("Incompatible genesis hash: peer belongs to different network")]
     GenesisMismatch,
     #[error("Peer clock drift exceeded: |peer {peer_ts} - local {local_ts}| > {limit}s")]
@@ -41,11 +41,11 @@ pub enum HandshakeError {
     Codec(#[from] CodecError),
 }
 
-/// Pesan inisiasi handshake antar-simpul (Ukuran tepat 188 Bytes).
+/// Pesan inisiasi handshake antar-simpul (Ukuran tepat 184 Bytes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HandshakeHello {
     pub protocol_version: u32,
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub genesis_hash: Hash256,
     pub best_height: u64,
     pub timestamp: u64,
@@ -57,7 +57,7 @@ pub struct HandshakeHello {
 impl HandshakeHello {
     pub fn compute_preimage(
         protocol_version: u32,
-        chain_id: u64,
+        chain_id: u32,
         genesis_hash: &Hash256,
         best_height: u64,
         timestamp: u64,
@@ -77,7 +77,7 @@ impl HandshakeHello {
     }
 
     pub fn new(
-        chain_id: u64,
+        chain_id: u32,
         genesis_hash: Hash256,
         best_height: u64,
         timestamp: u64,
@@ -125,7 +125,7 @@ impl CanonicalEncode for HandshakeHello {
 impl CanonicalDecode for HandshakeHello {
     fn decode_canonical(bytes: &[u8], cursor: &mut usize) -> Result<Self, CodecError> {
         let protocol_version = u32::decode_canonical(bytes, cursor)?;
-        let chain_id = u64::decode_canonical(bytes, cursor)?;
+        let chain_id = u32::decode_canonical(bytes, cursor)?;
         let genesis_hash = Hash256::decode_canonical(bytes, cursor)?;
         let best_height = u64::decode_canonical(bytes, cursor)?;
         let timestamp = u64::decode_canonical(bytes, cursor)?;
@@ -252,7 +252,7 @@ impl CanonicalDecode for HandshakeAck {
 /// Validasi menyeluruh pesan HANDSHAKE_HELLO yang diterima dari peer.
 pub fn validate_handshake_hello(
     hello: &HandshakeHello,
-    expected_chain_id: u64,
+    expected_chain_id: u32,
     expected_genesis: &Hash256,
     local_timestamp: u64,
 ) -> Result<(), HandshakeError> {

@@ -16,7 +16,7 @@ fn test_canonical_handshake_mutual_success() {
     let node_a_key = Keypair::from_seed(&[10u8; 32]);
     let node_b_key = Keypair::from_seed(&[20u8; 32]);
 
-    let chain_id = 1u64;
+    let chain_id = 1u32;
     let genesis_hash = blake3_hash(b"AURION-GENESIS-CANONICAL-STATE");
     let current_time = 1_773_570_000u64;
 

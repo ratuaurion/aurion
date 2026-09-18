@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 pub struct ShallowHealthReport {
     pub status: String,
     pub service: String,
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub current_height: u64,
     pub role: String,
     pub connected_peers: usize,
@@ -31,7 +31,7 @@ pub struct ComponentHealth {
 pub struct DeepHealthReport {
     pub status: String, // "READY" | "DEGRADED"
     pub service: String,
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub current_height: u64,
     pub components: Vec<ComponentHealth>,
     pub timestamp_epoch_s: u64,
@@ -40,13 +40,13 @@ pub struct DeepHealthReport {
 /// Reporter kesehatan simpul terpadu.
 #[derive(Debug, Clone)]
 pub struct HealthReporter {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub role: NodeRole,
     pub min_peer_threshold: usize,
 }
 
 impl HealthReporter {
-    pub fn new(chain_id: u64, role: NodeRole, min_peer_threshold: usize) -> Self {
+    pub fn new(chain_id: u32, role: NodeRole, min_peer_threshold: usize) -> Self {
         Self {
             chain_id,
             role,

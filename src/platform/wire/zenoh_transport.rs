@@ -2,6 +2,7 @@
 //! Menghubungkan Frame Wire Kanonikal 52-Byte Aurion ke Mesh Pub/Sub Zenoh.
 //! Mendukung Peer-to-Peer, NAT-Traversal, dan Interoperabilitas Bootnode.
 
+use crate::genesis::builder::GENESIS_CHAIN_ID;
 use crate::wire::frame::{parse_network_frame, serialize_network_frame, WireError, WireFrameHeader};
 use crate::wire::messages::{
     MSG_BFT_COMMIT_CERT, MSG_BFT_PRECOMMIT, MSG_BFT_PREVOTE, MSG_BFT_PROPOSAL, MSG_HANDSHAKE_ACK,
@@ -27,7 +28,7 @@ pub enum TransportError {
 /// Konfigurasi endpoint dan mode transport simpul Aurion.
 #[derive(Debug, Clone)]
 pub struct TransportConfig {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub is_peer: bool,
     pub listen_endpoints: Vec<String>,
     pub connect_endpoints: Vec<String>,
@@ -36,7 +37,7 @@ pub struct TransportConfig {
 impl Default for TransportConfig {
     fn default() -> Self {
         Self {
-            chain_id: 1, // Mainnet
+            chain_id: GENESIS_CHAIN_ID, // Canonical Mainnet Chain ID
             is_peer: true,
             listen_endpoints: vec!["tcp/0.0.0.0:9000".to_string()],
             connect_endpoints: vec![], // Diisi alamat aurion-bootnode jika ada
@@ -61,7 +62,7 @@ pub struct AurionKeyExpressions {
 }
 
 impl AurionKeyExpressions {
-    pub fn new(chain_id: u64) -> Self {
+    pub fn new(chain_id: u32) -> Self {
         let prefix = format!("aurion/net/{chain_id}");
         Self {
             handshake_hello: format!("{prefix}/handshake/hello"),

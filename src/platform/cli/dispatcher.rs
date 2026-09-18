@@ -237,7 +237,7 @@ struct SnapshotMetadataInfo {
     file_path: String,
     magic: String,
     version: u32,
-    chain_id: u64,
+    chain_id: u32,
     height: u64,
     epoch: u64,
     block_hash: String,
@@ -269,7 +269,7 @@ struct FaucetRequestInfo {
 #[derive(Serialize)]
 struct ExplorerSummaryInfo {
     network: &'static str,
-    chain_id: u64,
+    chain_id: u32,
     current_height: u64,
     finalized_height: u64,
     mempool_size: usize,
@@ -280,7 +280,7 @@ struct ExplorerSummaryInfo {
 #[derive(Serialize)]
 struct NetworkStatusInfo {
     network: &'static str,
-    chain_id: u64,
+    chain_id: u32,
     genesis_block_hash: String,
     state_root: String,
     p2p_wire_magic: &'static str,
@@ -302,7 +302,7 @@ struct NetworkPeersInfo {
 struct NodeLaunchStatusInfo {
     network: &'static str,
     role: &'static str,
-    chain_id: u64,
+    chain_id: u32,
     genesis_block_hash: String,
     state_root: String,
     storage_engine: &'static str,
@@ -2357,7 +2357,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let genesis = CeremonyTranscript::canonical_mainnet_genesis();
                     let info = NetworkStatusInfo {
                         network: "aurion-mainnet",
-                        chain_id: crate::genesis::builder::GENESIS_CHAIN_ID as u64,
+                        chain_id: crate::genesis::builder::GENESIS_CHAIN_ID,
                         genesis_block_hash: genesis.header.compute_block_hash().to_hex(),
                         state_root: genesis.header.state_root.to_hex(),
                         p2p_wire_magic: "AUR0",

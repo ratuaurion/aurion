@@ -50,7 +50,7 @@ pub enum SnapshotError {
 pub struct StateSnapshot {
     pub magic: [u8; 4],
     pub version: u32,
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub height: u64,
     pub epoch: u64,
     pub block_hash: Hash256,
@@ -64,7 +64,7 @@ impl StateSnapshot {
     pub fn create_from_store(
         store: &dyn StateStore,
         height: u64,
-        chain_id: u64,
+        chain_id: u32,
         epoch: u64,
     ) -> Result<Self, SnapshotError> {
         let block = store
@@ -229,7 +229,7 @@ impl StateSnapshot {
             return Err(SnapshotError::UnsupportedVersion(version));
         }
 
-        let chain_id = u64::decode_canonical(bytes, &mut cursor)?;
+        let chain_id = u32::decode_canonical(bytes, &mut cursor)?;
         let height = u64::decode_canonical(bytes, &mut cursor)?;
         let epoch = u64::decode_canonical(bytes, &mut cursor)?;
         let block_hash = Hash256::decode_canonical(bytes, &mut cursor)?;

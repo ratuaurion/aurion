@@ -58,7 +58,7 @@ Untuk menjamin bahwa setiap objek di dalam Aurion menghasilkan representasi byte
 ├───────────────────┼────────────────────────────────────────────────────┤
 │ Validator Entry   │ Tepat 72 Bytes (Fixed-size)                        │
 ├───────────────────┼────────────────────────────────────────────────────┤
-│ Transaksi         │ 148 Bytes + N Bytes Payload (Variable)             │
+│ Transaksi         │ 184 Bytes + N Bytes Payload (Variable)             │
 ├───────────────────┼────────────────────────────────────────────────────┤
 │ Blok Lengkap      │ 124 B (Header) + 8 B (Tx Count) + Σ(Tx) + CC(B)    │
 ├───────────────────┼────────────────────────────────────────────────────┤
@@ -110,23 +110,28 @@ Offset  Panjang  Field             Tipe       Keterangan
 TOTAL: Tepat 72 Bytes
 ```
 
-### 3.4 Transaksi Kanonikal (148 Bytes + $N$ Bytes)
+### 3.4 Transaksi Kanonikal (184 Bytes + Payload Opsional)
 ```text
 Offset       Panjang  Field         Tipe        Keterangan
 --------------------------------------------------------------------------------
-0x00         4 B      version       u32 (BE)    Format versi transaksi
-0x04         8 B      chain_id      u64 (BE)    1 = Mainnet, 2 = Testnet
-0x0C         8 B      nonce         u64 (BE)    Penghitung sekuensial akun
-0x14         32 B     sender        Address     Alamat pengirim
-0x34         32 B     recipient     Address     Alamat penerima
-0x54         16 B     amount        Quantum     u128 nilai transfer
-0x64         16 B     fee           Quantum     u128 biaya transaksi
-0x74         4 B      payload_len   u32 (BE)    Panjang N (Maks: 65.536 B)
-0x78         N B      payload       [u8; N]     Raw bytes data/script
-0x78 + N     64 B     signature     Signature   Ed25519 tanda tangan
+0x00         2 B      version       u16 (BE)    Format versi transaksi (wajib 1)
+0x02         4 B      chain_id      u32 (BE)    Mainnet = 1001 (GENESIS_CHAIN_ID)
+0x06         1 B      tx_type       u8          Jenis transaksi (0x01..0x06)
+0x07         1 B      flags         u8          Bitmask opsi (default 0x00)
+0x08         32 B     sender        Address     Alamat pengirim
+0x28         32 B     recipient     Address     Alamat penerima
+0x48         8 B      nonce         u64 (BE)    Penghitung sekuensial akun
+0x50         16 B     amount        Quantum     u128 nilai transfer
+0x60         16 B     fee           Quantum     u128 biaya transaksi
+0x70         8 B      valid_until   u64 (BE)    Batas kadaluarsa (0 = tanpa batas)
+0x78         4 B      payload_len   u32 (BE)    Panjang N (Maks: 24.576 B)
+0x7C         N B      payload       [u8; N]     Raw bytes data/script
+0x7C + N     64 B     signature     Signature   Ed25519 tanda tangan
 --------------------------------------------------------------------------------
-TOTAL: 148 + N Bytes
+BASIS (tanpa payload): 184 Bytes; TOTAL: 188 + N Bytes
 ```
+
+> **Preimage Penandatanganan:** Tanda tangan Ed25519 dibuat langsung atas `DST_TX ("AURION-TX-V1") || 0x00 || version || chain_id || tx_type || flags || sender || recipient || nonce || amount || fee || valid_until || payload_len || payload`. `TxID` dihitung terpisah dengan Blake3 derive-key konteks `AURION-TX-ID-V1` atas serialisasi kanonikal penuh (termasuk `signature`).
 
 ### 3.5 Sertifikat Komitmen (Commit Certificate)
 Menampung bukti kuorum supermayoritas $> 2/3$ tanda tangan validator:
@@ -244,7 +249,7 @@ Node A (Inisiator)                             Node B (Penerima)
        │                                              │
        ├────────────── HANDSHAKE_HELLO ──────────────►│
        │   - Protocol Version: 1                      │ (Verifikasi Genesis & Drift)
-       │   - Chain ID: 1                              │
+        │   - Chain ID: 1001                           │
        │   - Genesis Hash: 0xABCD...                  │
        │   - Best Height: 1250                        │
        │   - Timestamp: 1773570000                    │

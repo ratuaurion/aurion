@@ -69,7 +69,7 @@ File snapshot menyimpan keadaan akun dan riwayat state trie secara deterministik
 | :--- | :--- | :--- | :--- |
 | **Header** | `magic` | `[u8; 4]` | Magic bytes `AUSS` (0x41, 0x55, 0x53, 0x53) |
 | | `version` | `u32` | Versi format (v1 kanonikal) |
-| | `chain_id` | `u64` | Identifier jaringan testnet |
+| | `chain_id` | `u32` | Identifier jaringan testnet |
 | | `height` | `u64` | Tinggi blok snapshot dibuat |
 | | `epoch` | `u64` | Indeks epoch snapshot |
 | | `block_hash` | `[u8; 32]` | Hash blok kanonikal pada tinggi snapshot |

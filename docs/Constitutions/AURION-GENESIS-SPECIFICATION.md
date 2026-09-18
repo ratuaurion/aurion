@@ -54,7 +54,7 @@ Struktur data formal spesifikasi genesis didefinisikan sebagai:
 ```text
 GenesisSpecification
 ├── protocol_version       : u32        (Format versi protokol, 0x00000001)
-├── chain_id               : u64        (1 = Mainnet, 2 = Testnet)
+├── chain_id               : u32        (Mainnet = 1001)
 ├── genesis_time           : u64        (Unix epoch timestamp resmi dalam detik)
 ├── initial_supply         : InitialSupplyConfig
 │   ├── creator_vault      : AccountAllocation (30% = 19.800.000 AUR)
@@ -197,8 +197,8 @@ Untuk menjamin ketiadaan divergensi, konstanta resmi Genesis Mainnet Aurion diku
 /// Protocol Version
 pub const GENESIS_PROTOCOL_VERSION: u32 = 1;
 
-/// Network Chain ID (Mainnet = 1)
-pub const GENESIS_CHAIN_ID: u64 = 1;
+/// Network Chain ID (Mainnet = 1001)
+pub const GENESIS_CHAIN_ID: u32 = 1001;
 
 /// Genesis Unix Timestamp (Contoh Epoch Resmi Peluncuran)
 pub const GENESIS_TIMESTAMP_MAINNET: u64 = 1773570000;

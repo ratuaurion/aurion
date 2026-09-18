@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 /// Registri metrik terpadu simpul Aurion yang mematuhi format Prometheus OpenMetrics.
 #[derive(Debug)]
 pub struct MetricsRegistry {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub block_height: AtomicU64,
     pub bft_round: AtomicU64,
     pub bft_validators_active: AtomicUsize,
@@ -25,7 +25,7 @@ pub struct MetricsRegistry {
 }
 
 impl MetricsRegistry {
-    pub fn new(chain_id: u64) -> Self {
+    pub fn new(chain_id: u32) -> Self {
         Self {
             chain_id,
             block_height: AtomicU64::new(0),
@@ -151,7 +151,7 @@ impl MetricsRegistry {
 /// DTO representasi snapshot metrik untuk output JSON.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MetricsSnapshot {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub block_height: u64,
     pub bft_round: u64,
     pub bft_validators_active: usize,

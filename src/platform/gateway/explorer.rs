@@ -80,7 +80,7 @@ pub fn render_tx_by_hash(ctx: &RpcContext, hash_hex: &str) -> Option<String> {
 }
 
 /// Menyajikan dokumen HTML5 mandiri untuk Community Sandbox Dashboard (/sandbox).
-pub fn render_sandbox_html(chain_id: u64) -> String {
+pub fn render_sandbox_html(chain_id: u32) -> String {
     format!(r##"<!DOCTYPE html>
 <html lang="en">
 <head>

@@ -214,7 +214,7 @@ fn handle_sign_tx(args: &[String]) {
     let mut fee: u128 = 10_000; // default 0.0001 AUR
     let mut nonce: u64 = 0;
     let mut memo = String::new();
-    let mut chain_id: u32 = 1;
+    let mut chain_id: u32 = crate::genesis::builder::GENESIS_CHAIN_ID;
 
     let mut i = 0;
     while i < args.len() {

@@ -85,7 +85,7 @@ fn test_mainnet_slot_0_to_block_1_bft_transition() {
     let val0_addr = val0_key.derive_address();
 
     let config = NodeConfig {
-        chain_id: GENESIS_CHAIN_ID as u64,
+        chain_id: GENESIS_CHAIN_ID,
         ..NodeConfig::new_validator(Vec::new())
     };
 
@@ -181,7 +181,7 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
     let val0_addr = val0_key.derive_address();
 
     let config = NodeConfig {
-        chain_id: GENESIS_CHAIN_ID as u64,
+        chain_id: GENESIS_CHAIN_ID,
         ..NodeConfig::new_validator(Vec::new())
     };
 
@@ -340,7 +340,7 @@ fn test_mainnet_redb_persistence_crash_recovery() {
         let store = Arc::new(RedbStorageEngine::open_or_create(&db_path).unwrap());
         let genesis = CeremonyTranscript::canonical_mainnet_genesis();
         let config = NodeConfig {
-            chain_id: GENESIS_CHAIN_ID as u64,
+            chain_id: GENESIS_CHAIN_ID,
             ..NodeConfig::new_validator(Vec::new())
         };
 
@@ -398,7 +398,7 @@ fn test_mainnet_redb_persistence_crash_recovery() {
         let store = Arc::new(RedbStorageEngine::open_or_create(&db_path).unwrap());
         let genesis = CeremonyTranscript::canonical_mainnet_genesis();
         let config = NodeConfig {
-            chain_id: GENESIS_CHAIN_ID as u64,
+            chain_id: GENESIS_CHAIN_ID,
             ..NodeConfig::new_validator(Vec::new())
         };
 

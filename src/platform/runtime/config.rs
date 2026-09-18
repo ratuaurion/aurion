@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::genesis::builder::GENESIS_CHAIN_ID;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeRole {
     /// Simpul publik standar penerima lalu lintas P2P dan RPC.
@@ -25,7 +27,7 @@ pub const OFFICIAL_MAINNET_BOOTNODE: &str = "tcp/116.212.72.89:7447";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub role: NodeRole,
     pub p2p_bind: String,
     pub rpc_bind: String,
@@ -40,7 +42,7 @@ pub struct NodeConfig {
 impl Default for NodeConfig {
     fn default() -> Self {
         Self {
-            chain_id: 1001, // Canonical Mainnet Chain ID (matching GENESIS_CHAIN_ID)
+            chain_id: GENESIS_CHAIN_ID, // Canonical Mainnet Chain ID (single source of truth)
             role: NodeRole::FullNode,
             p2p_bind: "0.0.0.0:9000".to_string(),
             rpc_bind: "127.0.0.1:8545".to_string(),

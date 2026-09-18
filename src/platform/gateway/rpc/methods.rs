@@ -19,7 +19,7 @@ use std::sync::{Arc, Mutex};
 
 /// Konteks state bersama untuk melayani query dan submit JSON-RPC 2.0.
 pub struct RpcContext {
-    pub chain_id: u64,
+    pub chain_id: u32,
     pub current_height: Arc<AtomicU64>,
     pub finalized_height: Arc<AtomicU64>,
     pub mempool: Arc<Mutex<MempoolEngine>>,
@@ -32,7 +32,7 @@ pub struct RpcContext {
 }
 
 impl RpcContext {
-    pub fn new(chain_id: u64) -> Self {
+    pub fn new(chain_id: u32) -> Self {
         Self {
             chain_id,
             current_height: Arc::new(AtomicU64::new(0)),
