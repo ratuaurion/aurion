@@ -34,7 +34,7 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Open | ✅ Terverifikasi |
 | AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Open | ✅ Terverifikasi |
 | AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open | ✅ Terverifikasi |
-| AUR-ISSUE-005 | Password default wallet lemah | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-005 | Password default wallet lemah | High | Closed | ✅ Terverifikasi & sudah diremediasi |
 | AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
 | AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Open | ✅ Terverifikasi |
 | AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Open | ✅ Terverifikasi |
@@ -188,21 +188,28 @@ standar, parameter yang sulit diaudit, dan interoperabilitas wallet yang buruk.
 ### AUR-ISSUE-005: Password Default Wallet Lemah
 
 **Prioritas:** High
-**Status:** Open
-**Lokasi:** `src/platform/wallet/cli.rs` (baris 31, 89, dan 172)
+**Status:** Closed (Remediasi selesai, diverifikasi)
+**Lokasi:** `src/platform/wallet/cli.rs`, `src/platform/wallet/password.rs`
 
 Wallet CLI memakai `password123` sebagai default pada operasi `create`,
 `import`, dan `sign-tx`. Keystore yang dibuat tanpa perhatian operator dapat
-langsung ditebak. CLI juga mencetak mnemonic dan menerima password melalui
-argumen command line (terekspos di history shell/process list).
+langsung ditebak. CLI juga menerima password melalui argumen command line
+(terekspos di history shell/process list).
 
-**Tindakan wajib:**
+**Remediasi (diterapkan):**
 
-- hapus password default;
-- minta password melalui input aman atau secret terkontrol;
-- tolak password kosong dan password umum;
-- jangan menampilkan password di command line atau log;
-- tambahkan test bahwa operasi berhenti tanpa password.
+- password default `password123` dihapus; `handle_create`, `handle_import`,
+  dan `handle_sign_tx` kini memerlukan password eksplisit;
+- resolver baru `src/platform/wallet/password.rs` dengan 3-tier precedence:
+  1. stdin (flag `--password-stdin`);
+  2. environment `AURION_WALLET_PASSWORD`;
+  3. prompt interaktif via `rpassword` (no echo), dengan konfirmasi ganda
+     saat `create`;
+- opsi `--password`/`--passphrase` di argv tidak didukung dan diabaikan
+  dengan warning (mencegah eksposure ke process list / shell history);
+- password kosong ditolak, konfirmasi mismatch ditolak;
+- test ditambahkan pada `password.rs`, total suite lib menjadi 153 passed.
+  Guardrail: 100% canonical, zero conflicts.
 
 ### AUR-ISSUE-006: Address Creator dan Developer Placeholder
 

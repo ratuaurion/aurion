@@ -7,6 +7,7 @@ use crate::crypto::blake3_hash;
 use crate::wallet::bip39::{entropy_to_mnemonic_24, mnemonic_to_entropy_24, mnemonic_to_seed};
 use crate::wallet::derivation::DerivedAccount;
 use crate::wallet::keystore::Keystore;
+use crate::wallet::password::{resolve_password, ENV_WALLET_PASSWORD};
 use crate::wallet::signing::ClearSigningDetails;
 use std::fs;
 
@@ -26,9 +27,16 @@ pub fn handle_wallet_subcommand(args: &[String]) {
     }
 }
 
+/// Mendeteksi flag `--password-stdin` dan menghasilkan teks prompt yang benar.
+fn parse_password_flags(args: &[String]) -> (bool, String) {
+    let from_stdin = args.iter().any(|a| a == "--password-stdin" || a == "--passphrase-stdin");
+    let prompt = "Masukkan password wallet";
+    (from_stdin, prompt.to_string())
+}
+
 fn handle_create(args: &[String]) {
     let mut name = "default".to_string();
-    let mut password = "password123".to_string();
+    let mut password: Option<String> = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -40,8 +48,12 @@ fn handle_create(args: &[String]) {
                 }
             }
             "--password" | "--passphrase" => {
+                eprintln!(
+                    "[AURION WALLET WARNING] Opsi --password/-p pada argv TIDAK AMAN \
+                     (terekspos di process table & shell history). Opsi ini diabaikan. \
+                     Gunakan prompt interaktif, --password-stdin, atau env {ENV_WALLET_PASSWORD}."
+                );
                 if i + 1 < args.len() {
-                    password = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -61,6 +73,18 @@ fn handle_create(args: &[String]) {
     let mnemonic = entropy_to_mnemonic_24(&entropy);
     let master_seed = mnemonic_to_seed(&mnemonic, "");
     let derived = DerivedAccount::derive_account(&master_seed, 0, 0);
+
+    if password.is_none() {
+        let (from_stdin, prompt_text) = parse_password_flags(args);
+        match resolve_password(from_stdin, Some(ENV_WALLET_PASSWORD), &prompt_text, true) {
+            Ok(pw) => password = Some(pw),
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {e}");
+                return;
+            }
+        }
+    }
+    let password = password.expect("password guaranteed by earlier branch");
 
     let keystore = Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address);
     let keystore_json = keystore.to_json_string();
@@ -86,7 +110,7 @@ fn handle_create(args: &[String]) {
 fn handle_import(args: &[String]) {
     let mut mnemonic = String::new();
     let mut name = "imported".to_string();
-    let mut password = "password123".to_string();
+    let mut password: Option<String> = None;
 
     let mut i = 0;
     while i < args.len() {
@@ -104,8 +128,11 @@ fn handle_import(args: &[String]) {
                 }
             }
             "--password" | "--passphrase" => {
+                eprintln!(
+                    "[AURION WALLET WARNING] Opsi --password/-p pada argv TIDAK AMAN. Diabaikan. \
+                     Gunakan prompt interaktif, --password-stdin, atau env {ENV_WALLET_PASSWORD}."
+                );
                 if i + 1 < args.len() {
-                    password = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -123,6 +150,18 @@ fn handle_import(args: &[String]) {
         eprintln!("[AURION WALLET ERROR] Mnemonik tidak valid: {e}");
         return;
     }
+
+    if password.is_none() {
+        let (from_stdin, prompt_text) = parse_password_flags(args);
+        match resolve_password(from_stdin, Some(ENV_WALLET_PASSWORD), &prompt_text, false) {
+            Ok(pw) => password = Some(pw),
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {e}");
+                return;
+            }
+        }
+    }
+    let password = password.expect("password guaranteed by earlier branch");
 
     let master_seed = mnemonic_to_seed(&mnemonic, "");
     let derived = DerivedAccount::derive_account(&master_seed, 0, 0);
@@ -169,7 +208,7 @@ fn handle_address(args: &[String]) {
 
 fn handle_sign_tx(args: &[String]) {
     let mut keystore_path = "default.keystore.json".to_string();
-    let mut password = "password123".to_string();
+    let mut password: Option<String> = None;
     let mut to_addr = String::new();
     let mut amount: u128 = 0;
     let mut fee: u128 = 10_000; // default 0.0001 AUR
@@ -186,9 +225,12 @@ fn handle_sign_tx(args: &[String]) {
                     i += 1;
                 }
             }
-            "--password" => {
+            "--password" | "--passphrase" => {
+                eprintln!(
+                    "[AURION WALLET WARNING] Opsi --password/-p pada argv TIDAK AMAN. Diabaikan. \
+                     Gunakan prompt interaktif, --password-stdin, atau env {ENV_WALLET_PASSWORD}."
+                );
                 if i + 1 < args.len() {
-                    password = args[i + 1].clone();
                     i += 1;
                 }
             }
@@ -232,6 +274,18 @@ fn handle_sign_tx(args: &[String]) {
         }
         i += 1;
     }
+
+    if password.is_none() {
+        let (from_stdin, prompt_text) = parse_password_flags(args);
+        match resolve_password(from_stdin, Some(ENV_WALLET_PASSWORD), &prompt_text, false) {
+            Ok(pw) => password = Some(pw),
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {e}");
+                return;
+            }
+        }
+    }
+    let password = password.expect("password guaranteed by earlier branch");
 
     let keystore_raw = match fs::read_to_string(&keystore_path) {
         Ok(s) => s,
@@ -290,8 +344,13 @@ fn handle_sign_tx(args: &[String]) {
 fn print_wallet_help() {
     println!("Aurion Sovereign Wallet Subsystem CLI (/bin/aurion wallet)");
     println!("Penggunaan:");
-    println!("  aurion wallet create [--name <name>] [--password <pw>]");
-    println!("  aurion wallet import --mnemonic \"<24 words>\" [--name <name>] [--password <pw>]");
+    println!("  aurion wallet create [--name <name>] [--password-stdin]");
+    println!("  aurion wallet import --mnemonic \"<24 words>\" [--name <name>] [--password-stdin]");
     println!("  aurion wallet address [--keystore <path>]");
-    println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password <pw>] [--fee <quanta>] [--memo <text>]");
+    println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>]");
+    println!("Keamanan password:");
+    println!("  - Tanpa flag, password diminta lewat prompt interaktif (no echo, konfirmasi ganda saat create).");
+    println!("  - --password-stdin membaca password dari stdin (aman untuk pipa/CI).");
+    println!("  - Env {ENV_WALLET_PASSWORD} dibaca bila stdin adalah terminal.");
+    println!("  - Opsi --password/-p PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
 }
