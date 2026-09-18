@@ -10,6 +10,7 @@ use crate::cli::output::OutputFormat;
 use crate::consensus::bft::governance::{GovernanceEngine, ProposalSummary, UpgradeProposal};
 use crate::consensus::certificate::ValidatorEntry;
 use crate::core::Address;
+use crate::crypto::Keypair;
 use crate::genesis::builder::build_genesis;
 use crate::genesis::ceremony::{CanonicalCeremonyKeypairs, CeremonyTranscript};
 use crate::platform::runtime::recovery::{CircuitBreaker, DisasterRecoveryManager};
@@ -17,6 +18,7 @@ use crate::platform::telemetry::metrics::MetricsRegistry;
 use crate::runtime::config::NodeConfig;
 use crate::runtime::AurionNode;
 use crate::storage::{RedbStorageEngine, StateStore};
+use crate::wallet::keystore::Keystore;
 
 #[derive(Serialize)]
 struct VersionInfo {
@@ -354,7 +356,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
             if sub == "ceremony" {
                 let action = args.get(1).map(|s| s.as_str()).unwrap_or("inspect");
-                let keys = CanonicalCeremonyKeypairs::new_deterministic();
+                let mut keys = CanonicalCeremonyKeypairs::new_deterministic();
+
+                let creator_keystore_arg = args.windows(2).find(|w| w[0] == "--creator-keystore").map(|w| w[1].as_str());
+                let creator_pw_arg = args.windows(2).find(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase").map(|w| w[1].as_str()).unwrap_or("");
+                if let Some(path) = creator_keystore_arg {
+                    let content = std::fs::read_to_string(path)
+                        .map_err(|e| format!("Failed to read creator keystore from {path}: {e}"))?;
+                    let ks = Keystore::from_json_str(&content)
+                        .map_err(|e| format!("Failed to parse creator keystore: {e}"))?;
+                    let sk = ks.decrypt(creator_pw_arg)
+                        .map_err(|e| format!("Failed to decrypt creator keystore: {e}"))?;
+                    keys.creator = Keypair::from_seed(&sk.to_bytes());
+                }
+
+                let dev_keystore_arg = args.windows(2).find(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore").map(|w| w[1].as_str());
+                let dev_pw_arg = args.windows(2).find(|w| w[0] == "--developer-password" || w[0] == "--dev-password").map(|w| w[1].as_str()).unwrap_or("");
+                if let Some(path) = dev_keystore_arg {
+                    let content = std::fs::read_to_string(path)
+                        .map_err(|e| format!("Failed to read developer keystore from {path}: {e}"))?;
+                    let ks = Keystore::from_json_str(&content)
+                        .map_err(|e| format!("Failed to parse developer keystore: {e}"))?;
+                    let sk = ks.decrypt(dev_pw_arg)
+                        .map_err(|e| format!("Failed to decrypt developer keystore: {e}"))?;
+                    keys.developer = Keypair::from_seed(&sk.to_bytes());
+                }
 
                 match action {
                     "run" => {

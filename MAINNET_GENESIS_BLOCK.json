@@ -31,15 +31,21 @@
       "role": "Creator",
       "name": "Creator Sovereign Vault",
       "address_hex": "cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad",
+      "address_bech32m": "aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql",
+      "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
       "allocation_aur": 19800000,
-      "balance_quanta": 1980000000000000
+      "balance_quanta": 1980000000000000,
+      "derivation_path": "m/44'/9999'/0'/0'/0'"
     },
     {
       "role": "Developer",
       "name": "Developer Core Research Vault",
       "address_hex": "708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc",
+      "address_bech32m": "aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y",
+      "public_key_hex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
       "allocation_aur": 3300000,
-      "balance_quanta": 330000000000000
+      "balance_quanta": 330000000000000,
+      "derivation_path": "m/44'/9999'/0'/0'/0'"
     }
   ],
   "genesis_validators": [

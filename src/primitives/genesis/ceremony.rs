@@ -563,11 +563,23 @@ impl CeremonyTranscript {
         Ok(genesis)
     }
 
-    /// Membangun inisialisasi Mainnet kanonikal dari kunci seremonial bawaan.
+    /// JSON transkrip upacara genesis kanonikal yang tersegel dan teratestasi resmi.
+    pub const CANONICAL_SEALED_TRANSCRIPT_JSON: &'static str =
+        include_str!("../../../GENESIS_CEREMONY.json");
+
+    /// Membangun inisialisasi Mainnet kanonikal dari transkrip upacara resmi yang tersegel.
     pub fn canonical_mainnet_genesis() -> GenesisInitialization {
-        let keys = CanonicalCeremonyKeypairs::new_deterministic();
-        let transcript = CeremonyTranscript::build_and_seal(&keys)
-            .expect("Deterministic ceremony sealing must not fail");
+        if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
+            if let Ok(data) = std::fs::read_to_string("GENESIS_CEREMONY.json") {
+                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
+                    if let Ok(gen) = transcript.build_genesis_initialization() {
+                        return gen;
+                    }
+                }
+            }
+        }
+        let transcript = CeremonyTranscript::from_json_str(Self::CANONICAL_SEALED_TRANSCRIPT_JSON)
+            .expect("Embedded canonical genesis transcript must be valid JSON");
         transcript
             .build_genesis_initialization()
             .expect("Deterministic genesis reconstruction must succeed")
