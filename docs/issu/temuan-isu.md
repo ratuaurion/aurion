@@ -35,11 +35,11 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Closed | ✅ Terverifikasi & diremediasi (dokumen mengikuti kode + golden test) |
 | AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Closed | ✅ Terverifikasi & diremediasi (Argon2id + ChaCha20Poly1305, envelope V2 + migrasi) |
 | AUR-ISSUE-005 | Password default wallet lemah | High | Closed | ✅ Terverifikasi & sudah diremediasi |
-| AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
+| AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Closed | ✅ Terverifikasi & diremediasi (address Bech32m + public key + derivation path kanonikal) |
 | AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Closed | ✅ Terverifikasi & diremediasi (`MAX_TX_WIRE_SIZE` = 24.764 B) |
-| AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Closed | ✅ Terverifikasi & diremediasi (format Vote 117B kanonikal + decoder bounded) |
 | AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Closed | ✅ Terverifikasi & diremediasi (strict wire validation + tests) |
-| AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Closed | ✅ Terverifikasi & diremediasi (embedded artifact + hash/state-root assertions) |
 
 ## 3. Temuan Detail
 
@@ -284,8 +284,8 @@ langsung ditebak. CLI juga menerima password melalui argumen command line
 ### AUR-ISSUE-006: Address Creator dan Developer Placeholder
 
 **Prioritas:** High
-**Status:** Open
-**Lokasi:** `docs/Constitutions/AURION-GENESIS-SPECIFICATION.md:88-89`
+**Status:** Closed (Remediasi selesai, diverifikasi)
+**Lokasi:** `docs/Constitutions/AURION-GENESIS-SPECIFICATION.md:88-89,102-103`
 
 Dokumen genesis masih menggunakan label placeholder:
 
@@ -311,10 +311,23 @@ label yang salah sebagai alamat.
 3. Cocokkan address dengan genesis state root.
 4. Publikasikan checksum artifact yang disetujui.
 
+**Remediasi (diterapkan):**
+
+- Placeholder `aur1q_creator_vault_...` dan `aur1q_developer_vault_...` pada
+  tabel 3.1 diganti address Bech32m kanonikal (`aur1jjtq...`, `aur1eaj...`).
+- Subseksi baru **3.1.1** menambahkan tabel kunci kanonikal: Address Bech32m,
+  Address Hex (32 B), Public Key Ed25519 (hex), dan Derivation Path
+  (`m/44'/9999'/0'/0'/0'`) untuk Creator dan Developer, seluruhnya identik
+  dengan `GENESIS_CEREMONY.json` dan `MAINNET_GENESIS_BLOCK.json`.
+- `StateRoot_0` (`61e64770...`) dan `GenesisHash` blok nol (`d82f72ac...`)
+  dicantumkan langsung agar cocok dengan state root genesis.
+- Verifikasi: tidak ada lagi string placeholder/TODO/PLACEHOLDER pada
+  `AURION-GENESIS-SPECIFICATION.md`; guardrail 100% PASS.
+
 ### AUR-ISSUE-007: Ukuran Transaksi Tidak Konsisten
 
 **Prioritas:** High
-**Status:** Open
+**Status:** Closed
 **Lokasi:** codec, validator, wallet, wire limit, dan dokumentasi
 
 Kode mendefinisikan `TRANSACTION_BASE_BYTES = 184` dan payload maksimum 24 KiB
@@ -349,7 +362,7 @@ validator, wallet, wire limits, bootnode limits, fee policy, dan dokumentasi.
 - Dokumentasi `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md` Bagian 6 diperbarui
   (`TX_GOSSIP` = 24.764 B). Status **Closed**.
 
-### AUR-ISSUE-008: Format CommitCertificate Berbeda
+### AUR-ISSUE-008: Format CommitCertificate Berbeda (Closed)
 
 **Prioritas:** High
 **Status:** Open
@@ -375,6 +388,21 @@ commitment.
 3. Definisikan validator set reference dan quorum calculation.
 4. Bootnode meneruskan certificate opaque sampai format final dikunci.
 5. Mobile melakukan verifikasi signature dan quorum secara independen.
+
+**Catatan remediasi:**
+
+- Format kanonikal ditetapkan mengikuti implementasi validator: `block_hash`
+  (32B), `height` (8B), `round` (8B), `precommits_count` (4B), lalu array
+  `Vote` berukuran tetap 117B (`52 + 117K` Bytes total).
+- Decoder menolak jumlah precommit di atas 65.535 dan memeriksa ketersediaan
+  seluruh payload vote sebelum alokasi, sehingga count palsu tidak dapat
+  memicu alokasi tidak terbatas.
+- Verifikasi sertifikat kini menolak vote dengan height atau round yang tidak
+  cocok, selain validasi phase, block hash, duplikasi validator, signature,
+  dan quorum `> 2/3`.
+- Golden vector tersedia di unit test `certificate::tests::canonical_certificate_vector`.
+  Bootnode dapat meneruskan sertifikat sebagai payload opaque; verifier tetap
+  wajib menerapkan aturan kanonikal dan quorum ini.
 
 ### AUR-ISSUE-009: Validasi Frame Belum Strict
 
@@ -427,7 +455,7 @@ terlaksana.
   `tests/conformance.rs` dan `src/platform/conformance/runner.rs` memakai
   `MSG_TX_GOSSIP` (0x0030). Status **Closed**.
 
-### AUR-ISSUE-010: Genesis Artifact Belum Terikat ke Binary Aktif
+### AUR-ISSUE-010: Genesis Artifact Belum Terikat ke Binary Aktif (Closed)
 
 **Prioritas:** High
 **Status:** Open
@@ -452,6 +480,20 @@ belum menolak genesis mismatch terhadap nilai yang diratifikasi.
 3. Verifikasi manifest terhadap binary dari clean build.
 4. Simpan checksum binary dan artifact.
 5. Jadikan startup menolak genesis mismatch.
+
+**Catatan remediasi:**
+
+- `MAINNET_GENESIS_BLOCK.json` kini di-embed langsung ke binary dengan
+  `include_str!`; `canonical_mainnet_genesis()` tidak lagi membaca file genesis
+  dari working directory atau memprioritaskan override disk.
+- Artefak embedded divalidasi terhadap transkrip seremoni embedded, chain ID
+  Mainnet `1001`, metadata alokasi, validator count, dan kuorum.
+- Binary menghitung ulang block hash serta state root dari genesis yang
+  direkonstruksi dan menolak eksekusi melalui assertion fatal jika tidak sama
+  dengan `CANONICAL_GENESIS_HASH` dan `CANONICAL_GENESIS_STATE_ROOT`.
+- Dengan demikian file lokal tidak dapat mengubah genesis Mainnet; jaringan
+  custom harus menggunakan jalur konfigurasi eksplisit terpisah dan tidak
+  memanggil loader Mainnet kanonikal.
 
 ## 4. Urutan Perbaikan
 

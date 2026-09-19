@@ -745,25 +745,13 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .map_err(|e| format!("Storage initialization failed: {e}"))?,
             );
 
-            let genesis = if let Some(gen_path) = get_arg_value(&args, "--genesis") {
-                let data = std::fs::read_to_string(&gen_path)
-                    .map_err(|e| format!("Failed to read genesis file {gen_path}: {e}"))?;
-                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
-                    transcript.build_genesis_initialization()
-                        .map_err(|e| format!("Invalid ceremony transcript in {gen_path}: {e}"))?
-                } else {
-                    return Err(format!("Unrecognized genesis file format: {gen_path}"));
-                }
-            } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
-                let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
-                    .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
-                let transcript = CeremonyTranscript::from_json_str(&data)
-                    .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?;
-                transcript.build_genesis_initialization()
-                    .map_err(|e| format!("Failed to build genesis from GENESIS_CEREMONY.json: {e}"))?
-            } else {
-                CeremonyTranscript::canonical_mainnet_genesis()
-            };
+            if get_arg_value(&args, "--genesis").is_some() {
+                return Err(
+                    "Mainnet genesis is embedded and immutable; --genesis is only valid for an explicit custom-network command"
+                        .to_string(),
+                );
+            }
+            let genesis = CeremonyTranscript::canonical_mainnet_genesis();
 
             let block_hash = genesis.header.compute_block_hash().to_hex();
             let state_root = genesis.header.state_root.to_hex();
@@ -916,25 +904,13 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 Keypair::from_seed(&sk.to_bytes())
             };
 
-            let genesis = if let Some(gen_path) = get_arg_value(&args, "--genesis") {
-                let data = std::fs::read_to_string(&gen_path)
-                    .map_err(|e| format!("Failed to read genesis file {gen_path}: {e}"))?;
-                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
-                    transcript.build_genesis_initialization()
-                        .map_err(|e| format!("Invalid ceremony transcript in {gen_path}: {e}"))?
-                } else {
-                    return Err(format!("Unrecognized genesis file format: {gen_path}"));
-                }
-            } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
-                let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
-                    .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
-                let transcript = CeremonyTranscript::from_json_str(&data)
-                    .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?;
-                transcript.build_genesis_initialization()
-                    .map_err(|e| format!("Failed to build genesis from GENESIS_CEREMONY.json: {e}"))?
-            } else {
-                CeremonyTranscript::canonical_mainnet_genesis()
-            };
+            if get_arg_value(&args, "--genesis").is_some() {
+                return Err(
+                    "Mainnet genesis is embedded and immutable; --genesis is only valid for an explicit custom-network command"
+                        .to_string(),
+                );
+            }
+            let genesis = CeremonyTranscript::canonical_mainnet_genesis();
 
             let block_hash = genesis.header.compute_block_hash().to_hex();
             let state_root = genesis.header.state_root.to_hex();

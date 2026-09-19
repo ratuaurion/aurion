@@ -18,6 +18,10 @@ pub const CEREMONY_TOTAL_VOTING_POWER: u64 = 1_000_000;
 
 /// Kuorum voting BFT awal: >2/3 = 666.667 (AUR-GENESIS-007).
 pub const CEREMONY_QUORUM_THRESHOLD: u64 = 666_667;
+pub const CANONICAL_GENESIS_HASH: &str =
+    "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9";
+pub const CANONICAL_GENESIS_STATE_ROOT: &str =
+    "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850";
 
 /// Peran entitas dalam upacara pembentukan Genesis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -124,6 +128,40 @@ pub struct CeremonyTranscript {
     pub quorum_threshold: u64,
     pub quorum_achieved: bool,
     pub ceremony_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddedGenesisArtifact {
+    genesis_block: EmbeddedGenesisBlock,
+    metadata: EmbeddedGenesisMetadata,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddedGenesisBlock {
+    header: EmbeddedGenesisHeader,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddedGenesisHeader {
+    chain_id: u32,
+    height: u64,
+    timestamp: u64,
+    state_root: String,
+    block_hash: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EmbeddedGenesisMetadata {
+    network: String,
+    protocol_version: u32,
+    ceremony_transcript_hash: String,
+    hard_cap_aur: u64,
+    initial_supply_aur: u64,
+    creator_allocation_aur: u64,
+    developer_allocation_aur: u64,
+    total_validator_power: u64,
+    quorum_threshold: u64,
+    genesis_validators_count: usize,
 }
 
 /// Hitung pesan 32-byte Blake3 yang wajib ditandatangani oleh seluruh peserta upacara.
@@ -567,21 +605,66 @@ impl CeremonyTranscript {
     pub const CANONICAL_SEALED_TRANSCRIPT_JSON: &'static str =
         include_str!("../../../GENESIS_CEREMONY.json");
 
-    /// Membangun inisialisasi Mainnet kanonikal dari transkrip upacara resmi yang tersegel.
+    /// Artefak blok genesis Mainnet yang diikat langsung ke binary.
+    pub const EMBEDDED_MAINNET_GENESIS_JSON: &'static str =
+        include_str!("../../../MAINNET_GENESIS_BLOCK.json");
+
+    /// Membangun inisialisasi Mainnet kanonikal dari artefak yang diikat ke binary.
     pub fn canonical_mainnet_genesis() -> GenesisInitialization {
-        if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
-            if let Ok(data) = std::fs::read_to_string("GENESIS_CEREMONY.json") {
-                if let Ok(transcript) = CeremonyTranscript::from_json_str(&data) {
-                    if let Ok(gen) = transcript.build_genesis_initialization() {
-                        return gen;
-                    }
-                }
-            }
-        }
         let transcript = CeremonyTranscript::from_json_str(Self::CANONICAL_SEALED_TRANSCRIPT_JSON)
             .expect("Embedded canonical genesis transcript must be valid JSON");
-        transcript
+        let genesis = transcript
             .build_genesis_initialization()
-            .expect("Deterministic genesis reconstruction must succeed")
+            .expect("Deterministic genesis reconstruction must succeed");
+        let artifact: EmbeddedGenesisArtifact =
+            serde_json::from_str(Self::EMBEDDED_MAINNET_GENESIS_JSON)
+                .expect("Embedded mainnet genesis artifact must be valid JSON");
+
+        assert_eq!(artifact.metadata.network, "aurion-mainnet");
+        assert_eq!(artifact.metadata.protocol_version, transcript.protocol_version);
+        assert_eq!(
+            artifact.metadata.ceremony_transcript_hash,
+            transcript.ceremony_hash
+        );
+        assert_eq!(artifact.metadata.hard_cap_aur, transcript.hard_cap_aur);
+        assert_eq!(artifact.metadata.initial_supply_aur, transcript.initial_supply_aur);
+        assert_eq!(
+            artifact.metadata.creator_allocation_aur,
+            transcript.creator_allocation_aur
+        );
+        assert_eq!(
+            artifact.metadata.developer_allocation_aur,
+            transcript.developer_allocation_aur
+        );
+        assert_eq!(
+            artifact.metadata.total_validator_power,
+            transcript.total_validator_power
+        );
+        assert_eq!(
+            artifact.metadata.quorum_threshold,
+            transcript.quorum_threshold
+        );
+        assert_eq!(
+            artifact.metadata.genesis_validators_count,
+            genesis.validator_set.validators.len()
+        );
+
+        let computed_hash = genesis.header.compute_block_hash().to_hex();
+        let computed_state_root = genesis.header.state_root.to_hex();
+        assert_eq!(computed_hash, CANONICAL_GENESIS_HASH);
+        assert_eq!(computed_state_root, CANONICAL_GENESIS_STATE_ROOT);
+        assert_eq!(artifact.genesis_block.header.chain_id, GENESIS_CHAIN_ID);
+        assert_eq!(artifact.genesis_block.header.height, 0);
+        assert_eq!(
+            artifact.genesis_block.header.timestamp,
+            GENESIS_TIMESTAMP
+        );
+        assert_eq!(
+            artifact.genesis_block.header.state_root,
+            CANONICAL_GENESIS_STATE_ROOT
+        );
+        assert_eq!(artifact.genesis_block.header.block_hash, CANONICAL_GENESIS_HASH);
+
+        genesis
     }
 }
