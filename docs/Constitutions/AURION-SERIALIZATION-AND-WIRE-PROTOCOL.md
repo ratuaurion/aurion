@@ -197,6 +197,8 @@ Setiap pesan yang ditransmisikan melalui wire jaringan wajib dibungkus oleh **Wi
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                     Payload Length (u32, BE)                  |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|               Reserved2 (8 Bytes, Wajib 0x00...)              |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                                                               |
 +                                                               +
 |                   Blake3 Checksum (32 Bytes)                  |
@@ -208,12 +210,25 @@ Setiap pesan yang ditransmisikan melalui wire jaringan wajib dibungkus oleh **Wi
 
 ### 5.1 Rincian Kolom Wire Header
 1. **Magic Bytes (4 B):** `0x41555230` (ASCII: `"AUR0"`). Simpul memutuskan koneksi seketika jika 4 byte pertama tidak cocok.
-2. **Message Type ID (2 B):** Identifier numerik Big-Endian untuk membedakan rute pesan.
-3. **Reserved (2 B):** Bit cadangan untuk perluasan protokol masa depan. Wajib bernilai `0x0000`.
-4. **Payload Length (4 B):** Panjang payload biner dalam bytes. Wajib $\le \text{MaxPayloadCeiling}$.
-5. **Blake3 Checksum (32 B):** Hash Blake3 langsung dari payload:
+2. **Message Type ID (2 B):** Identifier numerik Big-Endian untuk membedakan rute pesan. Nilai yang tidak ada di katalog Bagian 6 **WAJIB DITOLAK** (`WireError::UnknownMessageType`); tidak ada rute fallback implisit.
+3. **Reserved (2 B):** Bit cadangan untuk perluasan protokol masa depan. Wajib bernilai `0x0000`; nilai lain ditolak (`WireError::NonZeroReserved`).
+4. **Payload Length (4 B):** Panjang payload biner dalam bytes. Wajib $\le$ plafon khusus `message_type` (Bagian 6).
+5. **Reserved2 (8 B):** Bit cadangan lapis kedua. Wajib seluruhnya `0x00`; jika tidak, ditolak (`WireError::NonZeroReserved2`).
+6. **Blake3 Checksum (32 B):** Hash Blake3 langsung dari payload:
    $$\text{Checksum} = \text{Blake3}(\text{Payload})$$
    Jika checksum tidak cocok, payload dibuang seketika tanpa didekode.
+
+### 5.2 Validasi Ketat Parser Frame (Strict Wire Validation)
+`parse_network_frame()` menolak frame **sebelum** payload dialokasikan/disalin bila salah satu kondisi berikut terpenuhi:
+1. Magic bytes $\ne$ `0x41555230` $\to$ `WireError::InvalidMagic`.
+2. `Message Type ID` tidak ada di katalog Bagian 6 $\to$ `WireError::UnknownMessageType`.
+3. `Reserved != 0x0000` $\to$ `WireError::NonZeroReserved`.
+4. `Reserved2` mengandung byte non-zero $\to$ `WireError::NonZeroReserved2`.
+5. `Payload Length` melebihi plafon khusus tipe pesan $\to$ `WireError::PayloadTooLarge`. Untuk `TX_GOSSIP` plafonnya adalah `MAX_TX_WIRE_SIZE` $= 24.764\ \text{B}$.
+6. Panjang byte frame tidak konsisten dengan `Payload Length` $\to$ `CodecError::UnexpectedEof`.
+7. Checksum Blake3 tidak cocok $\to$ `WireError::ChecksumMismatch`.
+
+`serialize_network_frame()` menegakkan aturan (2) dan (5) yang sama, sehingga frame di luar katalog tidak dapat diproduksi. Plafon global $8\ \text{MiB}$ tetap dipertahankan sebagai *backstop* keras di atas plafon per-tipe.
 
 ---
 
@@ -231,7 +246,7 @@ Setiap pesan yang ditransmisikan melalui wire jaringan wajib dibungkus oleh **Wi
 | `0x0021` | `BFT_PREVOTE` | $128\ \text{B}$ | Siaran suara fase 1 konsensus |
 | `0x0022` | `BFT_PRECOMMIT` | $128\ \text{B}$ | Siaran suara fase 2 konsensus |
 | `0x0023` | `BFT_COMMIT_CERT`| $256\ \text{KB}$ | Siaran sertifikat komitmen final blok |
-| `0x0030` | `TX_GOSSIP` | $68\ \text{KB}$ | Propagasi transaksi tunggal mempool |
+| `0x0030` | `TX_GOSSIP` | $24.764\ \text{B}$ | Propagasi transaksi tunggal mempool (184 B basis + 4 B prefiks + 24.576 B payload) |
 | `0x0031` | `MEMPOOL_INV` | $1\ \text{MB}$ | Daftar hash transaksi yang dimiliki |
 | `0x0040` | `SYNC_GET_HEADERS`| $128\ \text{B}$ | Permintaan rentang header untuk sinkronisasi |
 | `0x0041` | `SYNC_HEADERS` | $256\ \text{KB}$ | Kumpulan hingga 2.000 header blok |

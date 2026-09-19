@@ -13,8 +13,8 @@ pub enum CodecError {
     TrailingBytes(usize),
     #[error("Invalid boolean encoding: expected 0 or 1, got {0}")]
     InvalidBoolean(u8),
-    #[error("Allocation exceeds hard limit of 16MB: requested {0} bytes")]
-    ExcessiveAllocation(usize),
+    #[error("Allocation exceeds hard limit of {max} bytes: requested {requested}")]
+    ExcessiveAllocation { max: usize, requested: usize },
 }
 
 pub trait CanonicalDecode: Sized {
@@ -153,11 +153,37 @@ impl CanonicalDecode for Vec<u8> {
     fn decode_canonical(bytes: &[u8], cursor: &mut usize) -> Result<Self, CodecError> {
         let len = u32::decode_canonical(bytes, cursor)? as usize;
         if len > MAX_ALLOWED_ALLOCATION_BYTES {
-            return Err(CodecError::ExcessiveAllocation(len));
+            return Err(CodecError::ExcessiveAllocation {
+                max: MAX_ALLOWED_ALLOCATION_BYTES,
+                requested: len,
+            });
         }
         ensure_available(bytes, *cursor, len)?;
         let slice = &bytes[*cursor..*cursor + len];
         *cursor += len;
         Ok(slice.to_vec())
     }
+}
+
+/// Mendekode `Vec<u8>` berprefiks panjang (u32 BE) dengan plafon domain eksplisit.
+///
+/// Plafon `max_len` diperiksa **sebelum** pemeriksaan ketersediaan dan penyalinan
+/// byte, sehingga durasi/luas alokasi selalu terikat pada batas domain pemanggil
+/// (mis. `MAX_TRANSACTION_PAYLOAD_BYTES`) alih-alih plafon generik 16 MB.
+pub fn decode_length_prefixed_bytes(
+    bytes: &[u8],
+    cursor: &mut usize,
+    max_len: usize,
+) -> Result<Vec<u8>, CodecError> {
+    let len = u32::decode_canonical(bytes, cursor)? as usize;
+    if len > max_len {
+        return Err(CodecError::ExcessiveAllocation {
+            max: max_len,
+            requested: len,
+        });
+    }
+    ensure_available(bytes, *cursor, len)?;
+    let slice = &bytes[*cursor..*cursor + len];
+    *cursor += len;
+    Ok(slice.to_vec())
 }

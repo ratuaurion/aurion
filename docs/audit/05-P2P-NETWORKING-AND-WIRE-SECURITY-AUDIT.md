@@ -21,9 +21,9 @@ Submateri Jaringan P2P dan Protokol Wire Aurion mencakup:
 ### 2.1. Penolakan Injeksi Frame Oversize (Buffer Overflow DoS)
 - **Vektor Ancaman:** Penyerang mengirim frame biner dengan field `payload_length` palsu yang sangat besar (misal: 2 GB) untuk memaksa simpul melakukan alokasi heap memori berlebih dan memicu crash *Out of Memory* (OOM).
 - **Implementasi Aurion (`src/platform/wire/frame.rs`):**
-  Parser memvalidasi bahwa `payload_len <= 8_388_608`. Jika melebihi batas, stream dibatalkan seketika tanpa melakukan alokasi buffer heap.
-- **Verifikasi Pengujian (`tests/security_audit.rs:test_exploit_p2p_wire_oversize_injection`):**
-  Pengujian menyuntikkan header dengan panjang 16 MB. Parser menolak dengan `WireError::PayloadTooLarge` dan mengabaikan pembacaan body.
+  Parser menolak frame secara ketat sebelum payload dialokasikan: (a) `Message Type ID` wajib ada di katalog resmi (`WireError::UnknownMessageType`), (b) `Reserved`/`Reserved2` wajib nol (`WireError::NonZeroReserved`/`NonZeroReserved2`), (c) `payload_len` wajib $\le$ plafon khusus tipe pesan (`WireError::PayloadTooLarge`), dengan plafon global $8.388.608\ \text{B}$ sebagai *backstop* keras. Untuk `TX_GOSSIP` plafonnya `MAX_TX_WIRE_SIZE` $= 24.764\ \text{B}$.
+- **Verifikasi Pengujian (`tests/security_hardening.rs`):**
+  `test_strict_wire_frame_rejects_oversized_per_message_type` menyuntikkan `payload_len` melebihi plafon $24.764\ \text{B}$ dan memastikan penolakan sebelum alokasi; `test_strict_wire_frame_rejects_unknown_type_and_nonzero_reserved` memverifikasi penolakan tipe tak dikenal dan field cadangan non-zero. Injeksi header 16 MB tetap ditolak oleh *backstop* $8\ \text{MiB}$.
 
 ### 2.2. Penolakan Spam Mempool Sub-RBF
 - **Vektor Ancaman:** Penyerang membanjiri mempool dengan transaksi duplikat nonce yang hanya menaikkan biaya 1 Quanta untuk menggeser transaksi valid tanpa biaya berarti.

@@ -6,6 +6,20 @@ use crate::core::{Address, Quantum, Signature};
 pub const TRANSACTION_BASE_BYTES: usize = 184;
 pub const MAX_TRANSACTION_PAYLOAD_BYTES: usize = 24 * 1024; // 24 KB
 
+/// Panjang prefiks `payload_len` (u32 BE) pada serialisasi kanonikal transaksi.
+pub const TRANSACTION_LENGTH_PREFIX_BYTES: usize = 4;
+
+/// Ukuran wire kanonikal maksimum satu transaksi:
+/// basis (184) + prefiks panjang (4) + payload maksimum (24.576) = 24.764 byte.
+pub const MAX_TRANSACTION_WIRE_BYTES: usize =
+    TRANSACTION_BASE_BYTES + TRANSACTION_LENGTH_PREFIX_BYTES + MAX_TRANSACTION_PAYLOAD_BYTES;
+
+/// Ukuran wire kanonikal transaksi untuk panjang payload tertentu.
+#[inline]
+pub const fn transaction_wire_size(payload_len: usize) -> usize {
+    TRANSACTION_BASE_BYTES + TRANSACTION_LENGTH_PREFIX_BYTES + payload_len
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TxType {
@@ -86,7 +100,11 @@ impl CanonicalDecode for Transaction {
         let amount = Quantum::decode_canonical(bytes, cursor)?;
         let fee = Quantum::decode_canonical(bytes, cursor)?;
         let valid_until = u64::decode_canonical(bytes, cursor)?;
-        let payload = Vec::<u8>::decode_canonical(bytes, cursor)?;
+        let payload = crate::codec::decode_length_prefixed_bytes(
+            bytes,
+            cursor,
+            MAX_TRANSACTION_PAYLOAD_BYTES,
+        )?;
         let signature = Signature::decode_canonical(bytes, cursor)?;
 
         Ok(Transaction {

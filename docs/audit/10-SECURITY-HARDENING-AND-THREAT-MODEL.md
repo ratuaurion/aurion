@@ -102,7 +102,8 @@ Aurion menerapkan batas keras deterministik pada seluruh subsistem untuk mencega
 +------------------------+-------------------+------------------------------------------+
 | Lapisan / Komponen     | Batas Keras       | Efek Penolakan Jika Melanggar            |
 +------------------------+-------------------+------------------------------------------+
-| P2P Network Wire       | Max 8 MB / 64 KB  | Err(WireError::PayloadTooLarge)          |
+| P2P Network Wire       | Per-tipe (8 MB backstop) | Err(WireError::PayloadTooLarge)/UnknownMessageType |
+| P2P TX_GOSSIP          | Max 24.764 B      | Err(WireError::PayloadTooLarge)          |
 | L2 Batch Calldata      | Max 64 KB frame   | Err(L2CodecError::PayloadLengthMismatch) |
 | L4 Cross-Chain Envelope| Max 64 KB payload | Err("Payload exceeds MAX_L4_PAYLOAD_BYTES")|
 | Mempool Buffer         | 10.000 Transaksi  | Lowest-fee Eviction / Buffer Saturation  |

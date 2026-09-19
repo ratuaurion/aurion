@@ -10,6 +10,7 @@
 //! 4. Ketahanan kriptografis anti-malleability (RFC 8032 strict verification).
 //! 5. Penolakan mutlak atas serangan replay lintas-lapisan via Nullifier Registries.
 
+use aurion::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::ed25519_verify_strict;
 use aurion::crypto::{derive_address_from_pubkey, Keypair};
@@ -22,7 +23,7 @@ use aurion::runtime::{NodeConfig, NodeRole, RuntimeSupervisor};
 use aurion::scaling::codec::{L2BatchFrame, L2CodecError};
 use aurion::specialized::messaging::{CrossLayerMessage, NullifierRegistry};
 use aurion::specialized::types::DomainId;
-use aurion::transaction::types::{Transaction, TxType};
+use aurion::transaction::types::{Transaction, TxType, MAX_TRANSACTION_PAYLOAD_BYTES};
 use aurion::vm::context::ExecutionContext;
 use aurion::vm::engine::{AvmEngine, ExecutionResult};
 use aurion::vm::opcode::Opcode;
@@ -33,6 +34,7 @@ use aurion::wallet::keystore::Keystore;
 use aurion::wire::frame::{
     parse_network_frame, serialize_network_frame, WireError, MAX_WIRE_PAYLOAD_BYTES,
 };
+use aurion::wire::{MAX_TX_WIRE_SIZE, MSG_TX_GOSSIP};
 use ed25519_dalek::SigningKey;
 use std::collections::HashMap;
 use zeroize::Zeroize;
@@ -58,7 +60,10 @@ fn test_zeroize_extended_key_on_drop() {
 
     // Verifikasi seluruh 64 byte memori terhapus menjadi 0x00
     assert_eq!(ext_key.key, [0u8; 32], "Kunci rahasia wajib bernilai 0x00");
-    assert_eq!(ext_key.chain_code, [0u8; 32], "Chain code wajib bernilai 0x00");
+    assert_eq!(
+        ext_key.chain_code, [0u8; 32],
+        "Chain code wajib bernilai 0x00"
+    );
 }
 
 #[test]
@@ -70,7 +75,10 @@ fn test_zeroize_bip39_entropy_hygiene() {
 
     // Zeroize memori entropi
     entropy.zeroize();
-    assert_eq!(entropy, [0u8; 32], "Memori entropi wajib 0x00 pasca zeroize");
+    assert_eq!(
+        entropy, [0u8; 32],
+        "Memori entropi wajib 0x00 pasca zeroize"
+    );
 }
 
 #[test]
@@ -86,14 +94,22 @@ fn test_zeroize_keystore_encryption_decryption_cycle() {
 
     // 1. Dekripsi dengan password yang benar harus sukses
     let loaded_keystore = Keystore::from_json_str(&json).expect("Parse keystore json");
-    let decrypted_key = loaded_keystore.decrypt(password).expect("Decryption success");
+    let decrypted_key = loaded_keystore
+        .decrypt(password)
+        .expect("Decryption success");
 
     // Verifikasi public key dari decrypted key identik
-    assert_eq!(decrypted_key.verifying_key().to_bytes(), signing_key.verifying_key().to_bytes());
+    assert_eq!(
+        decrypted_key.verifying_key().to_bytes(),
+        signing_key.verifying_key().to_bytes()
+    );
 
     // 2. Dekripsi dengan password salah WAJIB ditolak seketika (Anti-Tamper MAC)
     let wrong_res = loaded_keystore.decrypt("WrongPassword");
-    assert!(wrong_res.is_err(), "Password salah wajib ditolak oleh otentikasi MAC");
+    assert!(
+        wrong_res.is_err(),
+        "Password salah wajib ditolak oleh otentikasi MAC"
+    );
 }
 
 // ============================================================================
@@ -102,17 +118,17 @@ fn test_zeroize_keystore_encryption_decryption_cycle() {
 
 #[test]
 fn test_anti_dos_wire_frame_max_payload_rejection() {
-    // 1. Payload normal diterima
-    let valid_payload = vec![0xAA; 1024];
+    // 1. Payload normal dalam batas tipe pesan (MSG_HANDSHAKE_HELLO <= 512 B) diterima
+    let valid_payload = vec![0xAA; 256];
     let encoded = serialize_network_frame(1, &valid_payload);
     assert!(encoded.is_ok());
 
-    // 2. Payload melebihi batas batas ukuran kanonikal MAX_WIRE_PAYLOAD_BYTES (8 MB)
+    // 2. Payload melebihi plafon tipe pesan (dan plafon global 8 MB) wajib ditolak
     let oversized_payload = vec![0xBB; MAX_WIRE_PAYLOAD_BYTES + 1];
     let oversized_res = serialize_network_frame(1, &oversized_payload);
     assert!(
         matches!(oversized_res, Err(WireError::PayloadTooLarge(_))),
-        "Frame jaringan melebihi 8 MB wajib ditolak demi mencegah DoS memori"
+        "Frame jaringan melebihi batas tipe/global wajib ditolak demi mencegah DoS memori"
     );
 
     // 3. Deserialisasi frame dengan magic salah wajib ditolak
@@ -123,6 +139,89 @@ fn test_anti_dos_wire_frame_max_payload_rejection() {
         matches!(decode_res, Err(WireError::InvalidMagic(_))),
         "Frame dengan magic salah wajib ditolak seketika"
     );
+}
+
+#[test]
+fn test_strict_wire_frame_rejects_oversized_per_message_type() {
+    // 1. Serialisasi gossip melampaui MAX_TX_WIRE_SIZE wajib ditolak
+    let oversized = vec![0xAA; MAX_TX_WIRE_SIZE + 1];
+    assert!(matches!(
+        serialize_network_frame(MSG_TX_GOSSIP, &oversized),
+        Err(WireError::PayloadTooLarge(_))
+    ));
+
+    // 2. Header dengan payload_len di atas plafon tipe ditolak sebelum checksum.
+    //    Layout header: magic[0..4], message_type[4..6], reserved[6..8],
+    //    payload_len[8..12], reserved2[12..20], checksum[20..52].
+    let frame = serialize_network_frame(MSG_TX_GOSSIP, &[]).unwrap();
+    let mut tampered = frame.clone();
+    tampered[8..12].copy_from_slice(&((MAX_TX_WIRE_SIZE + 1) as u32).to_be_bytes());
+    assert!(matches!(
+        parse_network_frame(&tampered),
+        Err(WireError::PayloadTooLarge(len)) if len == MAX_TX_WIRE_SIZE + 1
+    ));
+}
+
+#[test]
+fn test_strict_wire_frame_rejects_unknown_type_and_nonzero_reserved() {
+    let frame = serialize_network_frame(MSG_TX_GOSSIP, &[0x01, 0x02, 0x03]).unwrap();
+
+    // 1. Tipe pesan tidak dikenal wajib ditolak (tanpa fallback implisit)
+    let mut unknown = frame.clone();
+    unknown[4] = 0xFF;
+    unknown[5] = 0xFF;
+    assert!(matches!(
+        parse_network_frame(&unknown),
+        Err(WireError::UnknownMessageType(0xFFFF))
+    ));
+
+    // 2. reserved != 0 wajib ditolak
+    let mut reserved = frame.clone();
+    reserved[7] = 0x01;
+    assert!(matches!(
+        parse_network_frame(&reserved),
+        Err(WireError::NonZeroReserved(1))
+    ));
+
+    // 3. reserved2 non-zero wajib ditolak
+    let mut reserved2 = frame;
+    reserved2[12] = 0x01;
+    assert!(matches!(
+        parse_network_frame(&reserved2),
+        Err(WireError::NonZeroReserved2(_))
+    ));
+}
+
+#[test]
+fn test_transaction_decoder_rejects_oversized_payload_before_allocation() {
+    let tx = Transaction {
+        version: 1,
+        chain_id: 1,
+        tx_type: TxType::Transfer,
+        flags: 0,
+        sender: Address([1u8; 32]),
+        recipient: Address([2u8; 32]),
+        nonce: 0,
+        amount: Quantum::new(1),
+        fee: Quantum::new(1),
+        valid_until: 0,
+        payload: Vec::new(),
+        signature: Signature([0u8; 64]),
+    };
+    let mut encoded = Vec::new();
+    tx.encode_canonical(&mut encoded);
+
+    // Offset prefiks `payload_len` transaksi kanonikal = 0x78 = 120 byte.
+    let oversized_len = (MAX_TRANSACTION_PAYLOAD_BYTES + 1) as u32;
+    encoded[120..124].copy_from_slice(&oversized_len.to_be_bytes());
+
+    // Decoder wajib menolak sebelum membaca/mengalokasikan payload.
+    assert!(matches!(
+        Transaction::decode_canonical_exact(&encoded),
+        Err(CodecError::ExcessiveAllocation { max, requested })
+            if max == MAX_TRANSACTION_PAYLOAD_BYTES
+                && requested == MAX_TRANSACTION_PAYLOAD_BYTES + 1
+    ));
 }
 
 #[test]
@@ -204,7 +303,9 @@ fn test_anti_dos_mempool_rbf_and_capacity_bounds() {
         storage_root: None,
     };
 
-    assert!(mempool.submit_transaction(signed_tx1, &kp.public_key_bytes(), 100, &acct).is_ok());
+    assert!(mempool
+        .submit_transaction(signed_tx1, &kp.public_key_bytes(), 100, &acct)
+        .is_ok());
 
     // 1. RBF Mandate: Kenaikan fee < 10% (10.000 -> 10.500 = 5%) WAJIB DITOLAK
     let mut tx_rbf_low = tx1.clone();
@@ -218,7 +319,10 @@ fn test_anti_dos_mempool_rbf_and_capacity_bounds() {
     tx_rbf_ok.fee = Quantum::new(11_000);
     tx_rbf_ok.signature = kp.sign(&tx_rbf_ok.signing_preimage());
     let rbf_ok_res = mempool.submit_transaction(tx_rbf_ok, &kp.public_key_bytes(), 100, &acct);
-    assert!(rbf_ok_res.is_ok(), "RBF fee bump >= 10% wajib diterima menggantikan tx lama");
+    assert!(
+        rbf_ok_res.is_ok(),
+        "RBF fee bump >= 10% wajib diterima menggantikan tx lama"
+    );
 }
 
 #[test]
@@ -246,7 +350,10 @@ fn test_anti_dos_avm_stack_overflow_protection() {
 
     // Eksekusi harus dihentikan dengan status Error/Revert tanpa panic
     assert!(
-        matches!(result, ExecutionResult::Error(_) | ExecutionResult::Revert { .. }),
+        matches!(
+            result,
+            ExecutionResult::Error(_) | ExecutionResult::Revert { .. }
+        ),
         "Stack overflow (>1024) wajib dihentikan dengan aman tanpa panic"
     );
 }
@@ -340,7 +447,8 @@ fn test_multi_layer_nullifier_anti_replay_enforcement() {
     assert!(l4_registry.is_nullified(&cross_nullifier));
 
     // Replay pesan lintas rantai dengan nullifier yang sama WAJIB ditolak
-    let replay_l4 = l4_registry.register_nullifier(cross_nullifier, ChainId::Ethereum, [0x01; 32], 1001);
+    let replay_l4 =
+        l4_registry.register_nullifier(cross_nullifier, ChainId::Ethereum, [0x01; 32], 1001);
     assert!(
         replay_l4.is_err(),
         "Replay attack pada L4 cross-chain envelope wajib ditolak mutlak"

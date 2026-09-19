@@ -14,9 +14,7 @@ use std::collections::HashMap;
 use aurion::core::{Address, Hash256, Quantum};
 use aurion::crypto::{blake3_hash, derive_address_from_pubkey, Keypair};
 use aurion::interop::codec::{decode_envelope, encode_envelope, L4_HEADER_BYTES, L4_WIRE_MAGIC};
-use aurion::interop::types::{
-    BridgeStatus, ChainId, CrossChainMessage, ProofPayload, ProtocolId,
-};
+use aurion::interop::types::{BridgeStatus, ChainId, CrossChainMessage, ProofPayload, ProtocolId};
 use aurion::scaling::codec::{
     L2BatchFrame, L2BatchFrameHeader, BATCH_FRAME_HEADER_SIZE, MAGIC_AUL2, PROTOCOL_VERSION_1,
 };
@@ -28,6 +26,10 @@ use aurion::vm::opcode::Opcode;
 use aurion::vm::verifier::BytecodeVerifier;
 use aurion::wire::frame::{
     parse_network_frame, serialize_network_frame, WIRE_FRAME_HEADER_BYTES, WIRE_MAGIC,
+};
+use aurion::wire::{
+    max_payload_bound, MSG_BFT_PREVOTE, MSG_HANDSHAKE_HELLO, MSG_MEMPOOL_INV, MSG_PEERS_ADDR,
+    MSG_TX_GOSSIP,
 };
 
 // ==============================================================================
@@ -65,13 +67,6 @@ impl Blake3Prng {
         u64::from_be_bytes(buf)
     }
 
-    fn next_u16(&mut self) -> u16 {
-        let bytes = self.next_bytes();
-        let mut buf = [0u8; 2];
-        buf.copy_from_slice(&bytes[..2]);
-        u16::from_be_bytes(buf)
-    }
-
     fn next_u8(&mut self) -> u8 {
         self.next_bytes()[0]
     }
@@ -104,7 +99,17 @@ fn test_property_wire_frame_roundtrip_and_checksum_invariance() {
     let mut prng = Blake3Prng::new(b"AURION-PROPERTY-WIRE-FRAME-V1");
 
     for iter in 0..500 {
-        let msg_type = prng.next_u16();
+        // Hanya tipe pesan kanonikal yang diuji; plafon payload per tipe
+        // ditegakkan oleh codec, jadi panjang payload harus dipangkas ke batas tipe.
+        const KNOWN_TYPES: [u16; 5] = [
+            MSG_HANDSHAKE_HELLO,
+            MSG_BFT_PREVOTE,
+            MSG_PEERS_ADDR,
+            MSG_MEMPOOL_INV,
+            MSG_TX_GOSSIP,
+        ];
+        let msg_type = KNOWN_TYPES[iter % KNOWN_TYPES.len()];
+        let max_bound = max_payload_bound(msg_type);
         // Variasi panjang payload: 0, 1, kecil, menengah, hingga 64 KB
         let payload_len = match iter % 6 {
             0 => 0,
@@ -113,7 +118,8 @@ fn test_property_wire_frame_roundtrip_and_checksum_invariance() {
             3 => prng.next_range(65, 1024) as usize,
             4 => prng.next_range(1025, 16384) as usize,
             _ => prng.next_range(16385, 65536) as usize,
-        };
+        }
+        .min(max_bound);
         let payload = prng.next_vec(payload_len);
 
         // 1. Serialisasi frame
@@ -128,7 +134,11 @@ fn test_property_wire_frame_roundtrip_and_checksum_invariance() {
         );
 
         // Properti: 4 byte pertama adalah WIRE_MAGIC kanonikal "AUR0"
-        assert_eq!(&serialized[0..4], &WIRE_MAGIC, "Wire magic property violated");
+        assert_eq!(
+            &serialized[0..4],
+            &WIRE_MAGIC,
+            "Wire magic property violated"
+        );
 
         // 2. Deserialisasi dan verifikasi roundtrip
         let (header, parsed_payload) =
@@ -278,7 +288,8 @@ fn test_property_l4_cross_chain_envelope_roundtrip_invariance() {
         .expect("Valid message params must construct CrossChainMessage");
         msg.route.hop_count = hop_count;
 
-        let encoded = encode_envelope(&msg, status).expect("Valid L4 envelope encoding must succeed");
+        let encoded =
+            encode_envelope(&msg, status).expect("Valid L4 envelope encoding must succeed");
         assert!(encoded.len() >= L4_HEADER_BYTES);
         assert_eq!(&encoded[0..4], &L4_WIRE_MAGIC);
 
@@ -399,7 +410,11 @@ fn test_property_smt_root_determinism_and_order_independence() {
             root_1, root_2,
             "SMT root determinism violated across different insertion orders"
         );
-        assert_ne!(root_1, Hash256::ZERO, "SMT root cannot be zero with populated accounts");
+        assert_ne!(
+            root_1,
+            Hash256::ZERO,
+            "SMT root cannot be zero with populated accounts"
+        );
     }
 }
 

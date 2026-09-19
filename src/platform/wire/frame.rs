@@ -1,5 +1,6 @@
 //! Wire framing protokol jaringan P2P Aurion (Header 52 Bytes + Magic 0x41555230).
 
+use super::messages::{is_known_message_type, max_payload_bound};
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::Hash256;
 use crate::crypto::blake3_hash;
@@ -15,6 +16,12 @@ pub enum WireError {
     InvalidMagic([u8; 4]),
     #[error("Payload exceeds maximum network frame size of 8MB: {0} bytes")]
     PayloadTooLarge(usize),
+    #[error("Reserved header field must be zero, got {0:#06x}")]
+    NonZeroReserved(u16),
+    #[error("Reserved2 header field must be zero, got {0:?}")]
+    NonZeroReserved2([u8; 8]),
+    #[error("Unknown wire message type: {0:#06x}")]
+    UnknownMessageType(u16),
     #[error("Checksum mismatch: expected {expected}, got {computed}")]
     ChecksumMismatch {
         expected: Hash256,
@@ -22,6 +29,22 @@ pub enum WireError {
     },
     #[error("Codec error: {0}")]
     Codec(#[from] CodecError),
+}
+
+/// Memvalidasi tipe pesan termasuk katalog kanonikal.
+fn validate_message_type(message_type: u16) -> Result<(), WireError> {
+    if !is_known_message_type(message_type) {
+        return Err(WireError::UnknownMessageType(message_type));
+    }
+    Ok(())
+}
+
+/// Menegakkan plafon payload khusus tipe pesan sebelum alokasi lanjutan.
+fn validate_payload_bound(message_type: u16, payload_len: usize) -> Result<(), WireError> {
+    if payload_len > max_payload_bound(message_type) {
+        return Err(WireError::PayloadTooLarge(payload_len));
+    }
+    Ok(())
 }
 
 /// Header frame jaringan P2P berukuran tepat 52 bytes.
@@ -86,10 +109,9 @@ impl CanonicalDecode for WireFrameHeader {
 }
 
 /// Serialisasi frame jaringan lengkap (Header 52B + Payload).
-pub fn serialize_network_frame(
-    message_type: u16,
-    payload: &[u8],
-) -> Result<Vec<u8>, WireError> {
+pub fn serialize_network_frame(message_type: u16, payload: &[u8]) -> Result<Vec<u8>, WireError> {
+    validate_message_type(message_type)?;
+    validate_payload_bound(message_type, payload.len())?;
     if payload.len() > MAX_WIRE_PAYLOAD_BYTES {
         return Err(WireError::PayloadTooLarge(payload.len()));
     }
@@ -119,7 +141,18 @@ pub fn parse_network_frame(raw_frame: &[u8]) -> Result<(WireFrameHeader, &[u8]),
         return Err(WireError::InvalidMagic(header.magic));
     }
 
+    validate_message_type(header.message_type)?;
+
+    if header.reserved != 0 {
+        return Err(WireError::NonZeroReserved(header.reserved));
+    }
+
+    if header.reserved2 != [0u8; 8] {
+        return Err(WireError::NonZeroReserved2(header.reserved2));
+    }
+
     let payload_len = header.payload_len as usize;
+    validate_payload_bound(header.message_type, payload_len)?;
     if payload_len > MAX_WIRE_PAYLOAD_BYTES {
         return Err(WireError::PayloadTooLarge(payload_len));
     }

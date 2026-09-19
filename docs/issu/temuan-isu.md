@@ -36,9 +36,9 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Closed | ✅ Terverifikasi & diremediasi (Argon2id + ChaCha20Poly1305, envelope V2 + migrasi) |
 | AUR-ISSUE-005 | Password default wallet lemah | High | Closed | ✅ Terverifikasi & sudah diremediasi |
 | AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
-| AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Closed | ✅ Terverifikasi & diremediasi (`MAX_TX_WIRE_SIZE` = 24.764 B) |
 | AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Open | ✅ Terverifikasi |
-| AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Open | ✅ Terverifikasi |
+| AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Closed | ✅ Terverifikasi & diremediasi (strict wire validation + tests) |
 | AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Open | ✅ Terverifikasi |
 
 ## 3. Temuan Detail
@@ -332,14 +332,22 @@ perbedaan buffer bootnode, dan test vector yang tidak sesuai kode.
 Tetapkan formula ukuran berdasarkan schema final, lalu sinkronkan codec,
 validator, wallet, wire limits, bootnode limits, fee policy, dan dokumentasi.
 
-**Catatan remediasi (parsial):**
+**Catatan remediasi:**
 
 - Sebagai bagian remediasi ISSUE-003: dokumentasi disinkronkan ke `184 + N`
   Bytes + `payload_len` (bukan `148 + N`), dan hardcode `148` di
   `src/consensus/mempool/engine.rs` diganti `TRANSACTION_BASE_BYTES + 4 + payload`.
-- Audit lanjutan yang masih perlu: keselarasan `MSG_TX_GOSSIP` (68 KiB) dengan
-  batas payload 24 KiB, serta kebijakan fee berbasis ukuran di STF. Status tetap
-  **Open** sampai audit wire/fee selesai.
+- Audit wire diselesaikan bersamaan dengan ISSUE-009: `MAX_TRANSACTION_WIRE_BYTES`
+  / `MAX_TX_WIRE_SIZE` = `184 + 4 + 24.576` = **24.764 B** ditambahkan sebagai
+  konstanta kanonikal; `MSG_TX_GOSSIP` kini memakai plafon ini (bukan 68 KiB),
+  dan `src/consensus/mempool/engine.rs` memakai helper `transaction_wire_size()`.
+- **Kebijakan fee:** STF hanya menegakkan `fee > 0` (flat, tanpa komponen ukuran),
+  sehingga tidak ada kebijakan fee berbasis ukuran yang perlu disinkronkan.
+  Keselarasan tercapai *by construction*: validator menolak payload > 24 KiB,
+  wire menolak frame > 24.764 B, dan mempool memakai formula ukuran yang sama.
+  Tidak ada perubahan aturan konsensus.
+- Dokumentasi `AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md` Bagian 6 diperbarui
+  (`TX_GOSSIP` = 24.764 B). Status **Closed**.
 
 ### AUR-ISSUE-008: Format CommitCertificate Berbeda
 
@@ -371,7 +379,7 @@ commitment.
 ### AUR-ISSUE-009: Validasi Frame Belum Strict
 
 **Prioritas:** High
-**Status:** Open
+**Status:** Closed
 **Lokasi:** `src/platform/wire/frame.rs` dan `messages.rs`
 
 Kode menyediakan `max_payload_bound(message_type)` pada `messages.rs:40`, tetapi
@@ -394,6 +402,30 @@ terlaksana.
 3. Tolak message type tidak dikenal atau definisikan rute fallback eksplisit.
 4. Tambahkan malformed-frame dan oversized-message tests.
 5. Terapkan aturan yang sama pada bootnode atau gunakan relay opaque dengan limit aman.
+
+**Catatan remediasi:**
+
+- `max_payload_bound()` kini benar-benar ditegakkan: `MSG_TX_GOSSIP` =
+  `MAX_TX_WIRE_SIZE` (24.764 B), tipe dikenal lain memakai plafon katalog, dan
+  tipe tak dikenal mengembalikan `0` (tanpa fallback implisit). Ditambah
+  predikat `is_known_message_type()` di `messages.rs`.
+- `frame.rs` menambahkan varian error `UnknownMessageType(u16)`,
+  `NonZeroReserved(u16)`, `NonZeroReserved2([u8; 8])` dan helper
+  `validate_message_type()` / `validate_payload_bound()`. Urutan validasi
+  `parse_network_frame()`: magic $\to$ tipe dikenal $\to$ reserved $\to$ reserved2
+  $\to$ plafon per tipe $\to$ backstop global 8 MiB $\to$ panjang $\to$ checksum.
+  `serialize_network_frame()` menegakkan aturan tipe + plafon yang sama.
+- Decoder transaksi (`Transaction::decode_canonical`) memakai
+  `decode_length_prefixed_bytes()` sehingga `payload_len` divalidasi terhadap
+  `MAX_TRANSACTION_PAYLOAD_BYTES` sebelum alokasi (`CodecError::ExcessiveAllocation`
+  kini memuat `{ max, requested }`).
+- Pengujian: `tests/security_hardening.rs` menambah
+  `test_strict_wire_frame_rejects_oversized_per_message_type`,
+  `test_strict_wire_frame_rejects_unknown_type_and_nonzero_reserved`, dan
+  `test_transaction_decoder_rejects_oversized_payload_before_allocation`.
+  `tests/property_tests.rs` membatasi roundtrip ke tipe dikenal + plafon tipe.
+  `tests/conformance.rs` dan `src/platform/conformance/runner.rs` memakai
+  `MSG_TX_GOSSIP` (0x0030). Status **Closed**.
 
 ### AUR-ISSUE-010: Genesis Artifact Belum Terikat ke Binary Aktif
 

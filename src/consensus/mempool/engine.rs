@@ -5,7 +5,7 @@ use crate::core::{Address, Hash256, MonetaryError, Quantum};
 use crate::crypto::derive_address_from_pubkey;
 use crate::mempool::types::MempoolEntry;
 use crate::state::account::Account;
-use crate::transaction::types::{Transaction, TRANSACTION_BASE_BYTES};
+use crate::transaction::types::{transaction_wire_size, Transaction};
 use crate::transaction::validator::validate_transaction_stateless;
 use std::collections::HashMap;
 use thiserror::Error;
@@ -23,10 +23,7 @@ pub enum MempoolError {
     #[error("Transaction nonce {received} is lower than account on-chain nonce {expected}")]
     NonceTooLow { expected: u64, received: u64 },
     #[error("Insufficient balance: account has {balance}, required {required}")]
-    InsufficientBalance {
-        balance: Quantum,
-        required: Quantum,
-    },
+    InsufficientBalance { balance: Quantum, required: Quantum },
     #[error("Mempool full and transaction fee is too low for eviction")]
     MempoolFull,
     #[error("RBF Rejected: Replacement fee must be at least +10% higher (existing: {existing}, required: {required}, provided: {provided})")]
@@ -111,9 +108,7 @@ impl MempoolEngine {
                 .expect("mempool index inconsistency");
 
             let existing_fee_u128 = existing_entry.tx.fee.as_u128();
-            let bump = existing_fee_u128
-                .saturating_mul(RBF_MIN_FEE_BUMP_PERCENT)
-                / 100;
+            let bump = existing_fee_u128.saturating_mul(RBF_MIN_FEE_BUMP_PERCENT) / 100;
             let required_fee_u128 = existing_fee_u128.saturating_add(bump.max(1));
             let required_fee = Quantum::new(required_fee_u128);
 
@@ -146,7 +141,8 @@ impl MempoolEngine {
 
                 // Gusur transaksi berbiaya terendah
                 if let Some(evicted) = self.entries.remove(&low_id) {
-                    self.by_sender_nonce.remove(&(evicted.tx.sender, evicted.tx.nonce));
+                    self.by_sender_nonce
+                        .remove(&(evicted.tx.sender, evicted.tx.nonce));
                 }
             }
         }
@@ -173,7 +169,8 @@ impl MempoolEngine {
         let count = expired_ids.len();
         for id in expired_ids {
             if let Some(entry) = self.entries.remove(&id) {
-                self.by_sender_nonce.remove(&(entry.tx.sender, entry.tx.nonce));
+                self.by_sender_nonce
+                    .remove(&(entry.tx.sender, entry.tx.nonce));
             }
         }
         count
@@ -183,7 +180,8 @@ impl MempoolEngine {
     pub fn remove_finalized(&mut self, tx_ids: &[Hash256]) {
         for id in tx_ids {
             if let Some(entry) = self.entries.remove(id) {
-                self.by_sender_nonce.remove(&(entry.tx.sender, entry.tx.nonce));
+                self.by_sender_nonce
+                    .remove(&(entry.tx.sender, entry.tx.nonce));
             }
         }
     }
@@ -237,7 +235,7 @@ impl MempoolEngine {
             let queue = per_sender.get_mut(&sender).unwrap();
             let next_tx = queue.pop().unwrap();
 
-            let tx_size = TRANSACTION_BASE_BYTES + 4 + next_tx.payload.len();
+            let tx_size = transaction_wire_size(next_tx.payload.len());
             if current_bytes + tx_size <= max_payload_bytes {
                 current_bytes += tx_size;
                 candidate_txs.push(next_tx);

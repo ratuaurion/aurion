@@ -4,7 +4,7 @@
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::consensus::certificate::{CommitCertificate, ValidatorEntry, ValidatorSet};
 use crate::consensus::header::{BlockHeader, BLOCK_HEADER_BYTES};
-use crate::consensus::vote::{Vote, VOTE_BYTES, PHASE_PRECOMMIT};
+use crate::consensus::vote::{Vote, PHASE_PRECOMMIT, VOTE_BYTES};
 use crate::core::{
     Address, Hash256, MonetaryError, Quantum, Signature, CREATOR_ALLOCATION_QUANTA,
     DEVELOPER_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
@@ -22,6 +22,7 @@ use crate::transaction::validator::validate_transaction_stateless;
 use crate::wire::frame::{
     parse_network_frame, serialize_network_frame, WireError, WIRE_FRAME_HEADER_BYTES,
 };
+use crate::wire::messages::MSG_TX_GOSSIP;
 use std::collections::HashMap;
 use std::time::Instant;
 
@@ -127,7 +128,9 @@ pub fn run_pillar_1() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "Blake3 digests, Ed25519 strict anti-malleability, and Bech32m roundtrip verified 100%.".to_string(),
+        detail:
+            "Blake3 digests, Ed25519 strict anti-malleability, and Bech32m roundtrip verified 100%."
+                .to_string(),
     }
 }
 
@@ -148,7 +151,9 @@ pub fn run_pillar_2() -> PillarExecutionResult {
 
     // Hard cap enforcement
     let max = Quantum::MAX_SUPPLY;
-    if max.checked_add_bounded(Quantum::ONE) != Err(MonetaryError::SupplyCapExceeded(MAX_SUPPLY_QUANTA + 1)) {
+    if max.checked_add_bounded(Quantum::ONE)
+        != Err(MonetaryError::SupplyCapExceeded(MAX_SUPPLY_QUANTA + 1))
+    {
         return PillarExecutionResult {
             pillar_id: 2,
             name,
@@ -188,7 +193,9 @@ pub fn run_pillar_2() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "Hard cap 66M AUR, Quantum u128 arithmetic, and 20% deflationary fee burn verified.".to_string(),
+        detail:
+            "Hard cap 66M AUR, Quantum u128 arithmetic, and 20% deflationary fee burn verified."
+                .to_string(),
     }
 }
 
@@ -239,7 +246,8 @@ pub fn run_pillar_3() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "Deterministic big-endian encoding and strict trailing bytes rejection verified.".to_string(),
+        detail: "Deterministic big-endian encoding and strict trailing bytes rejection verified."
+            .to_string(),
     }
 }
 
@@ -296,7 +304,8 @@ pub fn run_pillar_4() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "184-byte base transaction, preimage domain separation, and TxID verified.".to_string(),
+        detail: "184-byte base transaction, preimage domain separation, and TxID verified."
+            .to_string(),
     }
 }
 
@@ -355,7 +364,9 @@ pub fn run_pillar_5() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "Deterministic atomic state transition, strict nonce increment, and fee burn verified.".to_string(),
+        detail:
+            "Deterministic atomic state transition, strict nonce increment, and fee burn verified."
+                .to_string(),
     }
 }
 
@@ -379,7 +390,10 @@ pub fn run_pillar_6() -> PillarExecutionResult {
             name,
             status: TestStatus::Failed("BlockHeader size is not exactly 124 bytes".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: format!("Expected 124 bytes, got {}", header.to_canonical_bytes().len()),
+            detail: format!(
+                "Expected 124 bytes, got {}",
+                header.to_canonical_bytes().len()
+            ),
         };
     }
 
@@ -419,7 +433,10 @@ pub fn run_pillar_6() -> PillarExecutionResult {
                 name,
                 status: TestStatus::Failed("Vote size is not exactly 117 bytes".to_string()),
                 duration_micros: start.elapsed().as_micros(),
-                detail: format!("Expected 117 bytes, got {}", vote.to_canonical_bytes().len()),
+                detail: format!(
+                    "Expected 117 bytes, got {}",
+                    vote.to_canonical_bytes().len()
+                ),
             };
         }
         precommits.push(vote);
@@ -447,7 +464,9 @@ pub fn run_pillar_6() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "124-byte BlockHeader, 117-byte Vote, 72-byte ValidatorEntry, and >2/3 quorum verified.".to_string(),
+        detail:
+            "124-byte BlockHeader, 117-byte Vote, 72-byte ValidatorEntry, and >2/3 quorum verified."
+                .to_string(),
     }
 }
 
@@ -456,7 +475,7 @@ pub fn run_pillar_7() -> PillarExecutionResult {
     let name = "P2P Wire Framing Protocol & Frame Checksum Integrity (52B Header)";
 
     let payload = b"AURION-CTS-NETWORK-PAYLOAD";
-    let frame = match serialize_network_frame(0x0010, payload) {
+    let frame = match serialize_network_frame(MSG_TX_GOSSIP, payload) {
         Ok(f) => f,
         Err(e) => {
             return PillarExecutionResult {
@@ -475,7 +494,11 @@ pub fn run_pillar_7() -> PillarExecutionResult {
             name,
             status: TestStatus::Failed("Network frame length mismatch".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: format!("Expected {}, got {}", WIRE_FRAME_HEADER_BYTES + payload.len(), frame.len()),
+            detail: format!(
+                "Expected {}, got {}",
+                WIRE_FRAME_HEADER_BYTES + payload.len(),
+                frame.len()
+            ),
         };
     }
 
@@ -492,7 +515,7 @@ pub fn run_pillar_7() -> PillarExecutionResult {
         }
     };
 
-    if header.message_type != 0x0010 || parsed_payload != payload {
+    if header.message_type != MSG_TX_GOSSIP || parsed_payload != payload {
         return PillarExecutionResult {
             pillar_id: 7,
             name,
@@ -505,11 +528,16 @@ pub fn run_pillar_7() -> PillarExecutionResult {
     // Tampered payload test
     let mut tampered = frame.clone();
     tampered[WIRE_FRAME_HEADER_BYTES] ^= 0xEE;
-    if !matches!(parse_network_frame(&tampered), Err(WireError::ChecksumMismatch { .. })) {
+    if !matches!(
+        parse_network_frame(&tampered),
+        Err(WireError::ChecksumMismatch { .. })
+    ) {
         return PillarExecutionResult {
             pillar_id: 7,
             name,
-            status: TestStatus::Failed("Tampered payload did not trigger ChecksumMismatch".to_string()),
+            status: TestStatus::Failed(
+                "Tampered payload did not trigger ChecksumMismatch".to_string(),
+            ),
             duration_micros: start.elapsed().as_micros(),
             detail: "Corrupted network packet must be rejected".to_string(),
         };
@@ -571,7 +599,9 @@ pub fn run_pillar_8() -> PillarExecutionResult {
     }
 
     let total = CREATOR_ALLOCATION_QUANTA + DEVELOPER_ALLOCATION_QUANTA;
-    if genesis.monetary.total_issued.as_u128() != total || genesis.monetary.total_burned.as_u128() != 0 {
+    if genesis.monetary.total_issued.as_u128() != total
+        || genesis.monetary.total_burned.as_u128() != 0
+    {
         return PillarExecutionResult {
             pillar_id: 8,
             name,
@@ -586,6 +616,8 @@ pub fn run_pillar_8() -> PillarExecutionResult {
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
-        detail: "Genesis Block 0, 35% hard cap allocation (30% Creator, 5% Dev), and σ0 state verified.".to_string(),
+        detail:
+            "Genesis Block 0, 35% hard cap allocation (30% Creator, 5% Dev), and σ0 state verified."
+                .to_string(),
     }
 }

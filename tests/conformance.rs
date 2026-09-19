@@ -22,6 +22,7 @@ use aurion::transaction::validator::validate_transaction_stateless;
 use aurion::wire::frame::{
     parse_network_frame, serialize_network_frame, WireError, WIRE_FRAME_HEADER_BYTES,
 };
+use aurion::wire::MSG_TX_GOSSIP;
 use std::collections::HashMap;
 
 #[test]
@@ -50,7 +51,8 @@ fn pillar_1_cryptographic_primitives() {
     );
 
     // 1.3 Ed25519 Keypair & Strict Signature
-    let seed = hex::decode("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60").unwrap();
+    let seed =
+        hex::decode("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60").unwrap();
     let mut seed_bytes = [0u8; 32];
     seed_bytes.copy_from_slice(&seed);
     let keypair = Keypair::from_seed(&seed_bytes);
@@ -126,7 +128,10 @@ fn pillar_3_canonical_codec() {
     // Strict zero-trailing rejection
     let mut trailing = encoded.clone();
     trailing.push(0x00);
-    assert_eq!(u64::decode_canonical_exact(&trailing), Err(CodecError::TrailingBytes(1)));
+    assert_eq!(
+        u64::decode_canonical_exact(&trailing),
+        Err(CodecError::TrailingBytes(1))
+    );
 }
 
 #[test]
@@ -191,9 +196,15 @@ fn pillar_5_state_transition_execution() {
     assert_eq!(receipt.burned_fee.as_u128(), 10_000_000); // 20% of 50M
     assert_eq!(receipt.miner_fee.as_u128(), 40_000_000); // 80% of 50M
 
-    assert_eq!(accounts.get(&sender).unwrap().balance.as_u128(), 650_000_000);
+    assert_eq!(
+        accounts.get(&sender).unwrap().balance.as_u128(),
+        650_000_000
+    );
     assert_eq!(accounts.get(&sender).unwrap().nonce, 1);
-    assert_eq!(accounts.get(&recipient).unwrap().balance.as_u128(), 300_000_000);
+    assert_eq!(
+        accounts.get(&recipient).unwrap().balance.as_u128(),
+        300_000_000
+    );
     assert_eq!(accounts.get(&miner).unwrap().balance.as_u128(), 40_000_000);
     assert_eq!(monetary.total_burned.as_u128(), 10_000_000);
 }
@@ -235,7 +246,15 @@ fn pillar_6_consensus_bft() {
     // Construct 3 precommits (30 voting weight > 27)
     let mut precommits = Vec::new();
     for (idx, kp) in keypairs.iter().enumerate().take(3) {
-        let vote = Vote::new_signed(kp, aurion::consensus::PHASE_PRECOMMIT, 1, 0, block_hash, idx as u32).unwrap();
+        let vote = Vote::new_signed(
+            kp,
+            aurion::consensus::PHASE_PRECOMMIT,
+            1,
+            0,
+            block_hash,
+            idx as u32,
+        )
+        .unwrap();
         assert_eq!(vote.to_canonical_bytes().len(), VOTE_BYTES);
         precommits.push(vote);
     }
@@ -253,11 +272,11 @@ fn pillar_6_consensus_bft() {
 #[test]
 fn pillar_7_wire_framing_and_security() {
     let payload = b"AURION-P2P-PAYLOAD";
-    let frame = serialize_network_frame(0x0010, payload).unwrap();
+    let frame = serialize_network_frame(MSG_TX_GOSSIP, payload).unwrap();
     assert_eq!(frame.len(), WIRE_FRAME_HEADER_BYTES + payload.len());
 
     let (header, parsed_payload) = parse_network_frame(&frame).unwrap();
-    assert_eq!(header.message_type, 0x0010);
+    assert_eq!(header.message_type, MSG_TX_GOSSIP);
     assert_eq!(parsed_payload, payload);
 
     // Tampered payload must fail checksum
