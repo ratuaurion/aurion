@@ -94,6 +94,14 @@ impl StateStore for MemoryStorageEngine {
         hashes.insert(block.hash(), block.header.height);
         certs.insert(block.header.height, certificate.clone());
         meta.insert("latest_height".to_string(), block.header.height.to_be_bytes().to_vec());
+        meta.insert(
+            "latest_block_hash".to_string(),
+            block.hash().as_bytes().to_vec(),
+        );
+        meta.insert(
+            "latest_state_root".to_string(),
+            block.header.state_root.as_bytes().to_vec(),
+        );
 
         Ok(())
     }

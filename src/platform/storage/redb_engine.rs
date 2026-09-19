@@ -214,6 +214,9 @@ impl StateStore for RedbStorageEngine {
             let mut meta_table = write_txn.open_table(METADATA_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
             let height_bytes = block.header.height.to_be_bytes();
             meta_table.insert("latest_height", height_bytes.as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+            let block_hash = block.hash();
+            meta_table.insert("latest_block_hash", block_hash.as_bytes().as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+            meta_table.insert("latest_state_root", &block.header.state_root.as_bytes()[..]).map_err(|e| StorageError::Database(e.to_string()))?;
         }
 
         // Atomic commit to disk via WAL

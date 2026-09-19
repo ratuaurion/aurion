@@ -149,7 +149,7 @@ impl MempoolEngine {
 
         // 7. Penerimaan Resmi ke dalam Mempool
         let tx_id = tx.compute_tx_id();
-        let entry = MempoolEntry::new(tx, current_time);
+        let entry = MempoolEntry::new(tx, *sender_pubkey, current_time);
         self.entries.insert(tx_id, entry);
         self.by_sender_nonce.insert(sender_nonce_key, tx_id);
 

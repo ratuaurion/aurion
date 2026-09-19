@@ -62,7 +62,7 @@ Untuk menjamin bahwa setiap objek di dalam Aurion menghasilkan representasi byte
 ├───────────────────┼────────────────────────────────────────────────────┤
 │ Blok Lengkap      │ 124 B (Header) + 8 B (Tx Count) + Σ(Tx) + CC(B)    │
 ├───────────────────┼────────────────────────────────────────────────────┤
-│ Commit Certificate│ 48 Bytes + (K × 96 Bytes Signatures)               │
+│ Commit Certificate│ 52 Bytes + (K × 117 Bytes Votes)                  │
 └───────────────────┴────────────────────────────────────────────────────┘
 ```
 

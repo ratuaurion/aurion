@@ -4,6 +4,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::genesis::builder::GENESIS_CHAIN_ID;
+use crate::consensus::bft::resolve_epoch_blocks;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeRole {
@@ -28,6 +29,7 @@ pub const OFFICIAL_MAINNET_BOOTNODE: &str = "tcp/116.212.72.89:7447";
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NodeConfig {
     pub chain_id: u32,
+    pub is_dev_mode: bool,
     pub role: NodeRole,
     pub p2p_bind: String,
     pub rpc_bind: String,
@@ -43,6 +45,7 @@ impl Default for NodeConfig {
     fn default() -> Self {
         Self {
             chain_id: GENESIS_CHAIN_ID, // Canonical Mainnet Chain ID (single source of truth)
+            is_dev_mode: false,
             role: NodeRole::FullNode,
             p2p_bind: "0.0.0.0:9000".to_string(),
             rpc_bind: "127.0.0.1:8545".to_string(),
@@ -79,6 +82,10 @@ impl NodeConfig {
 
     pub fn is_sentry(&self) -> bool {
         self.role == NodeRole::Sentry
+    }
+
+    pub fn epoch_blocks(&self) -> u64 {
+        resolve_epoch_blocks(self.is_dev_mode)
     }
 
     /// Daftar simpul bootstrap / genesis validator bootnodes resmi Mainnet.

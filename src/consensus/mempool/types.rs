@@ -23,16 +23,18 @@ pub enum TransactionState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MempoolEntry {
     pub tx: Transaction,
+    pub sender_pubkey: [u8; 32],
     pub tx_id: Hash256,
     pub state: TransactionState,
     pub admitted_timestamp: u64,
 }
 
 impl MempoolEntry {
-    pub fn new(tx: Transaction, admitted_timestamp: u64) -> Self {
+    pub fn new(tx: Transaction, sender_pubkey: [u8; 32], admitted_timestamp: u64) -> Self {
         let tx_id = tx.compute_tx_id();
         Self {
             tx,
+            sender_pubkey,
             tx_id,
             state: TransactionState::Mempool,
             admitted_timestamp,
@@ -83,4 +85,3 @@ impl TransactionReceipt {
         })
     }
 }
-

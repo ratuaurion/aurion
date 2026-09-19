@@ -4,14 +4,116 @@
 //! Mematuhi Konstitusi Konsensus dan Protokol Wire Aurion.
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
-use crate::consensus::certificate::CommitCertificate;
+use crate::consensus::certificate::{CommitCertificate, ValidatorSet};
 use crate::consensus::header::BlockHeader;
 use crate::core::Hash256;
-use crate::crypto::blake3_derive_key;
+use crate::crypto::{blake3_derive_key, ed25519_verify_strict, Keypair};
+use crate::genesis::builder::GENESIS_CHAIN_ID;
 use crate::transaction::types::Transaction;
-
+use thiserror::Error;
 
 pub const DST_MERKLE_BRANCH: &str = "AURION-MERKLE-BRANCH-V1";
+pub const DST_BLOCK_PROPOSAL: &str = "AURION-PROPOSAL-V1";
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum ProposalEnvelopeError {
+    #[error("proposer index {index} is outside validator set of size {set_size}")]
+    ProposerIndexOutOfBounds { index: u32, set_size: usize },
+    #[error("proposal chain ID {actual} is not canonical ({expected})")]
+    InvalidChainId { actual: u32, expected: u32 },
+    #[error("proposal proposer is not the deterministic leader")]
+    InvalidProposer,
+    #[error("proposal signature verification failed")]
+    InvalidSignature,
+}
+
+/// Wire envelope yang mengikat proposal ke proposer dan domain chain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlockProposalEnvelope {
+    pub block: Block,
+    pub proposer_index: u32,
+    pub signature: [u8; 64],
+}
+
+impl CanonicalEncode for BlockProposalEnvelope {
+    fn encode_canonical(&self, buf: &mut Vec<u8>) {
+        self.block.encode_canonical(buf);
+        self.proposer_index.encode_canonical(buf);
+        crate::core::Signature::from_bytes(self.signature).encode_canonical(buf);
+    }
+}
+
+impl CanonicalDecode for BlockProposalEnvelope {
+    fn decode_canonical(bytes: &[u8], cursor: &mut usize) -> Result<Self, CodecError> {
+        let block = Block::decode_canonical(bytes, cursor)?;
+        let proposer_index = u32::decode_canonical(bytes, cursor)?;
+        let signature = crate::core::Signature::decode_canonical(bytes, cursor)?;
+        Ok(Self {
+            block,
+            proposer_index,
+            signature: *signature.as_bytes(),
+        })
+    }
+}
+
+impl BlockProposalEnvelope {
+    pub fn new_signed(block: Block, chain_id: u32, proposer_index: u32, keypair: &Keypair) -> Self {
+        let signature = keypair.sign(&Self::signing_payload(&block, chain_id));
+        Self {
+            block,
+            proposer_index,
+            signature: *signature.as_bytes(),
+        }
+    }
+
+    pub fn signing_payload(block: &Block, chain_id: u32) -> Vec<u8> {
+        let mut payload = Vec::with_capacity(8 + 4 + 8 + 8 + 32);
+        payload.extend_from_slice(DST_BLOCK_PROPOSAL.as_bytes());
+        payload.extend_from_slice(&chain_id.to_be_bytes());
+        payload.extend_from_slice(&block.header.height.to_be_bytes());
+        payload.extend_from_slice(&block.header.round.to_be_bytes());
+        payload.extend_from_slice(block.hash().as_bytes());
+        payload
+    }
+
+    pub fn verify(
+        &self,
+        chain_id: u32,
+        validator_set: &ValidatorSet,
+    ) -> Result<(), ProposalEnvelopeError> {
+        if chain_id != GENESIS_CHAIN_ID {
+            return Err(ProposalEnvelopeError::InvalidChainId {
+                actual: chain_id,
+                expected: GENESIS_CHAIN_ID,
+            });
+        }
+
+        let validator = validator_set.get_validator(self.proposer_index).ok_or(
+            ProposalEnvelopeError::ProposerIndexOutOfBounds {
+                index: self.proposer_index,
+                set_size: validator_set.validators.len(),
+            },
+        )?;
+
+        let expected = crate::consensus::bft::engine::BftEngine::select_proposer(
+            validator_set,
+            self.block.header.height,
+            self.block.header.round,
+            &self.block.header.prev_block_hash,
+        );
+        if expected != self.proposer_index {
+            return Err(ProposalEnvelopeError::InvalidProposer);
+        }
+
+        let signature = crate::core::Signature::from_bytes(self.signature);
+        ed25519_verify_strict(
+            &validator.consensus_pubkey,
+            &Self::signing_payload(&self.block, chain_id),
+            &signature,
+        )
+        .map_err(|_| ProposalEnvelopeError::InvalidSignature)
+    }
+}
 
 /// Blok kanonikal Aurion.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,10 +198,8 @@ impl Block {
             return Hash256::ZERO;
         }
 
-        let mut current_level: Vec<Hash256> = transactions
-            .iter()
-            .map(|tx| tx.compute_tx_id())
-            .collect();
+        let mut current_level: Vec<Hash256> =
+            transactions.iter().map(|tx| tx.compute_tx_id()).collect();
 
         while current_level.len() > 1 {
             let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
@@ -155,5 +255,32 @@ mod tests {
         let decoded = Block::decode_canonical(&buf, &mut cursor).expect("Decode block failed");
         assert_eq!(cursor, buf.len());
         assert_eq!(block, decoded);
+    }
+
+    #[test]
+    fn test_proposal_envelope_canonical_roundtrip() {
+        let block = Block::new(
+            BlockHeader {
+                version: 1,
+                height: 7,
+                round: 2,
+                timestamp: 1773532800,
+                prev_block_hash: Hash256::from_bytes([4u8; 32]),
+                tx_merkle_root: Hash256::ZERO,
+                state_root: Hash256::from_bytes([5u8; 32]),
+            },
+            Vec::new(),
+            None,
+        );
+        let envelope = BlockProposalEnvelope {
+            block,
+            proposer_index: 3,
+            signature: [9u8; 64],
+        };
+        let mut encoded = Vec::new();
+        envelope.encode_canonical(&mut encoded);
+        let decoded = BlockProposalEnvelope::decode_canonical_exact(&encoded)
+            .expect("proposal envelope must decode canonically");
+        assert_eq!(decoded, envelope);
     }
 }

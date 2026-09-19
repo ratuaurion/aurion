@@ -34,14 +34,14 @@ Kluster devnet Aurion terdiri dari 6 simpul berdaulat dengan peran dan alokasi p
                                       ┌────────────────────────┐
                                       │  Public JSON-RPC & WS  │
                                       │  Gateway (rpc-gateway) │
-                                      │  Port: 8545 / 19506    │
+                                      │  Port: 8545 / 8550     │
                                       └────────────┬───────────┘
                                                    │
                                                    ▼
                                       ┌────────────────────────┐
                                       │   Anti-DDoS Sentry     │
                                       │   Edge Node (sentry-1) │
-                                      │   P2P: 19405 | RPC: 19505│
+                                      │   P2P: 7451 | RPC: 8549 │
                                       └────────────┬───────────┘
                                                    │
                           ┌────────────────────────┼────────────────────────┐
@@ -50,18 +50,18 @@ Kluster devnet Aurion terdiri dari 6 simpul berdaulat dengan peran dan alokasi p
                ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐
                │  Validator 1 (val-1) │ │  Validator 2 (val-2) │ │  Validator 3 (val-3) │ │  Validator 4 (val-4) │
                │  Proposer / BFT Core │ │  BFT Consensus Peer  │ │  BFT Consensus Peer  │ │  BFT Consensus Peer  │
-               │  P2P: 19401 | RPC:19501│ │ P2P: 19402 | RPC:19502│ │ P2P: 19403 | RPC:19503│ │ P2P: 19404 | RPC:19504│
+               │ P2P: 7447 | RPC:8545│ │ P2P: 7448 | RPC:8546│ │ P2P: 7449 | RPC:8547│ │ P2P: 7450 | RPC:8548│
                └──────────────────────┘ └──────────────────────┘ └──────────────────────┘ └──────────────────────┘
 ```
 
 | Simpul | Peran | Alamat P2P Wire (`AUR0`) | Antarmuka RPC (`HTTP/WS`) | Path Basis Data Persisten |
 | :--- | :--- | :--- | :--- | :--- |
-| **`val-1`** | BFT Validator (Proposer H=1) | `127.0.0.1:19401` | `http://127.0.0.1:19501` | `data/devnet/val-1/storage.redb` |
-| **`val-2`** | BFT Validator (Peer Kuorum) | `127.0.0.1:19402` | `http://127.0.0.1:19502` | `data/devnet/val-2/storage.redb` |
-| **`val-3`** | BFT Validator (Peer Kuorum) | `127.0.0.1:19403` | `http://127.0.0.1:19503` | `data/devnet/val-3/storage.redb` |
-| **`val-4`** | BFT Validator (Peer Kuorum) | `127.0.0.1:19404` | `http://127.0.0.1:19504` | `data/devnet/val-4/storage.redb` |
-| **`sentry-1`** | Edge Proxy Anti-DDoS Filter | `127.0.0.1:19405` | `http://127.0.0.1:19505` | `data/devnet/sentry-1/storage.redb` |
-| **`rpc-gateway`**| Gerbang Publik DApp/SDK | `127.0.0.1:19406` | `http://127.0.0.1:8545`  | `data/devnet/rpc-gateway/storage.redb` |
+| **`val-1`** | BFT Validator (Proposer H=1) | `127.0.0.1:7447` | `http://127.0.0.1:8545` | `data/devnet/val-1/storage.redb` |
+| **`val-2`** | BFT Validator (Peer Kuorum) | `127.0.0.1:7448` | `http://127.0.0.1:8546` | `data/devnet/val-2/storage.redb` |
+| **`val-3`** | BFT Validator (Peer Kuorum) | `127.0.0.1:7449` | `http://127.0.0.1:8547` | `data/devnet/val-3/storage.redb` |
+| **`val-4`** | BFT Validator (Peer Kuorum) | `127.0.0.1:7450` | `http://127.0.0.1:8548` | `data/devnet/val-4/storage.redb` |
+| **`sentry-1`** | Edge Proxy Anti-DDoS Filter | `127.0.0.1:7451` | `http://127.0.0.1:8549` | `data/devnet/sentry-1/storage.redb` |
+| **`rpc-gateway`**| Gerbang Publik DApp/SDK | `127.0.0.1:7452` | `http://127.0.0.1:8550` | `data/devnet/rpc-gateway/storage.redb` |
 
 ---
 
@@ -88,12 +88,12 @@ Output tabel real-time:
 ```
 Node ID      | Role       | PID      | RPC Port  | Port Status  | Health
 ----------------------------------------------------------------------
-val-1        | validator  | 14220    | 19501     | LISTENING    | UP
-val-2        | validator  | 14228    | 19502     | LISTENING    | UP
-val-3        | validator  | 14236    | 19503     | LISTENING    | UP
-val-4        | validator  | 14244    | 19504     | LISTENING    | UP
-sentry-1     | sentry     | 14252    | 19505     | LISTENING    | UP
-rpc-gateway  | rpc        | 14260    | 19506     | LISTENING    | UP
+val-1        | validator  | 14220    | 8545      | LISTENING    | UP
+val-2        | validator  | 14228    | 8546      | LISTENING    | UP
+val-3        | validator  | 14236    | 8547      | LISTENING    | UP
+val-4        | validator  | 14244    | 8548      | LISTENING    | UP
+sentry-1     | sentry     | 14252    | 8549      | LISTENING    | UP
+rpc-gateway  | rpc        | 14260    | 8550      | LISTENING    | UP
 ```
 
 ### Langkah 3.4: Perintah CLI Terpadu Bawaan Aurion
@@ -101,7 +101,7 @@ Anda juga dapat memeriksa dan mengendalikan devnet langsung dari binary Aurion:
 ```powershell
 aurion devnet init
 aurion devnet status --output json
-aurion devnet start --node-id val-1 --role validator --rpc-bind 127.0.0.1:19501
+aurion devnet start --node-id val-1 --role validator --rpc-bind 127.0.0.1:8545 --p2p-bind 127.0.0.1:7447 --dev
 ```
 
 ### Langkah 3.5: Menghentikan Kluster
@@ -150,7 +150,7 @@ curl -i http://127.0.0.1:8545/healthz
 HTTP/1.1 200 OK
 Content-Type: application/json
 
-{"status":"UP","node_role":"FullNode","chain_id":9999,"version":"1.0.0"}
+{"status":"UP","node_role":"FullNode","chain_id":1001,"version":"1.0.0"}
 ```
 
 ### JSON-RPC 2.0 Test Call

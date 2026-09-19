@@ -11,8 +11,24 @@ use crate::consensus::bft::certificate::{CertificateError, CommitCertificate, Va
 use crate::core::Address;
 use thiserror::Error;
 
-/// Panjang epoch default untuk testnet multi-region (setiap 10 blok).
-pub const DEFAULT_EPOCH_BLOCKS: u64 = 10;
+/// Panjang epoch kanonikal untuk Mainnet/produksi.
+pub const CANONICAL_EPOCH_BLOCKS: u64 = 10_000;
+
+/// Panjang epoch khusus fixture test/dev.
+pub const DEV_EPOCH_BLOCKS: u64 = 10;
+
+/// Pilih panjang epoch berdasarkan mode runtime.
+#[inline]
+pub const fn resolve_epoch_blocks(is_dev_mode: bool) -> u64 {
+    if is_dev_mode {
+        DEV_EPOCH_BLOCKS
+    } else {
+        CANONICAL_EPOCH_BLOCKS
+    }
+}
+
+/// Alias kompatibilitas untuk caller yang belum menerima konfigurasi runtime.
+pub const DEFAULT_EPOCH_BLOCKS: u64 = CANONICAL_EPOCH_BLOCKS;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EpochError {

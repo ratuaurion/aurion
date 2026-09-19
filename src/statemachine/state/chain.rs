@@ -84,6 +84,41 @@ impl ChainLedger {
                 .map_err(|e| ChainError::Storage(e.to_string()))?
                 .ok_or_else(|| ChainError::Storage(format!("Blok pada tinggi {} hilang dari storage", latest_h)))?;
 
+            let expected_hash = store
+                .get_metadata("latest_block_hash")
+                .map_err(|e| ChainError::Storage(e.to_string()))?
+                .ok_or_else(|| ChainError::Storage("metadata latest_block_hash hilang".into()))?;
+            let expected_hash: [u8; 32] = expected_hash
+                .try_into()
+                .map_err(|_| ChainError::Storage("metadata latest_block_hash invalid".into()))?;
+            if crate::primitives::core::Hash256::from_bytes(expected_hash) != latest_block.hash() {
+                return Err(ChainError::Storage("metadata latest_block_hash tidak cocok".into()));
+            }
+
+            let expected_root = store
+                .get_metadata("latest_state_root")
+                .map_err(|e| ChainError::Storage(e.to_string()))?
+                .ok_or_else(|| ChainError::Storage("metadata latest_state_root hilang".into()))?;
+            let expected_root: [u8; 32] = expected_root
+                .try_into()
+                .map_err(|_| ChainError::Storage("metadata latest_state_root invalid".into()))?;
+            if crate::primitives::core::Hash256::from_bytes(expected_root) != latest_block.header.state_root {
+                return Err(ChainError::Storage("metadata latest_state_root tidak cocok".into()));
+            }
+
+            if latest_h > 0 {
+                let certificate = store
+                    .get_certificate(latest_h)
+                    .map_err(|e| ChainError::Storage(e.to_string()))?
+                    .ok_or_else(|| ChainError::Storage("sertifikat blok terakhir hilang".into()))?;
+                certificate
+                    .verify(&genesis.validator_set)
+                    .map_err(|e| ChainError::Storage(format!("sertifikat blok terakhir invalid: {}", e)))?;
+                if certificate.block_hash != latest_block.hash() || certificate.height != latest_h {
+                    return Err(ChainError::Storage("sertifikat tidak cocok dengan blok terakhir".into()));
+                }
+            }
+
             let computed_root = compute_accounts_state_root(&accounts);
             if computed_root != latest_block.header.state_root {
                 return Err(ChainError::InvalidStateRoot {
@@ -191,6 +226,63 @@ impl ChainLedger {
     /// Hitung state root saat ini dari himpunan akun aktif.
     pub fn compute_current_state_root(&self) -> Hash256 {
         compute_accounts_state_root(&self.accounts)
+    }
+
+    /// Validate a proposal against the current ledger without mutating state.
+    pub fn validate_block_proposal(
+        &self,
+        block: &Block,
+        miner: &Address,
+    ) -> Result<(), ChainError> {
+        let prev_block = self.latest_block();
+        let expected_height = prev_block.height() + 1;
+        if block.height() != expected_height {
+            return Err(ChainError::InvalidHeight {
+                expected: expected_height,
+                got: block.height(),
+            });
+        }
+        if block.header.prev_block_hash != prev_block.hash() {
+            return Err(ChainError::InvalidParentHash {
+                expected: prev_block.hash(),
+                got: block.header.prev_block_hash,
+            });
+        }
+        if block.header.timestamp <= prev_block.header.timestamp {
+            return Err(ChainError::InvalidTimestamp {
+                prev: prev_block.header.timestamp,
+                got: block.header.timestamp,
+            });
+        }
+        if !block.verify_tx_merkle_root() {
+            return Err(ChainError::InvalidTxMerkleRoot);
+        }
+
+        let mut accounts = self.accounts.clone();
+        let mut monetary = self.monetary.clone();
+        let subsidy = calculate_block_subsidy(block.height());
+        if !subsidy.is_zero() {
+            monetary
+                .apply_issuance(subsidy)
+                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+            let miner_account = accounts.entry(*miner).or_default();
+            miner_account.balance = miner_account
+                .balance
+                .checked_add(subsidy)
+                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+        }
+        for tx in &block.transactions {
+            apply_transaction(&mut accounts, &mut monetary, miner, tx)
+                .map_err(ChainError::StateTransition)?;
+        }
+        let expected_state_root = compute_accounts_state_root(&accounts);
+        if block.header.state_root != expected_state_root {
+            return Err(ChainError::InvalidStateRoot {
+                expected: expected_state_root,
+                got: block.header.state_root,
+            });
+        }
+        Ok(())
     }
 
     /// Eksekusi dan komit blok baru ke dalam ledger secara atomik.

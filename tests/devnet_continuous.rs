@@ -106,7 +106,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
         val_rpc_addrs.push(rpc_addr.clone());
 
         let config = NodeConfig {
-            chain_id: 9999,
+            chain_id: 1001,
             rpc_bind: rpc_addr,
             p2p_bind: p2p_addr,
             ..NodeConfig::new_validator(Vec::new())
@@ -128,7 +128,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     let sentry_rpc = allocate_devnet_port();
     let sentry_p2p = allocate_devnet_port();
     let sentry_config = NodeConfig {
-        chain_id: 9999,
+        chain_id: 1001,
         rpc_bind: sentry_rpc.clone(),
         p2p_bind: sentry_p2p,
         ..NodeConfig::new_sentry("0.0.0.0:19405".to_string())
@@ -139,7 +139,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     let rpc_store = Arc::new(RedbStorageEngine::open_or_create(&rpc_db_path).expect("Open store"));
     let rpc_gw_bind = allocate_devnet_port();
     let rpc_gw_config = NodeConfig {
-        chain_id: 9999,
+        chain_id: 1001,
         rpc_bind: rpc_gw_bind.clone(),
         ..Default::default()
     };
@@ -178,7 +178,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     // Transfer from creator to alice
     let mut tx1 = Transaction {
         version: 1,
-        chain_id: 9999,
+        chain_id: 1001,
         tx_type: TxType::Transfer,
         flags: 0,
         sender: creator_addr,
@@ -299,7 +299,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     let val_3_db_path = base_path.join("val_3.redb");
     let recovered_store = Arc::new(RedbStorageEngine::open_or_create(&val_3_db_path).expect("Reopen val 3 store"));
     let recovered_config = NodeConfig {
-        chain_id: 9999,
+        chain_id: 1001,
         rpc_bind: allocate_devnet_port(),
         p2p_bind: allocate_devnet_port(),
         ..NodeConfig::new_validator(Vec::new())

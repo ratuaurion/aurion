@@ -1,13 +1,14 @@
 //! Dispatcher Perintah Unified CLI Aurion.
 //! Menghubungkan antarmuka baris perintah dengan runtime, konsensus, storage, dan dompet.
 
+use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
-use serde::Serialize;
 
 use crate::cli::command::CliCommand;
 use crate::cli::output::OutputFormat;
 use crate::consensus::bft::governance::{GovernanceEngine, ProposalSummary, UpgradeProposal};
+use crate::consensus::bft::ZenohBftTransport;
 use crate::consensus::certificate::ValidatorEntry;
 use crate::core::Address;
 use crate::crypto::Keypair;
@@ -359,36 +360,65 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let action = args.get(1).map(|s| s.as_str()).unwrap_or("inspect");
                 let mut keys = CanonicalCeremonyKeypairs::new_deterministic();
 
-                if args.windows(2).any(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase") {
+                if args
+                    .windows(2)
+                    .any(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase")
+                {
                     eprintln!("[AURION WARNING] Opsi --creator-password/--creator-passphrase pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --creator-password-stdin, env AURION_CREATOR_PASSWORD, atau prompt interaktif.");
                 }
-                let creator_keystore_arg = args.windows(2).find(|w| w[0] == "--creator-keystore").map(|w| w[1].as_str());
+                let creator_keystore_arg = args
+                    .windows(2)
+                    .find(|w| w[0] == "--creator-keystore")
+                    .map(|w| w[1].as_str());
                 if let Some(path) = creator_keystore_arg {
                     let content = std::fs::read_to_string(path)
                         .map_err(|e| format!("Failed to read creator keystore from {path}: {e}"))?;
                     let ks = Keystore::from_json_str(&content)
                         .map_err(|e| format!("Failed to parse creator keystore: {e}"))?;
-                    let creator_stdin = args.iter().any(|a| a == "--creator-password-stdin" || a == "--creator-passphrase-stdin");
-                    let creator_pw = resolve_password(creator_stdin, Some("AURION_CREATOR_PASSWORD"), "Masukkan password Creator key", false)
-                        .map_err(|e| format!("Gagal memperoleh password Creator key: {e}"))?;
-                    let sk = ks.unlock_and_migrate_to_file(&creator_pw, path)
+                    let creator_stdin = args.iter().any(|a| {
+                        a == "--creator-password-stdin" || a == "--creator-passphrase-stdin"
+                    });
+                    let creator_pw = resolve_password(
+                        creator_stdin,
+                        Some("AURION_CREATOR_PASSWORD"),
+                        "Masukkan password Creator key",
+                        false,
+                    )
+                    .map_err(|e| format!("Gagal memperoleh password Creator key: {e}"))?;
+                    let sk = ks
+                        .unlock_and_migrate_to_file(&creator_pw, path)
                         .map_err(|e| format!("Failed to decrypt creator keystore: {e}"))?;
                     keys.creator = Keypair::from_seed(&sk.to_bytes());
                 }
 
-                if args.windows(2).any(|w| w[0] == "--developer-password" || w[0] == "--dev-password") {
+                if args
+                    .windows(2)
+                    .any(|w| w[0] == "--developer-password" || w[0] == "--dev-password")
+                {
                     eprintln!("[AURION WARNING] Opsi --developer-password/--dev-password pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --developer-password-stdin, env AURION_DEVELOPER_PASSWORD, atau prompt interaktif.");
                 }
-                let dev_keystore_arg = args.windows(2).find(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore").map(|w| w[1].as_str());
+                let dev_keystore_arg = args
+                    .windows(2)
+                    .find(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore")
+                    .map(|w| w[1].as_str());
                 if let Some(path) = dev_keystore_arg {
-                    let content = std::fs::read_to_string(path)
-                        .map_err(|e| format!("Failed to read developer keystore from {path}: {e}"))?;
+                    let content = std::fs::read_to_string(path).map_err(|e| {
+                        format!("Failed to read developer keystore from {path}: {e}")
+                    })?;
                     let ks = Keystore::from_json_str(&content)
                         .map_err(|e| format!("Failed to parse developer keystore: {e}"))?;
-                    let dev_stdin = args.iter().any(|a| a == "--developer-password-stdin" || a == "--dev-password-stdin");
-                    let dev_pw = resolve_password(dev_stdin, Some("AURION_DEVELOPER_PASSWORD"), "Masukkan password Developer key", false)
-                        .map_err(|e| format!("Gagal memperoleh password Developer key: {e}"))?;
-                    let sk = ks.unlock_and_migrate_to_file(&dev_pw, path)
+                    let dev_stdin = args
+                        .iter()
+                        .any(|a| a == "--developer-password-stdin" || a == "--dev-password-stdin");
+                    let dev_pw = resolve_password(
+                        dev_stdin,
+                        Some("AURION_DEVELOPER_PASSWORD"),
+                        "Masukkan password Developer key",
+                        false,
+                    )
+                    .map_err(|e| format!("Gagal memperoleh password Developer key: {e}"))?;
+                    let sk = ks
+                        .unlock_and_migrate_to_file(&dev_pw, path)
                         .map_err(|e| format!("Failed to decrypt developer keystore: {e}"))?;
                     keys.developer = Keypair::from_seed(&sk.to_bytes());
                 }
@@ -397,41 +427,77 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     "run" => {
                         let transcript = CeremonyTranscript::build_and_seal(&keys)
                             .map_err(|e| format!("Genesis ceremony execution failed: {e}"))?;
-                        let report = transcript.verify()
+                        let report = transcript
+                            .verify()
                             .map_err(|e| format!("Ceremony verification failed: {e}"))?;
 
-                        let export_path = args.windows(2).find(|w| w[0] == "--export").map(|w| w[1].as_str());
+                        let export_path = args
+                            .windows(2)
+                            .find(|w| w[0] == "--export")
+                            .map(|w| w[1].as_str());
                         if let Some(path) = export_path {
-                            let json_str = transcript.to_json_pretty()
-                                .map_err(|e| format!("Failed to serialize ceremony transcript: {e}"))?;
-                            std::fs::write(path, json_str)
-                                .map_err(|e| format!("Failed to write ceremony transcript to {path}: {e}"))?;
+                            let json_str = transcript.to_json_pretty().map_err(|e| {
+                                format!("Failed to serialize ceremony transcript: {e}")
+                            })?;
+                            std::fs::write(path, json_str).map_err(|e| {
+                                format!("Failed to write ceremony transcript to {path}: {e}")
+                            })?;
                         }
 
                         if format == OutputFormat::Json {
-                            println!("{}", transcript.to_json_pretty().map_err(|e| e.to_string())?);
+                            println!(
+                                "{}",
+                                transcript.to_json_pretty().map_err(|e| e.to_string())?
+                            );
                         } else {
                             println!("==================================================================");
                             println!("           AURION DETERMINISTIC GENESIS CEREMONY (PRD-015)        ");
                             println!("==================================================================");
                             println!("  Status:                   SEALED & VERIFIED");
                             println!("  Ceremony Transcript Hash: {}", transcript.ceremony_hash);
-                            println!("  Genesis Block Hash (H=0): {}", transcript.genesis_block_hash);
+                            println!(
+                                "  Genesis Block Hash (H=0): {}",
+                                transcript.genesis_block_hash
+                            );
                             println!("  Initial State Root (σ0):  {}", transcript.state_root);
                             println!("  Chain ID:                 {}", transcript.chain_id);
                             println!("  Genesis Timestamp:        {}", transcript.timestamp);
-                            println!("  Hard Cap:                 {} AUR", transcript.hard_cap_aur);
-                            println!("  Initial Supply (35%):     {} AUR", transcript.initial_supply_aur);
-                            println!("  Creator Allocation:       {} AUR (30%)", transcript.creator_allocation_aur);
-                            println!("  Developer Allocation:     {} AUR (5%)", transcript.developer_allocation_aur);
-                            println!("  Participants:             {} (Creator, Dev, 4 Validators)", transcript.participants.len());
-                            println!("  Attestations Collected:   {}/{}", transcript.attestations.len(), transcript.participants.len());
-                            println!("  Validator Quorum Power:   {}/{} (Threshold: {})",
+                            println!(
+                                "  Hard Cap:                 {} AUR",
+                                transcript.hard_cap_aur
+                            );
+                            println!(
+                                "  Initial Supply (35%):     {} AUR",
+                                transcript.initial_supply_aur
+                            );
+                            println!(
+                                "  Creator Allocation:       {} AUR (30%)",
+                                transcript.creator_allocation_aur
+                            );
+                            println!(
+                                "  Developer Allocation:     {} AUR (5%)",
+                                transcript.developer_allocation_aur
+                            );
+                            println!(
+                                "  Participants:             {} (Creator, Dev, 4 Validators)",
+                                transcript.participants.len()
+                            );
+                            println!(
+                                "  Attestations Collected:   {}/{}",
+                                transcript.attestations.len(),
+                                transcript.participants.len()
+                            );
+                            println!(
+                                "  Validator Quorum Power:   {}/{} (Threshold: {})",
                                 transcript.attested_validator_power,
                                 transcript.total_validator_power,
-                                transcript.quorum_threshold);
+                                transcript.quorum_threshold
+                            );
                             println!("  BFT Quorum Status:        {}", report.quorum_status);
-                            println!("  Monetary Audit:           {}", report.monetary_audit_status);
+                            println!(
+                                "  Monetary Audit:           {}",
+                                report.monetary_audit_status
+                            );
                             println!("==================================================================");
                             if let Some(p) = export_path {
                                 println!("  Artifact Exported To:     {p}");
@@ -439,27 +505,38 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         }
                     }
                     "verify" => {
-                        let file_path = args.windows(2).find(|w| w[0] == "--file").map(|w| w[1].as_str());
+                        let file_path = args
+                            .windows(2)
+                            .find(|w| w[0] == "--file")
+                            .map(|w| w[1].as_str());
                         let transcript = if let Some(path) = file_path {
-                            let data = std::fs::read_to_string(path)
-                                .map_err(|e| format!("Failed to read ceremony transcript from {path}: {e}"))?;
+                            let data = std::fs::read_to_string(path).map_err(|e| {
+                                format!("Failed to read ceremony transcript from {path}: {e}")
+                            })?;
                             CeremonyTranscript::from_json_str(&data)
                                 .map_err(|e| format!("Failed to parse ceremony transcript: {e}"))?
                         } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
-                            let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
-                                .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
-                            CeremonyTranscript::from_json_str(&data)
-                                .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?
+                            let data =
+                                std::fs::read_to_string("GENESIS_CEREMONY.json").map_err(|e| {
+                                    format!("Failed to read GENESIS_CEREMONY.json: {e}")
+                                })?;
+                            CeremonyTranscript::from_json_str(&data).map_err(|e| {
+                                format!("Failed to parse GENESIS_CEREMONY.json: {e}")
+                            })?
                         } else {
                             CeremonyTranscript::build_and_seal(&keys)
                                 .map_err(|e| format!("Genesis ceremony seal failed: {e}"))?
                         };
 
-                        let report = transcript.verify()
+                        let report = transcript
+                            .verify()
                             .map_err(|e| format!("Genesis ceremony verification failed: {e}"))?;
 
                         if format == OutputFormat::Json {
-                            println!("{}", serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?);
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
+                            );
                         } else {
                             println!("==================================================================");
                             println!("        AURION GENESIS CEREMONY VERIFICATION REPORT (PRD-015)     ");
@@ -470,29 +547,42 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                             println!("  State Root (σ0):          {}", report.state_root);
                             println!("  Total Attestations:       {}", report.total_attestations);
                             println!("  Validator Quorum:         {}", report.quorum_status);
-                            println!("  Monetary Policy Audit:    {}", report.monetary_audit_status);
+                            println!(
+                                "  Monetary Policy Audit:    {}",
+                                report.monetary_audit_status
+                            );
                             println!("==================================================================");
                         }
                     }
                     _ => {
-                        let file_path = args.windows(2).find(|w| w[0] == "--file").map(|w| w[1].as_str());
+                        let file_path = args
+                            .windows(2)
+                            .find(|w| w[0] == "--file")
+                            .map(|w| w[1].as_str());
                         let transcript = if let Some(path) = file_path {
-                            let data = std::fs::read_to_string(path)
-                                .map_err(|e| format!("Failed to read ceremony transcript from {path}: {e}"))?;
+                            let data = std::fs::read_to_string(path).map_err(|e| {
+                                format!("Failed to read ceremony transcript from {path}: {e}")
+                            })?;
                             CeremonyTranscript::from_json_str(&data)
                                 .map_err(|e| format!("Failed to parse ceremony transcript: {e}"))?
                         } else if std::path::Path::new("GENESIS_CEREMONY.json").exists() {
-                            let data = std::fs::read_to_string("GENESIS_CEREMONY.json")
-                                .map_err(|e| format!("Failed to read GENESIS_CEREMONY.json: {e}"))?;
-                            CeremonyTranscript::from_json_str(&data)
-                                .map_err(|e| format!("Failed to parse GENESIS_CEREMONY.json: {e}"))?
+                            let data =
+                                std::fs::read_to_string("GENESIS_CEREMONY.json").map_err(|e| {
+                                    format!("Failed to read GENESIS_CEREMONY.json: {e}")
+                                })?;
+                            CeremonyTranscript::from_json_str(&data).map_err(|e| {
+                                format!("Failed to parse GENESIS_CEREMONY.json: {e}")
+                            })?
                         } else {
                             CeremonyTranscript::build_and_seal(&keys)
                                 .map_err(|e| format!("Genesis ceremony seal failed: {e}"))?
                         };
 
                         if format == OutputFormat::Json {
-                            println!("{}", transcript.to_json_pretty().map_err(|e| e.to_string())?);
+                            println!(
+                                "{}",
+                                transcript.to_json_pretty().map_err(|e| e.to_string())?
+                            );
                         } else {
                             println!("==================================================================");
                             println!("           AURION GENESIS CEREMONY TRANSCRIPT INSPECTOR           ");
@@ -500,19 +590,30 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                             println!("  Ceremony Hash:       {}", transcript.ceremony_hash);
                             println!("  Genesis Block Hash:  {}", transcript.genesis_block_hash);
                             println!("  State Root:          {}", transcript.state_root);
-                            println!("  Quorum Achieved:     {} ({}/{})",
+                            println!(
+                                "  Quorum Achieved:     {} ({}/{})",
                                 transcript.quorum_achieved,
                                 transcript.attested_validator_power,
-                                transcript.total_validator_power);
+                                transcript.total_validator_power
+                            );
                             println!("  Participants ({}):", transcript.participants.len());
                             for p in &transcript.participants {
-                                println!("    - [{:?}] {} (Weight: {})", p.role, p.name, p.voting_weight);
+                                println!(
+                                    "    - [{:?}] {} (Weight: {})",
+                                    p.role, p.name, p.voting_weight
+                                );
                             }
                             println!("  Attestations ({}):", transcript.attestations.len());
                             for a in &transcript.attestations {
-                                let sig_prefix = if a.signature_hex.len() >= 16 { &a.signature_hex[..16] } else { &a.signature_hex };
-                                println!("    - [{:?}] {} | Sig: {}...",
-                                    a.role, a.participant_name, sig_prefix);
+                                let sig_prefix = if a.signature_hex.len() >= 16 {
+                                    &a.signature_hex[..16]
+                                } else {
+                                    &a.signature_hex
+                                };
+                                println!(
+                                    "    - [{:?}] {} | Sig: {}...",
+                                    a.role, a.participant_name, sig_prefix
+                                );
                             }
                             println!("==================================================================");
                         }
@@ -550,17 +651,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         developer_allocation_aur: 3_300_000,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION CANONICAL GENESIS STATE INSPECTOR             ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION CANONICAL GENESIS STATE INSPECTOR             "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Chain ID:             {}", info.chain_id);
                         println!("  Genesis Timestamp:    {}", info.timestamp);
                         println!("  Genesis Block Hash:   {}", info.genesis_block_hash);
                         println!("  Initial State Root:   {}", info.state_root);
                         println!("  Initial 35% Supply:   {} AUR", info.initial_supply_aur);
-                        println!("  Creator Allocation:   {} AUR (30%)", info.creator_allocation_aur);
-                        println!("  Developer Allocation: {} AUR (5%)", info.developer_allocation_aur);
-                        println!("==================================================================");
+                        println!(
+                            "  Creator Allocation:   {} AUR (30%)",
+                            info.creator_allocation_aur
+                        );
+                        println!(
+                            "  Developer Allocation: {} AUR (5%)",
+                            info.developer_allocation_aur
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -569,8 +684,8 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
         CliCommand::Storage(args) => {
             let sub = args.first().map(|s| s.as_str()).unwrap_or("status");
-            let db_path = get_arg_value(&args, "--db-path")
-                .unwrap_or_else(|| "data/aurion.redb".to_string());
+            let db_path =
+                get_arg_value(&args, "--db-path").unwrap_or_else(|| "data/aurion.redb".to_string());
             let path_obj = PathBuf::from(&db_path);
             let exists = path_obj.exists();
 
@@ -588,19 +703,36 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         db_path: db_path.clone(),
                         exists,
                         latest_height,
-                        status: if exists { "ONLINE_ACID" } else { "UNINITIALIZED" },
+                        status: if exists {
+                            "ONLINE_ACID"
+                        } else {
+                            "UNINITIALIZED"
+                        },
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("          AURION REDB PERSISTENCE & STORAGE STATUS                ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "          AURION REDB PERSISTENCE & STORAGE STATUS                "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Database Engine:  redb 4.3 (Pure Rust, Zero C++ Runtime)");
                         println!("  Database Path:    {}", info.db_path);
                         println!("  File Exists:      {}", info.exists);
-                        println!("  Latest Height:    {}", info.latest_height.map(|h| h.to_string()).unwrap_or_else(|| "N/A".to_string()));
+                        println!(
+                            "  Latest Height:    {}",
+                            info.latest_height
+                                .map(|h| h.to_string())
+                                .unwrap_or_else(|| "N/A".to_string())
+                        );
                         println!("  Integrity Status: {}", info.status);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => println!("Unknown storage command: {sub}. Available: status, verify"),
@@ -622,7 +754,12 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let addr_str = &args[1];
                 let addr = if addr_str.starts_with("aur") {
                     crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_MAINNET)
-                        .or_else(|_| crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_TESTNET))
+                        .or_else(|_| {
+                            crate::crypto::decode_address_bech32m(
+                                addr_str,
+                                crate::crypto::HRP_TESTNET,
+                            )
+                        })
                         .map_err(|e| format!("Invalid Bech32m address: {e}"))?
                 } else if addr_str.len() == 64 {
                     let mut bytes = [0u8; 32];
@@ -659,7 +796,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
                 format.print(&info, || {
                     println!("Address:        {}", info.address);
-                    println!("Balance:        {} AUR ({} Quanta)", info.balance_aur, info.balance_quanta);
+                    println!(
+                        "Balance:        {} AUR ({} Quanta)",
+                        info.balance_aur, info.balance_quanta
+                    );
                     println!("Nonce:          {}", info.nonce);
                 });
             } else {
@@ -670,16 +810,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
         CliCommand::Block(args) => {
             let sub = args.first().map(|s| s.as_str()).unwrap_or("latest");
-            let db_path = get_arg_value(&args, "--db-path")
-                .unwrap_or_else(|| "data/aurion.redb".to_string());
+            let db_path =
+                get_arg_value(&args, "--db-path").unwrap_or_else(|| "data/aurion.redb".to_string());
             let store = RedbStorageEngine::open_or_create(&db_path)
                 .map_err(|e| format!("Failed to access storage: {e}"))?;
 
             let target_height = match sub {
                 "latest" => store.get_latest_height().ok().flatten().unwrap_or(0),
-                "get" if args.len() > 1 => {
-                    args[1].parse::<u64>().map_err(|_| "Invalid block height".to_string())?
-                }
+                "get" if args.len() > 1 => args[1]
+                    .parse::<u64>()
+                    .map_err(|_| "Invalid block height".to_string())?,
                 _ => 0,
             };
 
@@ -706,7 +846,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("==================================================================");
                 });
             } else {
-                println!("Block not found at height {target_height} (database may be uninitialized).");
+                println!(
+                    "Block not found at height {target_height} (database may be uninitialized)."
+                );
             }
             Ok(())
         }
@@ -722,14 +864,13 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let db_path = get_arg_value(&args, "--data-dir")
                 .unwrap_or_else(|| "data/aurion.redb".to_string());
 
-            let bootnode_endpoint = get_arg_value(&args, "--bootnode")
-                .or_else(|| {
-                    if args.iter().any(|a| a == "--no-bootnode") {
-                        None
-                    } else {
-                        Some(crate::runtime::config::OFFICIAL_MAINNET_BOOTNODE.to_string())
-                    }
-                });
+            let bootnode_endpoint = get_arg_value(&args, "--bootnode").or_else(|| {
+                if args.iter().any(|a| a == "--no-bootnode") {
+                    None
+                } else {
+                    Some(crate::runtime::config::OFFICIAL_MAINNET_BOOTNODE.to_string())
+                }
+            });
 
             let locator = get_arg_value(&args, "--locator")
                 .unwrap_or_else(|| "tcp/127.0.0.1:9000".to_string());
@@ -802,12 +943,21 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             println!("==================================================================");
             println!("  [AURION NODE] Starting Sovereign Full Node & Gateway Daemon...  ");
             println!("==================================================================");
-            println!("[AURION NODE] Network: aurion-mainnet (Chain ID: {})", node.config.chain_id);
+            println!(
+                "[AURION NODE] Network: aurion-mainnet (Chain ID: {})",
+                node.config.chain_id
+            );
             println!("[AURION NODE] Genesis Block Hash: {block_hash}");
             println!("[AURION NODE] Storage Engine: redb 4.3 (Pure Rust ACID)");
             println!("[AURION NODE] Ledger Height: {current_h}");
-            println!("[AURION NODE] P2P Protocol: Magic AUR0 on {}", node.config.p2p_bind);
-            println!("[AURION NODE] Serving JSON-RPC 2.0 and WebSocket on http://{}", node.config.rpc_bind);
+            println!(
+                "[AURION NODE] P2P Protocol: Magic AUR0 on {}",
+                node.config.p2p_bind
+            );
+            println!(
+                "[AURION NODE] Serving JSON-RPC 2.0 and WebSocket on http://{}",
+                node.config.rpc_bind
+            );
 
             // Inisialisasi koneksi PEX ke Bootnode di latar belakang jika aktif
             if let Some(bn) = &bootnode_endpoint {
@@ -825,12 +975,19 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     match crate::wire::ZenohTransport::new(transport_cfg).await {
                         Ok(transport) => {
                             println!("[AURION P2P] Connected to Bootnode: {bn_target}");
-                            println!("[AURION P2P] Registered locator: {loc_target} (Role: fullnode)");
-                            let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                            println!(
+                                "[AURION P2P] Registered locator: {loc_target} (Role: fullnode)"
+                            );
+                            let mut interval =
+                                tokio::time::interval(std::time::Duration::from_secs(5));
                             loop {
                                 interval.tick().await;
-                                if let Err(e) = transport.announce_peer(&loc_target, "fullnode").await {
-                                    eprintln!("[AURION P2P] Failed to send heartbeat to bootnode: {e}");
+                                if let Err(e) =
+                                    transport.announce_peer(&loc_target, "fullnode").await
+                                {
+                                    eprintln!(
+                                        "[AURION P2P] Failed to send heartbeat to bootnode: {e}"
+                                    );
                                 }
                             }
                         }
@@ -840,7 +997,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                 });
             } else {
-                println!("[AURION NODE] Operating in standalone/offline mode (No bootnode connected).");
+                println!(
+                    "[AURION NODE] Operating in standalone/offline mode (No bootnode connected)."
+                );
             }
 
             println!("[AURION NODE] Press Ctrl+C to stop.");
@@ -862,7 +1021,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let db_path = get_arg_value(&args, "--data-dir")
                 .unwrap_or_else(|| "data/validator.redb".to_string());
 
-            let config = NodeConfig {
+            let mut config = NodeConfig {
                 rpc_bind: rpc_bind.clone(),
                 ..NodeConfig::new_validator(Vec::new())
             };
@@ -873,7 +1032,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             );
 
             let is_status_or_dry = sub == "status" || is_dry_run;
-            let is_dev_mode = args.iter().any(|a| a == "--dev" || a == "--insecure-deterministic-keys");
+            let is_dev_mode = args
+                .iter()
+                .any(|a| a == "--dev" || a == "--insecure-deterministic-keys");
+            config.is_dev_mode = is_dev_mode;
 
             let val_idx: usize = get_arg_value(&args, "--index")
                 .and_then(|s| s.parse().ok())
@@ -897,9 +1059,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let ks = Keystore::from_json_str(&content)
                     .map_err(|e| format!("Failed to parse validator keystore: {e}"))?;
                 let val_stdin = args.iter().any(|a| a == "--validator-password-stdin");
-                let val_pw = resolve_password(val_stdin, Some("AURION_VALIDATOR_PASSWORD"), "Masukkan password kunci validator", false)
-                    .map_err(|e| format!("Gagal memperoleh password kunci validator: {e}"))?;
-                let sk = ks.unlock_and_migrate_to_file(&val_pw, &key_path)
+                let val_pw = resolve_password(
+                    val_stdin,
+                    Some("AURION_VALIDATOR_PASSWORD"),
+                    "Masukkan password kunci validator",
+                    false,
+                )
+                .map_err(|e| format!("Gagal memperoleh password kunci validator: {e}"))?;
+                let sk = ks
+                    .unlock_and_migrate_to_file(&val_pw, &key_path)
                     .map_err(|e| format!("Failed to decrypt validator keystore: {e}"))?;
                 Keypair::from_seed(&sk.to_bytes())
             };
@@ -914,7 +1082,13 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
             let block_hash = genesis.header.compute_block_hash().to_hex();
             let state_root = genesis.header.state_root.to_hex();
-            let node = AurionNode::new_with_store(config, genesis, Some(val_key), Some(val_idx as u32), store);
+            let node = Arc::new(AurionNode::new_with_store(
+                config,
+                genesis,
+                Some(val_key.clone()),
+                Some(val_idx as u32),
+                store,
+            ));
             let current_h = node.ledger.lock().unwrap().latest_height();
 
             if sub == "status" || is_dry_run {
@@ -938,7 +1112,11 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("   AURION VALIDATOR ENGINE LAUNCH & STATUS INSPECTOR (PRD-016)    ");
                     println!("==================================================================");
                     println!("  Network:            {}", info.network);
-                    println!("  Node Role:          {} (Index: {})", info.role, val_idx + 1);
+                    println!(
+                        "  Node Role:          {} (Index: {})",
+                        info.role,
+                        val_idx + 1
+                    );
                     println!("  Chain ID:           {}", info.chain_id);
                     println!("  Genesis Block Hash: {}", info.genesis_block_hash);
                     println!("  State Root:         {}", info.state_root);
@@ -957,12 +1135,70 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             println!("  [AURION VALIDATOR] Starting BFT Consensus Validator Engine...   ");
             println!("==================================================================");
             println!("[AURION VALIDATOR] Validator Index: {}", val_idx + 1);
-            println!("[AURION VALIDATOR] Consensus Algorithm: Single-Slot BFT Finality (2/3+ Quorum)");
-            println!("[AURION VALIDATOR] Serving Status Gateway on http://{}", node.config.rpc_bind);
+            println!(
+                "[AURION VALIDATOR] Consensus Algorithm: Single-Slot BFT Finality (2/3+ Quorum)"
+            );
+            println!(
+                "[AURION VALIDATOR] Serving Status Gateway on http://{}",
+                node.config.rpc_bind
+            );
             println!("[AURION VALIDATOR] Press Ctrl+C to stop.");
 
-            if let Err(e) = node.run_rpc_server(None).await {
-                eprintln!("[AURION VALIDATOR] Server error: {e}");
+            let shutdown = tokio::sync::watch::channel(false);
+            let endpoint = if node.config.p2p_bind.starts_with("tcp/") {
+                node.config.p2p_bind.clone()
+            } else {
+                format!("tcp/{}", node.config.p2p_bind)
+            };
+            let connect = node
+                .config
+                .bootnode
+                .as_deref()
+                .map(|peer| {
+                    if peer.starts_with("tcp/") {
+                        peer.to_string()
+                    } else {
+                        format!("tcp/{peer}")
+                    }
+                })
+                .into_iter()
+                .collect::<Vec<_>>();
+            let connect_refs = connect.iter().map(String::as_str).collect::<Vec<_>>();
+            let zenoh = ZenohBftTransport::open(
+                val_idx as u32,
+                node.config.chain_id,
+                &endpoint,
+                &connect_refs,
+            )
+            .await
+            .map_err(|error| format!("Validator Zenoh initialization failed: {error}"))?;
+            let consensus_handle = node
+                .clone()
+                .spawn_consensus_engine_with_shutdown(
+                    val_idx as u32,
+                    val_key,
+                    zenoh.session(),
+                    shutdown.1.clone(),
+                )
+                .await
+                .map_err(|error| format!("Validator consensus initialization failed: {error}"))?;
+            let rpc_node = node.clone();
+            let rpc_shutdown = shutdown.1.clone();
+            let rpc_handle =
+                tokio::spawn(async move { rpc_node.run_rpc_server(Some(rpc_shutdown)).await });
+            tokio::select! {
+                result = rpc_handle => {
+                    if let Ok(Err(error)) = result {
+                        eprintln!("[AURION VALIDATOR] Server error: {error}");
+                    }
+                }
+                result = tokio::signal::ctrl_c() => {
+                    if let Err(error) = result {
+                        eprintln!("[AURION VALIDATOR] Shutdown signal error: {error}");
+                    }
+                    let _ = shutdown.0.send(true);
+                    let _ = consensus_handle.await;
+                }
             }
             Ok(())
         }
@@ -995,7 +1231,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
             let node = AurionNode::new(config, genesis, None, None);
 
-            println!("[AURION RPC] Gateway bound to http://{}", node.config.rpc_bind);
+            println!(
+                "[AURION RPC] Gateway bound to http://{}",
+                node.config.rpc_bind
+            );
             println!("[AURION RPC] Press Ctrl+C to stop.");
 
             if let Err(e) = node.run_rpc_server(None).await {
@@ -1009,7 +1248,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             match sub {
                 "deploy" => {
                     if args.len() < 2 {
-                        return Err("Bytecode required: aurion contract deploy <hex_bytecode>".to_string());
+                        return Err(
+                            "Bytecode required: aurion contract deploy <hex_bytecode>".to_string()
+                        );
                     }
                     let bytecode_hex = &args[1];
                     let bytecode = hex::decode(bytecode_hex)
@@ -1028,25 +1269,41 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION AVM BYTECODE VERIFICATION SUCCESS             ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION AVM BYTECODE VERIFICATION SUCCESS             "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:           {}", info.status);
                         println!("  Bytecode Size:    {} bytes", info.bytecode_bytes);
                         println!("  Code Hash:        {}", info.code_hash);
                         println!("  Valid JumpDests:  {}", info.valid_jumpdests);
                         println!("  Deployment Gas:   {} Gas", info.estimated_gas);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "inspect" => {
                     if args.len() < 2 {
-                        return Err("Address required: aurion contract inspect <contract_address>".to_string());
+                        return Err(
+                            "Address required: aurion contract inspect <contract_address>"
+                                .to_string(),
+                        );
                     }
                     let addr_str = &args[1];
                     let addr = if addr_str.starts_with("aur") {
                         crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_MAINNET)
-                            .or_else(|_| crate::crypto::decode_address_bech32m(addr_str, crate::crypto::HRP_TESTNET))
+                            .or_else(|_| {
+                                crate::crypto::decode_address_bech32m(
+                                    addr_str,
+                                    crate::crypto::HRP_TESTNET,
+                                )
+                            })
                             .map_err(|e| format!("Invalid Bech32m address: {e}"))?
                     } else if addr_str.len() == 64 {
                         let mut bytes = [0u8; 32];
@@ -1060,12 +1317,19 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let db_path = get_arg_value(&args, "--db-path")
                         .unwrap_or_else(|| "data/aurion.redb".to_string());
                     let store_opt = RedbStorageEngine::open_or_create(&db_path).ok();
-                    let account = store_opt.and_then(|store| store.get_account(&addr).ok().flatten());
+                    let account =
+                        store_opt.and_then(|store| store.get_account(&addr).ok().flatten());
 
                     let (bal, nonce, code_h, stor_r, is_c) = match account {
                         Some(acc) => {
                             let is_c = acc.is_contract();
-                            (acc.balance, acc.nonce, acc.code_hash.map(|h| h.to_hex()), acc.storage_root.map(|h| h.to_hex()), is_c)
+                            (
+                                acc.balance,
+                                acc.nonce,
+                                acc.code_hash.map(|h| h.to_hex()),
+                                acc.storage_root.map(|h| h.to_hex()),
+                                is_c,
+                            )
                         }
                         None => (crate::core::Quantum::ZERO, 0, None, None, false),
                     };
@@ -1084,8 +1348,14 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     format.print(&info, || {
                         println!("Contract:       {}", info.address);
                         println!("Is Contract:    {}", info.is_contract);
-                        println!("Code Hash:      {}", info.code_hash.as_deref().unwrap_or("None"));
-                        println!("Storage Root:   {}", info.storage_root.as_deref().unwrap_or("None"));
+                        println!(
+                            "Code Hash:      {}",
+                            info.code_hash.as_deref().unwrap_or("None")
+                        );
+                        println!(
+                            "Storage Root:   {}",
+                            info.storage_root.as_deref().unwrap_or("None")
+                        );
                         println!("Balance:        {} AUR", info.balance_aur);
                         println!("Nonce:          {}", info.nonce);
                     });
@@ -1105,21 +1375,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         status: "active",
                         layer: "Layer-2 Rollup (AURION-L2)",
                         chain_id: 99992,
-                        bridge_contract: "aur1999999999999999999999999999999999999999999999999999sqqqqqqqq".to_string(),
+                        bridge_contract:
+                            "aur1999999999999999999999999999999999999999999999999999sqqqqqqqq"
+                                .to_string(),
                         stf_engine: "Aurion L2 Execution Engine (Zero-Float exact Quantum)",
                         zk_or_fraud_proof: "AVM Dispute Arbitration & Merkle Verification",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION LAYER-2 ROLLUP NODE RUNTIME                   ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION LAYER-2 ROLLUP NODE RUNTIME                   "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Layer:                {}", info.layer);
                         println!("  Chain ID:             {}", info.chain_id);
                         println!("  Status:               {}", info.status);
                         println!("  Settlement Bridge:    {}", info.bridge_contract);
                         println!("  STF Engine:           {}", info.stf_engine);
                         println!("  Arbitration:          {}", info.zk_or_fraud_proof);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "sequencer" => {
@@ -1132,44 +1412,74 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         da_commitment_scheme: "Blake3 256-bit DA Commitment Posting",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION LAYER-2 SEQUENCER & BATCH ASSEMBLER           ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION LAYER-2 SEQUENCER & BATCH ASSEMBLER           "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Sequencer Status:     {}", info.status);
-                        println!("  Mempool Capacity:     {} transactions (Anti-DoS)", info.mempool_capacity);
+                        println!(
+                            "  Mempool Capacity:     {} transactions (Anti-DoS)",
+                            info.mempool_capacity
+                        );
                         println!("  Mempool Ordering:     {}", info.fee_ordering);
                         println!("  Soft Finality:        {}", info.soft_finality_latency);
                         println!("  Batch Header Magic:   {}", info.batch_header_magic);
                         println!("  DA Posting:           {}", info.da_commitment_scheme);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "bridge" => {
                     let info = L2BridgeInfo {
-                        bridge_address: "aur1999999999999999999999999999999999999999999999999999sqqqqqqqq".to_string(),
+                        bridge_address:
+                            "aur1999999999999999999999999999999999999999999999999999sqqqqqqqq"
+                                .to_string(),
                         vault_balance_aur: "0.00000000".to_string(),
                         vault_balance_quanta: 0,
-                        latest_state_root: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                        latest_state_root:
+                            "0000000000000000000000000000000000000000000000000000000000000000"
+                                .to_string(),
                         latest_batch_index: 0,
                         is_sequencer_frozen: false,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION L1 SETTLEMENT BRIDGE CLIENT                   ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION L1 SETTLEMENT BRIDGE CLIENT                   "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Bridge Address:       {}", info.bridge_address);
-                        println!("  Vault Balance:        {} AUR ({} Quanta)", info.vault_balance_aur, info.vault_balance_quanta);
+                        println!(
+                            "  Vault Balance:        {} AUR ({} Quanta)",
+                            info.vault_balance_aur, info.vault_balance_quanta
+                        );
                         println!("  Latest State Root:    {}", info.latest_state_root);
                         println!("  Latest Batch Index:   {}", info.latest_batch_index);
                         println!("  Sequencer Frozen:     {}", info.is_sequencer_frozen);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "tx" => {
-                    let from_str = get_arg_value(&args, "--from")
-                        .unwrap_or_else(|| "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string());
-                    let to_str = get_arg_value(&args, "--to")
-                        .unwrap_or_else(|| "aur1222222222222222222222222222222222222222222222222222sqqqqqqqq".to_string());
+                    let from_str = get_arg_value(&args, "--from").unwrap_or_else(|| {
+                        "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq"
+                            .to_string()
+                    });
+                    let to_str = get_arg_value(&args, "--to").unwrap_or_else(|| {
+                        "aur1222222222222222222222222222222222222222222222222222sqqqqqqqq"
+                            .to_string()
+                    });
                     let amount_quanta: u128 = get_arg_value(&args, "--amount-quanta")
                         .and_then(|s| s.parse().ok())
                         .unwrap_or(100_000_000); // 1 AUR
@@ -1196,18 +1506,38 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION LAYER-2 TRANSACTION SIMULATION                ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION LAYER-2 TRANSACTION SIMULATION                "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:               {}", info.status);
                         println!("  From:                 {}", info.sender);
                         println!("  To:                   {}", info.recipient);
-                        println!("  Amount:               {} AUR ({} Quanta)", info.amount_aur, info.amount_quanta);
-                        println!("  Gas Used:             {} units (Exact Base Integer)", info.gas_used);
+                        println!(
+                            "  Amount:               {} AUR ({} Quanta)",
+                            info.amount_aur, info.amount_quanta
+                        );
+                        println!(
+                            "  Gas Used:             {} units (Exact Base Integer)",
+                            info.gas_used
+                        );
                         println!("  Total Fee:            {} Quanta", info.fee_quanta);
-                        println!("  -> Sequencer Fee (80%):    {} Quanta", info.sequencer_fee_quanta);
-                        println!("  -> L1 Settlement (20%):    {} Quanta", info.l1_settlement_fee_quanta);
-                        println!("==================================================================");
+                        println!(
+                            "  -> Sequencer Fee (80%):    {} Quanta",
+                            info.sequencer_fee_quanta
+                        );
+                        println!(
+                            "  -> L1 Settlement (20%):    {} Quanta",
+                            info.l1_settlement_fee_quanta
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -1218,7 +1548,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!();
                     println!("Available Subcommands:");
                     println!("  node        Display or manage L2 rollup node daemon");
-                    println!("  sequencer   Inspect L2 sequencer status, mempool, and batch assembler");
+                    println!(
+                        "  sequencer   Inspect L2 sequencer status, mempool, and batch assembler"
+                    );
                     println!("  bridge      Query L1 settlement bridge contract and vault status");
                     println!("  tx          Inspect, simulate, or format L2 transactions");
                     println!();
@@ -1248,9 +1580,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         gas_model: "Exact Integer Quantum Accounting (Zero Float)",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("          AURION LAYER-3 SPECIALIZED EXECUTION NODE DAEMON        ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "          AURION LAYER-3 SPECIALIZED EXECUTION NODE DAEMON        "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:               {}", info.status);
                         println!("  Layer:                {}", info.layer);
                         println!("  Domain ID:            {}", info.domain_id);
@@ -1258,7 +1596,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         println!("  Settlement Layer:     {}", info.settlement_layer);
                         println!("  Sovereign Root:       {}", info.sovereign_root);
                         println!("  Gas Model:            {}", info.gas_model);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "domain" => {
@@ -1293,16 +1633,29 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         domains,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("           AURION SPECIALIZED EXECUTION DOMAIN ADAPTERS           ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "           AURION SPECIALIZED EXECUTION DOMAIN ADAPTERS           "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Total Registered Domains: {}", info.total_domains);
-                        println!("------------------------------------------------------------------");
+                        println!(
+                            "------------------------------------------------------------------"
+                        );
                         for d in &info.domains {
-                            println!("  * {:<10} | {:<32} | {}", d.name, d.domain_type, d.security_model);
+                            println!(
+                                "  * {:<10} | {:<32} | {}",
+                                d.name, d.domain_type, d.security_model
+                            );
                             println!("    -> {}", d.description);
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "checkpoint" => {
@@ -1314,21 +1667,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         status: "checkpoint_created",
                         domain_id: domain_id.to_hex(),
                         batch_index: 1,
-                        state_root: "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0".to_string(),
+                        state_root:
+                            "a1b2c3d4e5f60718293a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
+                                .to_string(),
                         block_range: "1..1000".to_string(),
                         finality_tier: "SoftL2Settled (Committed to L2 Settlement Client)",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION L3-TO-L2 CHECKPOINT COMMITMENT                ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION L3-TO-L2 CHECKPOINT COMMITMENT                "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:               {}", info.status);
                         println!("  Domain ID:            {}", info.domain_id);
                         println!("  Batch Index:          {}", info.batch_index);
                         println!("  State Root:           {}", info.state_root);
                         println!("  Block Range:          {}", info.block_range);
                         println!("  Finality Tier:        {}", info.finality_tier);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "route" => {
@@ -1339,23 +1702,35 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
                     let info = L3RouteInfo {
                         status: "routed_success",
-                        message_id: "000000000000000102030405060708090a0b0c0d0e0f10111213141516171819".to_string(),
+                        message_id:
+                            "000000000000000102030405060708090a0b0c0d0e0f10111213141516171819"
+                                .to_string(),
                         source_domain: from_str,
                         destination_domain: to_str,
-                        nullifier: "f1e2d3c4b5a697887766554433221100ffeeddccbbaa99887766554433221100".to_string(),
+                        nullifier:
+                            "f1e2d3c4b5a697887766554433221100ffeeddccbbaa99887766554433221100"
+                                .to_string(),
                         hop_path: "L3(source) -> L2(settlement_hub) -> L3(destination)",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("         AURION CROSS-DOMAIN HIERARCHICAL MESSAGE ROUTER          ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "         AURION CROSS-DOMAIN HIERARCHICAL MESSAGE ROUTER          "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:               {}", info.status);
                         println!("  Message ID:           {}", info.message_id);
                         println!("  Source:               {}", info.source_domain);
                         println!("  Destination:          {}", info.destination_domain);
                         println!("  Nullifier Hash:       {}", info.nullifier);
                         println!("  Hop Path:             {}", info.hop_path);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -1365,7 +1740,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("Usage: aurion specialized <subcommand> [options] (alias: aurion l3)");
                     println!();
                     println!("Available Subcommands:");
-                    println!("  node        Display or manage L3 specialized execution node daemon");
+                    println!(
+                        "  node        Display or manage L3 specialized execution node daemon"
+                    );
                     println!("  domain      List and inspect specialized domain adapters");
                     println!("  checkpoint  Inspect or create L3-to-L2 periodic state checkpoints");
                     println!("  route       Simulate or route cross-layer/cross-domain messages");
@@ -1403,7 +1780,11 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let info = L4RelayStatus {
                         subsystem: "aurion-l4-relay",
                         status: "ACTIVE — trust-minimized cross-chain relayer operational",
-                        verifiers: vec!["BitcoinSpvVerifier", "EvmStateVerifier", "ZkStateProofVerifier"],
+                        verifiers: vec![
+                            "BitcoinSpvVerifier",
+                            "EvmStateVerifier",
+                            "ZkStateProofVerifier",
+                        ],
                         confirmations_required: 6,
                         zero_unsafe: true,
                         zero_float: true,
@@ -1434,9 +1815,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let info = L4BridgeStatus {
                         subsystem: "aurion-l4-bridge-vault",
                         status: "ACTIVE — cross-chain asset vault operational",
-                        supported_chains: vec!["AurionL1", "AurionL2", "Bitcoin", "Ethereum", "CosmosIbc"],
+                        supported_chains: vec![
+                            "AurionL1",
+                            "AurionL2",
+                            "Bitcoin",
+                            "Ethereum",
+                            "CosmosIbc",
+                        ],
                         tss_quorum: ">= 67% threshold signature scheme (AUR-L4-SEC-003)",
-                        conservation_invariant: "1:1 locked:wrapped invariant enforced (AUR-L4-SEC-001)",
+                        conservation_invariant:
+                            "1:1 locked:wrapped invariant enforced (AUR-L4-SEC-001)",
                     };
                     format.print(&info, || {
                         println!("==================================================================");
@@ -1463,23 +1851,34 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                     let info = L4VerifyStatus {
                         subsystem: "aurion-l4-verify",
-                        multi_prover: "3 independent provers: LightClient + ZkStateProof + OptimisticWatcher",
+                        multi_prover:
+                            "3 independent provers: LightClient + ZkStateProof + OptimisticWatcher",
                         quorum_rule: "2-of-3 agreement required (AUR-L4-SEC-002)",
                         state_read_relay: "Oracle-free decentralized state reads (AUR-L4-MSG-001)",
-                        identity_resolver: "Cross-domain sovereign identity binding (AUR-L4-ARCH-002)",
-                        nullifier_registry: "Universal anti-replay nullifier registry (AUR-L4-MSG-002)",
+                        identity_resolver:
+                            "Cross-domain sovereign identity binding (AUR-L4-ARCH-002)",
+                        nullifier_registry:
+                            "Universal anti-replay nullifier registry (AUR-L4-MSG-002)",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("      AURION LAYER-4 MULTI-PROVER & IDENTITY VERIFICATION         ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "      AURION LAYER-4 MULTI-PROVER & IDENTITY VERIFICATION         "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Multi-Prover Engine:    {}", info.multi_prover);
                         println!("  Quorum Rule:            {}", info.quorum_rule);
                         println!("  State Read Relay:       {}", info.state_read_relay);
                         println!("  Identity Resolver:      {}", info.identity_resolver);
                         println!("  Nullifier Registry:     {}", info.nullifier_registry);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1494,21 +1893,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                     let info = L4CircuitStatus {
                         subsystem: "aurion-l4-circuit-security",
-                        circuit_breaker: "Automated emergency bridge halt on Critical anomaly (AUR-L4-SEC-001)",
+                        circuit_breaker:
+                            "Automated emergency bridge halt on Critical anomaly (AUR-L4-SEC-001)",
                         rate_limiter: "Volume cap per bridge per time window (AUR-L4-SEC-003)",
                         isolation_invariant: "Bridge halt does NOT affect L1 Aurion consensus",
-                        governance_reset: "Multi-party Blake3 token required to re-open halted circuit",
+                        governance_reset:
+                            "Multi-party Blake3 token required to re-open halted circuit",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION LAYER-4 CIRCUIT BREAKER & RATE LIMITER STATUS       ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION LAYER-4 CIRCUIT BREAKER & RATE LIMITER STATUS       "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Circuit Breaker:        {}", info.circuit_breaker);
                         println!("  Rate Limiter:           {}", info.rate_limiter);
                         println!("  L1 Isolation:           {}", info.isolation_invariant);
                         println!("  Governance Reset:       {}", info.governance_reset);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1545,12 +1954,21 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         zero_float: true,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("        AURION LAYER-4 INTEROPERABILITY — FULL STATUS             ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "        AURION LAYER-4 INTEROPERABILITY — FULL STATUS             "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Layer:              {}", info.layer);
                         println!("  Era:                {}", info.era);
-                        println!("  Phases Complete:    {}/{}", info.phases_complete, info.phases_total);
+                        println!(
+                            "  Phases Complete:    {}/{}",
+                            info.phases_complete, info.phases_total
+                        );
                         println!("  Progress:           {}", info.progress_pct);
                         println!("  Tests:              {}", info.tests_pass);
                         println!("  Zero Unsafe:        {}", info.zero_unsafe);
@@ -1559,7 +1977,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         for inv in &info.invariants {
                             println!("    - {inv}");
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1570,7 +1990,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("Usage: aurion l4 <subcommand> [options]");
                     println!();
                     println!("Subcommands:");
-                    println!("  relay    Trust-minimized cross-chain relayer & light client status");
+                    println!(
+                        "  relay    Trust-minimized cross-chain relayer & light client status"
+                    );
                     println!("  bridge   Cross-chain asset vault & TSS custody status");
                     println!("  verify   Multi-prover engine, identity, & state read relay status");
                     println!("  circuit  Emergency circuit breaker & rate limiter security status");
@@ -1601,7 +2023,8 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                     let info = L5NodeStatus {
                         subsystem: "aurion-l5-node-registry",
-                        status: "ACTIVE — decentralized edge infrastructure node registry operational",
+                        status:
+                            "ACTIVE — decentralized edge infrastructure node registry operational",
                         min_collateral: "1,000.00000000 AUR (100,000,000,000 Quanta)",
                         unbonding_period: "14 days (100,800 slots)",
                         supported_roles: vec![
@@ -1644,23 +2067,33 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                     let info = L5ComputeStatus {
                         subsystem: "aurion-l5-verifiable-compute",
-                        status: "ACTIVE — decentralized verifiable off-chain compute engine operational",
-                        execution_model: "Zk-STARK / Optimistic fraud-provable execution (REQ-L5-02)",
+                        status:
+                            "ACTIVE — decentralized verifiable off-chain compute engine operational",
+                        execution_model:
+                            "Zk-STARK / Optimistic fraud-provable execution (REQ-L5-02)",
                         max_instructions: 1_000_000_000,
                         proof_system: "Cryptographic Blake3 attestation with state root binding",
                         slashing_enforced: true,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("        AURION LAYER-5 VERIFIABLE COMPUTE ENGINE STATUS           ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "        AURION LAYER-5 VERIFIABLE COMPUTE ENGINE STATUS           "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Status:                 {}", info.status);
                         println!("  Execution Model:        {}", info.execution_model);
                         println!("  Max Instructions:       {}", info.max_instructions);
                         println!("  Proof System:           {}", info.proof_system);
                         println!("  Slashing Enforced:      {}", info.slashing_enforced);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1683,16 +2116,24 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         retrievability_proof: "Cryptographic Blake3 multi-chunk attestation",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION LAYER-5 DISTRIBUTED STORAGE GRID STATUS             ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION LAYER-5 DISTRIBUTED STORAGE GRID STATUS             "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Status:                 {}", info.status);
                         println!("  Chunk Size:             {}", info.chunk_size);
                         println!("  Content Addressing:     {}", info.content_addressing);
                         println!("  Verification:           {}", info.verification);
                         println!("  Proof Model:            {}", info.retrievability_proof);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1708,23 +2149,35 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                     let info = L5DaStatus {
                         subsystem: "aurion-l5-data-availability",
-                        status: "ACTIVE — 2D Reed-Solomon data availability sampling mesh (REQ-L5-04)",
+                        status:
+                            "ACTIVE — 2D Reed-Solomon data availability sampling mesh (REQ-L5-04)",
                         erasure_coding: "2D Reed-Solomon (Original N x N -> Expanded 2N x 2N)",
-                        sampling_protocol: "Decentralized light-client random coordinate query (DAS)",
-                        data_root_invariant: "Merkle-Blake3 2D root commitment anchored to L1 block",
-                        recovery_threshold: ">= 50% row/column sampling threshold for full reconstruction",
+                        sampling_protocol:
+                            "Decentralized light-client random coordinate query (DAS)",
+                        data_root_invariant:
+                            "Merkle-Blake3 2D root commitment anchored to L1 block",
+                        recovery_threshold:
+                            ">= 50% row/column sampling threshold for full reconstruction",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("      AURION LAYER-5 DATA AVAILABILITY SAMPLING (DAS) STATUS      ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "      AURION LAYER-5 DATA AVAILABILITY SAMPLING (DAS) STATUS      "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Status:                 {}", info.status);
                         println!("  Erasure Coding:         {}", info.erasure_coding);
                         println!("  Sampling Protocol:      {}", info.sampling_protocol);
                         println!("  DA Root Commitment:     {}", info.data_root_invariant);
                         println!("  Recovery Threshold:     {}", info.recovery_threshold);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1747,16 +2200,24 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         zero_float: true,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION LAYER-5 STREAMING PAYMENT & STATE CHANNELS          ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION LAYER-5 STREAMING PAYMENT & STATE CHANNELS          "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Status:                 {}", info.status);
                         println!("  Channel Type:           {}", info.channel_type);
                         println!("  Conservation:           {}", info.conservation_invariant);
                         println!("  Precision:              {}", info.precision);
                         println!("  Zero Float:             {}", info.zero_float);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1779,16 +2240,24 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         revocation_window: "Instant on-chain nullification / slot-based expiry",
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION LAYER-5 AUTONOMOUS AGENT EXECUTIVE RUNTIME          ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION LAYER-5 AUTONOMOUS AGENT EXECUTIVE RUNTIME          "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Subsystem:              {}", info.subsystem);
                         println!("  Status:                 {}", info.status);
                         println!("  Mandate Spec:           {}", info.mandate_spec);
                         println!("  Spending Cap Enforced:  {}", info.spending_cap_enforced);
                         println!("  Action Whitelisting:    {}", info.action_whitelisting);
                         println!("  Revocation:             {}", info.revocation_window);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1826,12 +2295,21 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         zero_float: true,
                     };
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("        AURION LAYER-5 GLOBAL INFRASTRUCTURE — FULL STATUS        ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "        AURION LAYER-5 GLOBAL INFRASTRUCTURE — FULL STATUS        "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Layer:              {}", info.layer);
                         println!("  Era:                {}", info.era);
-                        println!("  Pillars Complete:   {}/{}", info.pillars_complete, info.pillars_total);
+                        println!(
+                            "  Pillars Complete:   {}/{}",
+                            info.pillars_complete, info.pillars_total
+                        );
                         println!("  Progress:           {}", info.progress_pct);
                         println!("  Tests:              {}", info.tests_pass);
                         println!("  Zero Unsafe:        {}", info.zero_unsafe);
@@ -1840,7 +2318,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         for inv in &info.invariants {
                             println!("    - {inv}");
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
 
@@ -1851,7 +2331,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("Usage: aurion l5 <subcommand> [options]");
                     println!();
                     println!("Subcommands:");
-                    println!("  node     Infrastructure node registry, collateral & slashing status");
+                    println!(
+                        "  node     Infrastructure node registry, collateral & slashing status"
+                    );
                     println!("  compute  Verifiable zk/optimistic compute engine status");
                     println!("  storage  Distributed Blake3 storage grid & PoR status");
                     println!("  da       2D Reed-Solomon data availability sampling (DAS) status");
@@ -1873,8 +2355,8 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 "init" => {
                     let data_dir = get_arg_value(&args, "--data-dir")
                         .unwrap_or_else(|| "data/devnet".to_string());
-                    let validators_str = get_arg_value(&args, "--validators")
-                        .unwrap_or_else(|| "4".to_string());
+                    let validators_str =
+                        get_arg_value(&args, "--validators").unwrap_or_else(|| "4".to_string());
                     let val_count = validators_str.parse::<usize>().unwrap_or(4);
 
                     let info = DevnetInitInfo {
@@ -1890,20 +2372,39 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION DEVNET CONTINUOUS DEPLOYMENT INITIALIZATION         ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION DEVNET CONTINUOUS DEPLOYMENT INITIALIZATION         "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Network ID:           {}", info.network);
                         println!("  Chain ID:             {}", info.genesis_chain_id);
                         println!("  Data Directory:       {}", info.data_dir);
-                        println!("  BFT Validators:       {} nodes (single-slot finality)", info.validators_count);
-                        println!("  Sentry Isolation:     {} node (anti-DDoS edge filter)", info.sentry_count);
-                        println!("  JSON-RPC Gateway:     {} node (public endpoint)", info.rpc_gateway_count);
+                        println!(
+                            "  BFT Validators:       {} nodes (single-slot finality)",
+                            info.validators_count
+                        );
+                        println!(
+                            "  Sentry Isolation:     {} node (anti-DDoS edge filter)",
+                            info.sentry_count
+                        );
+                        println!(
+                            "  JSON-RPC Gateway:     {} node (public endpoint)",
+                            info.rpc_gateway_count
+                        );
                         println!("  P2P Port Allocation:  {}", info.p2p_port_range);
                         println!("  RPC Port Allocation:  {}", info.rpc_port_range);
                         println!("  Consensus Model:      Single-Slot BFT (>2/3 quorum)");
-                        println!("  Execution Mode:       Native Local PC / Docker Disk D Compatible");
-                        println!("==================================================================");
+                        println!(
+                            "  Execution Mode:       Native Local PC / Docker Disk D Compatible"
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "status" => {
@@ -1937,25 +2438,47 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION DEVNET CONTINUOUS DEPLOYMENT CLUSTER STATUS         ");
-                        println!("==================================================================");
-                        println!("  Network:   {} | Consensus: {}", info.network, info.consensus);
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION DEVNET CONTINUOUS DEPLOYMENT CLUSTER STATUS         "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "  Network:   {} | Consensus: {}",
+                            info.network, info.consensus
+                        );
                         println!("  Topology:  {}", info.topology);
-                        println!("  Nodes:     {}/{} active", info.active_nodes, info.total_nodes);
-                        println!("------------------------------------------------------------------");
+                        println!(
+                            "  Nodes:     {}/{} active",
+                            info.active_nodes, info.total_nodes
+                        );
+                        println!(
+                            "------------------------------------------------------------------"
+                        );
                         for node in &nodes {
-                            println!("  [{}] {} | P2P: {} | RPC: {} | Status: {}",
-                                node.id, node.role, node.p2p_endpoint, node.rpc_endpoint, node.status);
+                            println!(
+                                "  [{}] {} | P2P: {} | RPC: {} | Status: {}",
+                                node.id,
+                                node.role,
+                                node.p2p_endpoint,
+                                node.rpc_endpoint,
+                                node.status
+                            );
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 "start" => {
-                    let node_id = get_arg_value(&args, "--node-id")
-                        .unwrap_or_else(|| "val-1".to_string());
-                    let role = get_arg_value(&args, "--role")
-                        .unwrap_or_else(|| "validator".to_string());
+                    let node_id =
+                        get_arg_value(&args, "--node-id").unwrap_or_else(|| "val-1".to_string());
+                    let role =
+                        get_arg_value(&args, "--role").unwrap_or_else(|| "validator".to_string());
                     let rpc_bind = get_arg_value(&args, "--rpc-bind")
                         .unwrap_or_else(|| "127.0.0.1:19501".to_string());
                     let p2p_bind = get_arg_value(&args, "--p2p-bind")
@@ -1975,29 +2498,75 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let keys = CanonicalCeremonyKeypairs::new_deterministic();
                     let config = NodeConfig {
                         chain_id: crate::genesis::builder::GENESIS_CHAIN_ID,
+                        is_dev_mode: true,
                         role: crate::runtime::config::NodeRole::Validator,
                         p2p_bind: p2p_bind.clone(),
                         rpc_bind: rpc_bind.clone(),
                         ..Default::default()
                     };
 
-                    let store = Arc::new(
-                        RedbStorageEngine::open_or_create(&data_dir)
-                            .map_err(|e| format!("Devnet node storage initialization failed: {e}"))?,
-                    );
+                    let store =
+                        Arc::new(RedbStorageEngine::open_or_create(&data_dir).map_err(|e| {
+                            format!("Devnet node storage initialization failed: {e}")
+                        })?);
 
                     let genesis = CeremonyTranscript::canonical_mainnet_genesis();
-                    let node = AurionNode::new_with_store(
+                    let node = Arc::new(AurionNode::new_with_store(
                         config,
                         genesis,
                         Some(keys.validators[validator_index].clone()),
                         Some(validator_index as u32),
                         store,
-                    );
+                    ));
 
-                    println!("[AURION DEVNET] Node '{node_id}' online. Serving RPC on http://{rpc_bind}");
-                    if let Err(e) = node.run_rpc_server(None).await {
-                        eprintln!("[AURION DEVNET] Server runtime error: {e}");
+                    println!(
+                        "[AURION DEVNET] Node '{node_id}' online. Serving RPC on http://{rpc_bind}"
+                    );
+                    let shutdown = tokio::sync::watch::channel(false);
+                    let endpoint = if p2p_bind.starts_with("tcp/") {
+                        p2p_bind.clone()
+                    } else {
+                        format!("tcp/{p2p_bind}")
+                    };
+                    let zenoh = ZenohBftTransport::open(
+                        validator_index as u32,
+                        crate::genesis::builder::GENESIS_CHAIN_ID,
+                        &endpoint,
+                        &[],
+                    )
+                    .await
+                    .map_err(|error| format!("Devnet Zenoh initialization failed: {error}"))?;
+                    let consensus_handle = node
+                        .clone()
+                        .spawn_consensus_engine_with_shutdown(
+                            validator_index as u32,
+                            keys.validators[validator_index].clone(),
+                            zenoh.session(),
+                            shutdown.1.clone(),
+                        )
+                        .await
+                        .map_err(|error| {
+                            format!("Devnet consensus initialization failed: {error}")
+                        })?;
+                    let rpc_node = node.clone();
+                    let rpc_shutdown = shutdown.1.clone();
+                    let rpc_handle =
+                        tokio::spawn(
+                            async move { rpc_node.run_rpc_server(Some(rpc_shutdown)).await },
+                        );
+                    tokio::select! {
+                        result = rpc_handle => {
+                            if let Ok(Err(error)) = result {
+                                eprintln!("[AURION DEVNET] Server runtime error: {error}");
+                            }
+                        }
+                        result = tokio::signal::ctrl_c() => {
+                            if let Err(error) = result {
+                                eprintln!("[AURION DEVNET] Shutdown signal error: {error}");
+                            }
+                            let _ = shutdown.0.send(true);
+                            let _ = consensus_handle.await;
+                        }
                     }
                 }
                 _ => {
@@ -2008,12 +2577,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!();
                     println!("Subcommands:");
                     println!("  init         Initialize devnet topology, directories, and genesis configurations");
-                    println!("  status       Inspect devnet multi-node cluster health and node status");
+                    println!(
+                        "  status       Inspect devnet multi-node cluster health and node status"
+                    );
                     println!("  start        Start a specific devnet node instance");
                     println!("  orchestrate  Launch full multi-node cluster via tools/devnet_orchestrator.py");
                     println!();
                     println!("Options:");
-                    println!("  --data-dir <DIR>          Base data directory (default: data/devnet)");
+                    println!(
+                        "  --data-dir <DIR>          Base data directory (default: data/devnet)"
+                    );
                     println!("  --validators <N>          Number of BFT validators (default: 4)");
                     println!("  --node-id <ID>            Node identifier (e.g., val-1, sentry-1, rpc-gateway)");
                     println!("  --role <ROLE>             Node role: validator | sentry | rpc");
@@ -2031,10 +2604,31 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             match sub {
                 "init" | "status" => {
                     let regions = [
-                        ("Asia-Pacific", "val-ap-1", "Validator-Proposer", 15, 19411, 19511),
+                        (
+                            "Asia-Pacific",
+                            "val-ap-1",
+                            "Validator-Proposer",
+                            15,
+                            19411,
+                            19511,
+                        ),
                         ("Europe", "val-eu-1", "Validator-Peer", 160, 19412, 19512),
-                        ("North-America", "val-us-1", "Validator-Peer", 220, 19413, 19513),
-                        ("South-America", "val-sa-1", "Validator-Peer", 300, 19414, 19514),
+                        (
+                            "North-America",
+                            "val-us-1",
+                            "Validator-Peer",
+                            220,
+                            19413,
+                            19513,
+                        ),
+                        (
+                            "South-America",
+                            "val-sa-1",
+                            "Validator-Peer",
+                            300,
+                            19414,
+                            19514,
+                        ),
                         ("Asia-Pacific", "sentry-ap", "Sentry-Edge", 15, 19415, 19515),
                         ("Europe", "sentry-eu", "Sentry-Edge", 160, 19416, 19516),
                     ];
@@ -2063,20 +2657,42 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("     AURION PRIVATE MULTI-REGION TESTNET STATUS (NET-011)        ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "     AURION PRIVATE MULTI-REGION TESTNET STATUS (NET-011)        "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Network:           {}", info.network);
                         println!("  Consensus:         {}", info.consensus);
-                        println!("  Active Regions:    {} (AP, EU, US, SA)", info.regions_count);
+                        println!(
+                            "  Active Regions:    {} (AP, EU, US, SA)",
+                            info.regions_count
+                        );
                         println!("  Max WAN Latency:   {} ms", info.max_wan_rtt_ms);
-                        println!("  Validators/Sentry: {}/{}", info.total_validators, info.total_sentries);
-                        println!("------------------------------------------------------------------");
+                        println!(
+                            "  Validators/Sentry: {}/{}",
+                            info.total_validators, info.total_sentries
+                        );
+                        println!(
+                            "------------------------------------------------------------------"
+                        );
                         for node in &nodes {
-                            println!("  [{:<14}] {:<10} | {:<18} | RTT: {:>3}ms | RPC: {}",
-                                node.region, node.node_id, node.role, node.simulated_rtt_ms, node.rpc_endpoint);
+                            println!(
+                                "  [{:<14}] {:<10} | {:<18} | RTT: {:>3}ms | RPC: {}",
+                                node.region,
+                                node.node_id,
+                                node.role,
+                                node.simulated_rtt_ms,
+                                node.rpc_endpoint
+                            );
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -2102,14 +2718,20 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let sub = args.first().map(|s| s.as_str()).unwrap_or("help");
             match sub {
                 "inspect" | "verify" => {
-                    let file_path = args.get(1).map(|s| s.as_str()).unwrap_or("data/snapshot.auss");
+                    let file_path = args
+                        .get(1)
+                        .map(|s| s.as_str())
+                        .unwrap_or("data/snapshot.auss");
                     let path_obj = std::path::Path::new(file_path);
 
                     if !path_obj.exists() {
                         return Err(format!("Snapshot file not found: {file_path}"));
                     }
 
-                    let snapshot = crate::statemachine::state::snapshot::StateSnapshot::read_from_file(path_obj)
+                    let snapshot =
+                        crate::statemachine::state::snapshot::StateSnapshot::read_from_file(
+                            path_obj,
+                        )
                         .map_err(|e| format!("Failed to read snapshot: {e}"))?;
                     let checksum = snapshot.compute_checksum();
 
@@ -2128,9 +2750,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("         AURION STATE SNAPSHOT METADATA INSPECTOR (NET-011)       ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "         AURION STATE SNAPSHOT METADATA INSPECTOR (NET-011)       "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  File Path:        {}", info.file_path);
                         println!("  Magic Header:     {}", info.magic);
                         println!("  Snapshot Version: {}", info.version);
@@ -2143,7 +2771,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         println!("  Has Certificate:  {}", info.has_certificate);
                         println!("  Blake3 Checksum:  {}", info.checksum);
                         println!("  Integrity Status: VERIFIED_CANONICAL");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -2155,7 +2785,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("Subcommands:");
                     println!("  export   Export state snapshot at specified block height");
                     println!("  inspect  Inspect snapshot metadata, header, and account counts");
-                    println!("  verify   Cryptographically verify snapshot checksum and state root");
+                    println!(
+                        "  verify   Cryptographically verify snapshot checksum and state root"
+                    );
                     println!();
                     println!("Options:");
                     println!("  --height <H>              Block height to export");
@@ -2171,49 +2803,83 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let sub = args.first().map(|s| s.as_str()).unwrap_or("status");
             match sub {
                 "request" => {
-                    let recipient = args.get(1).cloned()
+                    let recipient = args
+                        .get(1)
+                        .cloned()
                         .or_else(|| get_arg_value(&args, "--to"))
-                        .unwrap_or_else(|| "aur1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsqqqqqqqq".to_string());
+                        .unwrap_or_else(|| {
+                            "aur1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsqqqqqqqq"
+                                .to_string()
+                        });
 
                     let info = FaucetRequestInfo {
                         status: "DISPENSED",
                         recipient: recipient.to_string(),
                         amount_aur: "10.00000000",
                         amount_quanta: 1_000_000_000,
-                        tx_hash: "0x8f10a7b4892c5d1e2f3a4b5c6d7e8f90123456789abcdef0123456789abcdef0".to_string(),
+                        tx_hash:
+                            "0x8f10a7b4892c5d1e2f3a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
+                                .to_string(),
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION PUBLIC TESTNET FAUCET DISPENSER               ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION PUBLIC TESTNET FAUCET DISPENSER               "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:           {}", info.status);
                         println!("  Recipient:        {}", info.recipient);
-                        println!("  Dispensed Amount: {} AUR ({} Quanta)", info.amount_aur, info.amount_quanta);
+                        println!(
+                            "  Dispensed Amount: {} AUR ({} Quanta)",
+                            info.amount_aur, info.amount_quanta
+                        );
                         println!("  Tx Hash:          {}", info.tx_hash);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
                     let info = FaucetStatusInfo {
                         status: "ONLINE",
                         network: "aurion-public-testnet",
-                        faucet_address: "aur1dev0000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+                        faucet_address:
+                            "aur1dev0000000000000000000000000000000000000000000000000sqqqqqqqq"
+                                .to_string(),
                         dispense_amount_aur: "10.00000000",
                         dispense_amount_quanta: 1_000_000_000,
                         cooldown_seconds: 60,
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("               AURION TESTNET FAUCET STATUS                       ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "               AURION TESTNET FAUCET STATUS                       "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Status:           {}", info.status);
                         println!("  Network:          {}", info.network);
                         println!("  Faucet Address:   {}", info.faucet_address);
-                        println!("  Quota Per Claim:  {} AUR ({} Quanta)", info.dispense_amount_aur, info.dispense_amount_quanta);
-                        println!("  Cooldown Period:  {} seconds per address", info.cooldown_seconds);
-                        println!("==================================================================");
+                        println!(
+                            "  Quota Per Claim:  {} AUR ({} Quanta)",
+                            info.dispense_amount_aur, info.dispense_amount_quanta
+                        );
+                        println!(
+                            "  Cooldown Period:  {} seconds per address",
+                            info.cooldown_seconds
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -2244,9 +2910,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("        AURION COMMUNITY SANDBOX & EXPLORER SUMMARY               ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "        AURION COMMUNITY SANDBOX & EXPLORER SUMMARY               "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Network:          {}", info.network);
                         println!("  Chain ID:         {}", info.chain_id);
                         println!("  Current Height:   {}", info.current_height);
@@ -2254,7 +2926,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         println!("  Mempool Size:     {} pending txs", info.mempool_size);
                         println!("  Accounts Count:   {} registered", info.accounts_count);
                         println!("  Web Sandbox UI:   {}", info.sandbox_dashboard_url);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -2268,15 +2942,26 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let report = crate::platform::audit::SecurityAuditRunner::run_full_audit();
                     let pass_pct = (report.passed_checks * 100) / report.total_checks.max(1);
                     format.print(&report, || {
-                        println!("==================================================================");
-                        println!("             AURION SECURITY AUDIT SUMMARY (PRD-013)              ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION SECURITY AUDIT SUMMARY (PRD-013)              "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Version:          {}", report.version);
                         println!("  Total Checks:     {}", report.total_checks);
-                        println!("  Passed Checks:    {} ({}%)", report.passed_checks, pass_pct);
+                        println!(
+                            "  Passed Checks:    {} ({}%)",
+                            report.passed_checks, pass_pct
+                        );
                         println!("  Failed Checks:    {}", report.failed_checks);
                         println!("  Readiness Status: {}", report.readiness_verdict);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -2321,16 +3006,26 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("             AURION MAINNET BOOTNODES & SEED PEERS                ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "             AURION MAINNET BOOTNODES & SEED PEERS                "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Network:         {}", info.network);
                         println!("  Total Bootnodes: {}", info.total_bootnodes);
-                        println!("------------------------------------------------------------------");
+                        println!(
+                            "------------------------------------------------------------------"
+                        );
                         for (i, p) in bootnodes.iter().enumerate() {
                             println!("  [{}] {:<36} | Endpoint: {}", i + 1, p.name, p.endpoint);
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
                 _ => {
@@ -2342,27 +3037,45 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         state_root: genesis.header.state_root.to_hex(),
                         p2p_wire_magic: "AUR0",
                         p2p_protocol_version: 1,
-                        bootnodes_count: crate::runtime::config::NodeConfig::mainnet_bootnodes().len(),
+                        bootnodes_count: crate::runtime::config::NodeConfig::mainnet_bootnodes()
+                            .len(),
                         active_consensus: "Single-Slot BFT Finality (>2/3 Quorum)",
                         hard_cap_aur: 66_000_000,
                         status: "MAINNET_PRODUCTION_ACTIVE",
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("           AURION PRODUCTION MAINNET NETWORK STATUS               ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "           AURION PRODUCTION MAINNET NETWORK STATUS               "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Network:            {}", info.network);
                         println!("  Chain ID:           {}", info.chain_id);
                         println!("  Genesis Block Hash: {}", info.genesis_block_hash);
                         println!("  State Root (σ0):    {}", info.state_root);
-                        println!("  P2P Wire Framing:   Magic '{}' (52B Header)", info.p2p_wire_magic);
+                        println!(
+                            "  P2P Wire Framing:   Magic '{}' (52B Header)",
+                            info.p2p_wire_magic
+                        );
                         println!("  P2P Version:        {}", info.p2p_protocol_version);
-                        println!("  Genesis Bootnodes:  {} active validators", info.bootnodes_count);
+                        println!(
+                            "  Genesis Bootnodes:  {} active validators",
+                            info.bootnodes_count
+                        );
                         println!("  Consensus:          {}", info.active_consensus);
-                        println!("  Hard Cap:           {} AUR (Zero-Float exact Quantum)", info.hard_cap_aur);
+                        println!(
+                            "  Hard Cap:           {} AUR (Zero-Float exact Quantum)",
+                            info.hard_cap_aur
+                        );
                         println!("  Network Status:     {}", info.status);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -2373,10 +3086,18 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let sub = args.first().map(|s| s.as_str()).unwrap_or("status");
             let registry = MetricsRegistry::new(1001);
             // Inisialisasi metrik awal mainnet
-            registry.block_height.store(0, std::sync::atomic::Ordering::SeqCst);
-            registry.bft_round.store(0, std::sync::atomic::Ordering::SeqCst);
-            registry.bft_validators_active.store(4, std::sync::atomic::Ordering::SeqCst);
-            registry.connected_peers.store(4, std::sync::atomic::Ordering::SeqCst);
+            registry
+                .block_height
+                .store(0, std::sync::atomic::Ordering::SeqCst);
+            registry
+                .bft_round
+                .store(0, std::sync::atomic::Ordering::SeqCst);
+            registry
+                .bft_validators_active
+                .store(4, std::sync::atomic::Ordering::SeqCst);
+            registry
+                .connected_peers
+                .store(4, std::sync::atomic::Ordering::SeqCst);
 
             if sub == "export" || args.iter().any(|a| a == "--prometheus") {
                 let openmetrics = registry.render_openmetrics();
@@ -2392,15 +3113,39 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 println!("  Chain ID:                 {}", snapshot.chain_id);
                 println!("  Block Height:             {}", snapshot.block_height);
                 println!("  BFT Round:                {}", snapshot.bft_round);
-                println!("  Active Validators:        {}", snapshot.bft_validators_active);
+                println!(
+                    "  Active Validators:        {}",
+                    snapshot.bft_validators_active
+                );
                 println!("  Connected Peers:          {}", snapshot.connected_peers);
-                println!("  Mempool Size:             {} pending txs", snapshot.mempool_size);
-                println!("  Sync Status:              {} (1 = Synced)", snapshot.node_sync_status);
-                println!("  Transactions Processed:   {}", snapshot.transactions_processed_total);
-                println!("  Blocks Finalized:         {}", snapshot.blocks_finalized_total);
-                println!("  Quanta Permanently Burned:{}", snapshot.burned_quanta_total);
-                println!("  BFT Finality Latency:     {} ms", snapshot.bft_finality_latency_ms);
-                println!("  Active Protocol Version:  v{}", snapshot.active_protocol_version);
+                println!(
+                    "  Mempool Size:             {} pending txs",
+                    snapshot.mempool_size
+                );
+                println!(
+                    "  Sync Status:              {} (1 = Synced)",
+                    snapshot.node_sync_status
+                );
+                println!(
+                    "  Transactions Processed:   {}",
+                    snapshot.transactions_processed_total
+                );
+                println!(
+                    "  Blocks Finalized:         {}",
+                    snapshot.blocks_finalized_total
+                );
+                println!(
+                    "  Quanta Permanently Burned:{}",
+                    snapshot.burned_quanta_total
+                );
+                println!(
+                    "  BFT Finality Latency:     {} ms",
+                    snapshot.bft_finality_latency_ms
+                );
+                println!(
+                    "  Active Protocol Version:  v{}",
+                    snapshot.active_protocol_version
+                );
                 println!("  Metrics Format:           Prometheus / OpenMetrics text/plain");
                 println!("==================================================================");
             });
@@ -2418,20 +3163,42 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 100,
                 500,
                 700,
-            ).unwrap();
+            )
+            .unwrap();
             let _ = gov.register_proposal(canonical_proposal);
 
             match sub {
                 "propose" => {
-                    let id = get_arg_value(&args, "--id").and_then(|v| v.parse::<u32>().ok()).unwrap_or(2);
-                    let name = get_arg_value(&args, "--name").unwrap_or_else(|| "Ecosystem Upgrade".to_string());
-                    let target_v = get_arg_value(&args, "--version").and_then(|v| v.parse::<u32>().ok()).unwrap_or(2);
-                    let bit = get_arg_value(&args, "--bit").and_then(|v| v.parse::<u8>().ok()).unwrap_or(2);
-                    let start = get_arg_value(&args, "--start").and_then(|v| v.parse::<u64>().ok()).unwrap_or(1000);
-                    let window = get_arg_value(&args, "--window").and_then(|v| v.parse::<u64>().ok()).unwrap_or(500);
-                    let activation = get_arg_value(&args, "--activation").and_then(|v| v.parse::<u64>().ok()).unwrap_or(1600);
+                    let id = get_arg_value(&args, "--id")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .unwrap_or(2);
+                    let name = get_arg_value(&args, "--name")
+                        .unwrap_or_else(|| "Ecosystem Upgrade".to_string());
+                    let target_v = get_arg_value(&args, "--version")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .unwrap_or(2);
+                    let bit = get_arg_value(&args, "--bit")
+                        .and_then(|v| v.parse::<u8>().ok())
+                        .unwrap_or(2);
+                    let start = get_arg_value(&args, "--start")
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(1000);
+                    let window = get_arg_value(&args, "--window")
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(500);
+                    let activation = get_arg_value(&args, "--activation")
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(1600);
 
-                    match UpgradeProposal::new(id, name.clone(), target_v, bit, start, window, activation) {
+                    match UpgradeProposal::new(
+                        id,
+                        name.clone(),
+                        target_v,
+                        bit,
+                        start,
+                        window,
+                        activation,
+                    ) {
                         Ok(p) => {
                             gov.register_proposal(p).map_err(|e| e.to_string())?;
                             println!("Upgrade proposal #{id} ('{name}') registered successfully.");
@@ -2441,9 +3208,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
                 }
                 "signal" => {
-                    let bit = get_arg_value(&args, "--bit").and_then(|v| v.parse::<u8>().ok()).unwrap_or(1);
-                    println!("Validator Signaling Configured: Bit {bit} (Mask: 0x{:X})", 1u32 << bit);
-                    println!("Include this bit in BlockHeader.version during the evaluation window.");
+                    let bit = get_arg_value(&args, "--bit")
+                        .and_then(|v| v.parse::<u8>().ok())
+                        .unwrap_or(1);
+                    println!(
+                        "Validator Signaling Configured: Bit {bit} (Mask: 0x{:X})",
+                        1u32 << bit
+                    );
+                    println!(
+                        "Include this bit in BlockHeader.version during the evaluation window."
+                    );
                 }
                 _ => {
                     let proposals = gov.list_proposals();
@@ -2454,22 +3228,42 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("       AURION ON-CHAIN GOVERNANCE & FORK SIGNALING (PRD-017)      ");
-                        println!("==================================================================");
-                        println!("  Active Protocol Version:  v{}", info.active_protocol_version);
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "       AURION ON-CHAIN GOVERNANCE & FORK SIGNALING (PRD-017)      "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "  Active Protocol Version:  v{}",
+                            info.active_protocol_version
+                        );
                         println!("  Registered Proposals:     {}", info.proposals_count);
-                        println!("------------------------------------------------------------------");
+                        println!(
+                            "------------------------------------------------------------------"
+                        );
                         for p in &info.proposals {
                             println!("  Proposal #{}: {}", p.proposal_id, p.name);
                             println!("    Target Version:   v{}", p.target_version);
-                            println!("    Signal Bit:       bit {} (Mask 0x{:X})", p.signal_bit, 1u32 << p.signal_bit);
+                            println!(
+                                "    Signal Bit:       bit {} (Mask 0x{:X})",
+                                p.signal_bit,
+                                1u32 << p.signal_bit
+                            );
                             println!("    Lifecycle Status: {:?}", p.status);
-                            println!("    Support Tally:    {}/{} blocks ({} bps)", p.signaling_blocks, p.total_window_blocks, p.support_bps);
+                            println!(
+                                "    Support Tally:    {}/{} blocks ({} bps)",
+                                p.signaling_blocks, p.total_window_blocks, p.support_bps
+                            );
                             println!("    Activation Tip:   Height {}", p.activation_height);
                             println!();
                         }
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -2482,7 +3276,8 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
             match sub {
                 "trip" => {
-                    let reason = get_arg_value(&args, "--reason").unwrap_or_else(|| "Operator manual emergency halt drill".to_string());
+                    let reason = get_arg_value(&args, "--reason")
+                        .unwrap_or_else(|| "Operator manual emergency halt drill".to_string());
                     cb.trip(reason.clone());
                     println!("Emergency Circuit Breaker Tripped: {reason}");
                     println!("Node consensus and state mutations halted.");
@@ -2496,13 +3291,20 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         .unwrap_or_else(|| "testnet_snapshot_h10.auss".to_string());
                     println!("Restoring node state from snapshot: {snapshot_path}...");
                     if std::path::Path::new(&snapshot_path).exists() {
-                        let temp_db = std::env::temp_dir().join(format!("aurion_restore_{}.redb", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)));
+                        let temp_db = std::env::temp_dir().join(format!(
+                            "aurion_restore_{}.redb",
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_millis())
+                                .unwrap_or(0)
+                        ));
                         let store = RedbStorageEngine::open_or_create(&temp_db)
                             .map_err(|e| format!("Storage initialization failed: {e}"))?;
                         let report = DisasterRecoveryManager::restore_from_snapshot_file(
                             std::path::Path::new(&snapshot_path),
                             &store,
-                        ).map_err(|e| format!("Disaster recovery restore failed: {e}"))?;
+                        )
+                        .map_err(|e| format!("Disaster recovery restore failed: {e}"))?;
 
                         format.print(&report, || {
                             println!("Disaster Recovery Restore Succeeded!");
@@ -2519,22 +3321,37 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 "audit" => {
                     let genesis = CeremonyTranscript::canonical_mainnet_genesis();
                     let ledger = crate::state::chain::ChainLedger::from_genesis(genesis);
-                    let temp_db = std::env::temp_dir().join(format!("aurion_audit_{}.redb", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0)));
-                    let store = RedbStorageEngine::open_or_create(&temp_db).map_err(|e| e.to_string())?;
+                    let temp_db = std::env::temp_dir().join(format!(
+                        "aurion_audit_{}.redb",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_millis())
+                            .unwrap_or(0)
+                    ));
+                    let store =
+                        RedbStorageEngine::open_or_create(&temp_db).map_err(|e| e.to_string())?;
                     let audit = DisasterRecoveryManager::audit_ledger_integrity(&ledger, &store)
                         .map_err(|e| format!("Audit failed: {e}"))?;
 
                     format.print(&audit, || {
-                        println!("==================================================================");
-                        println!("           AURION LEDGER INTEGRITY & RECOVERY AUDIT               ");
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "           AURION LEDGER INTEGRITY & RECOVERY AUDIT               "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
                         println!("  Integrity Valid:      {}", audit.is_valid);
                         println!("  Total Blocks:         {}", audit.total_blocks);
                         println!("  Latest Block Hash:    {}", audit.latest_block_hash);
                         println!("  Latest State Root:    {}", audit.latest_state_root);
                         println!("  Total Accounts:       {}", audit.total_accounts);
                         println!("  Detected Errors:      {}", audit.errors.len());
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                     let _ = std::fs::remove_file(temp_db);
                 }
@@ -2544,20 +3361,38 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         trip_reason: cb.trip_reason.clone(),
                         consecutive_failed_rounds: cb.consecutive_failed_rounds,
                         max_allowed_failed_rounds: cb.max_allowed_failed_rounds,
-                        status: if cb.is_tripped { "HALTED" } else { "NORMAL_ACTIVE" },
+                        status: if cb.is_tripped {
+                            "HALTED"
+                        } else {
+                            "NORMAL_ACTIVE"
+                        },
                     };
 
                     format.print(&info, || {
-                        println!("==================================================================");
-                        println!("      AURION DISASTER RECOVERY & CIRCUIT BREAKER (PRD-017)        ");
-                        println!("==================================================================");
-                        println!("  Circuit Breaker Tripped:   {}", info.circuit_breaker_tripped);
-                        println!("  Consecutive Failed Rounds: {} / {}", info.consecutive_failed_rounds, info.max_allowed_failed_rounds);
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "      AURION DISASTER RECOVERY & CIRCUIT BREAKER (PRD-017)        "
+                        );
+                        println!(
+                            "=================================================================="
+                        );
+                        println!(
+                            "  Circuit Breaker Tripped:   {}",
+                            info.circuit_breaker_tripped
+                        );
+                        println!(
+                            "  Consecutive Failed Rounds: {} / {}",
+                            info.consecutive_failed_rounds, info.max_allowed_failed_rounds
+                        );
                         if let Some(r) = &info.trip_reason {
                             println!("  Trip Reason:               {}", r);
                         }
                         println!("  Operational Status:        {}", info.status);
-                        println!("==================================================================");
+                        println!(
+                            "=================================================================="
+                        );
                     });
                 }
             }
@@ -2603,15 +3438,23 @@ fn print_master_help() {
     println!("  genesis     Inspect genesis parameters, allocations, and canonical hash");
     println!("  conformance Run or export 8-Pillar Protocol Conformance Test Suite (CTS)");
     println!("  l2          Manage Layer-2 rollup runtime, sequencer, bridge, and transactions");
-    println!("  specialized Manage Layer-3 specialized execution domains and checkpoints (alias: l3)");
+    println!(
+        "  specialized Manage Layer-3 specialized execution domains and checkpoints (alias: l3)"
+    );
     println!("  interop     Manage Layer-4 cross-chain interoperability, bridges, and circuit breakers (alias: l4)");
-    println!("  infra       Manage Layer-5 global distributed infrastructure & services (alias: l5)");
+    println!(
+        "  infra       Manage Layer-5 global distributed infrastructure & services (alias: l5)"
+    );
     println!("  devnet      Manage local multi-node live staging devnet cluster (NET-010)");
     println!("  testnet     Manage private multi-region global testnet & WAN topology (NET-011)");
     println!("  snapshot    Export, inspect, and verify state snapshots for fast-sync (NET-011)");
     println!("  faucet      Request testnet tokens or inspect testnet faucet status (NET-012)");
-    println!("  audit       Run formal external security audit & penetration verification (PRD-013)");
-    println!("  metrics     Export Prometheus / OpenMetrics telemetry or inspect node stats (PRD-017)");
+    println!(
+        "  audit       Run formal external security audit & penetration verification (PRD-013)"
+    );
+    println!(
+        "  metrics     Export Prometheus / OpenMetrics telemetry or inspect node stats (PRD-017)"
+    );
     println!("  governance  Manage on-chain upgrade proposals and validator signaling (PRD-017, alias: gov)");
     println!("  recovery    Disaster recovery snapshot restore & circuit breaker management (PRD-017, alias: dr)");
     println!("  rpc         Run standalone JSON-RPC 2.0 & WebSocket gateway");

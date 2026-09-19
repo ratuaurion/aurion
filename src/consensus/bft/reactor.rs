@@ -1,18 +1,18 @@
 #![forbid(unsafe_code)]
 
-//! Event-driven BFT reactor.
-//!
-//! The reactor owns consensus message handling but not ledger persistence.
-//! Callers commit a returned, verified certificate through `BftEngine` and
-//! their storage transaction.
+//! Event-driven two-phase BFT reactor.
 
 use crate::consensus::bft::block::Block;
+use crate::consensus::bft::block::BlockProposalEnvelope;
 use crate::consensus::bft::certificate::{CommitCertificate, ValidatorSet};
 use crate::consensus::bft::engine::{BftEngine, BftEngineError};
 use crate::consensus::bft::transport::{BftTransport, ConsensusMessage, TransportError};
-use crate::consensus::bft::vote::{Vote, PHASE_PRECOMMIT};
+use crate::consensus::bft::vote::{Vote, PHASE_PRECOMMIT, PHASE_PREVOTE};
 use crate::crypto::Keypair;
+use crate::genesis::builder::GENESIS_CHAIN_ID;
+use crate::state::chain::{ChainError, ChainLedger};
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::{self, Instant};
@@ -27,11 +27,15 @@ pub enum ReactorError {
     InvalidVote(String),
     #[error("consensus engine failure: {0}")]
     Engine(#[from] BftEngineError),
+    #[error("ledger failure: {0}")]
+    Ledger(#[from] ChainError),
+    #[error("reactor requires a ledger-aware constructor before commit")]
+    MissingLedger,
 }
 
 #[derive(Default)]
 pub struct VoteAccumulator {
-    votes: HashMap<(crate::core::Hash256, u64), Vec<Vote>>,
+    votes: HashMap<(crate::core::Hash256, u64, u8), Vec<Vote>>,
 }
 
 impl VoteAccumulator {
@@ -40,7 +44,8 @@ impl VoteAccumulator {
     }
 
     pub fn add_vote(&mut self, vote: Vote) -> usize {
-        let entry = self.votes.entry((vote.block_hash, vote.round)).or_default();
+        let key = (vote.block_hash, vote.round, vote.phase);
+        let entry = self.votes.entry(key).or_default();
         if !entry
             .iter()
             .any(|existing| existing.validator_index == vote.validator_index)
@@ -50,17 +55,34 @@ impl VoteAccumulator {
         entry.len()
     }
 
+    pub fn add_vote_checked(&mut self, vote: Vote) -> Result<usize, ReactorError> {
+        let key = (vote.block_hash, vote.round, vote.phase);
+        let entry = self.votes.entry(key).or_default();
+        if entry
+            .iter()
+            .any(|existing| existing.validator_index == vote.validator_index)
+        {
+            return Err(ReactorError::InvalidVote(format!(
+                "duplicate vote from validator {} in phase {:#04x}",
+                vote.validator_index, vote.phase
+            )));
+        }
+        entry.push(vote);
+        Ok(entry.len())
+    }
+
     pub fn votes_for(
         &self,
         block_hash: &crate::core::Hash256,
         round: u64,
+        phase: u8,
     ) -> Option<&[Vote]> {
-        self.votes.get(&(*block_hash, round)).map(Vec::as_slice)
+        self.votes
+            .get(&(*block_hash, round, phase))
+            .map(Vec::as_slice)
     }
 
     pub fn prune_below_height(&mut self, _current_height: u64) {
-        // Vote keys do not include height; callers clear the accumulator on
-        // height advancement to avoid retaining stale rounds.
         self.votes.clear();
     }
 }
@@ -71,10 +93,13 @@ pub struct BftReactor<T: BftTransport> {
     pub transport: T,
     pub current_height: u64,
     pub current_round: u64,
+    pending_transactions: Vec<(crate::transaction::types::Transaction, [u8; 32])>,
     pub vote_accumulator: VoteAccumulator,
     pub round_timeout: Duration,
     pub pending_proposal: Option<Block>,
+    pub pending_proposer_index: Option<u32>,
     engine: BftEngine,
+    ledger: Option<Arc<Mutex<ChainLedger>>>,
 }
 
 impl<T: BftTransport> BftReactor<T> {
@@ -86,21 +111,74 @@ impl<T: BftTransport> BftReactor<T> {
         initial_height: u64,
         round_timeout: Duration,
     ) -> Self {
+        Self::new_internal(
+            validator_index,
+            keypair,
+            validator_set,
+            transport,
+            initial_height,
+            round_timeout,
+            None,
+        )
+    }
+
+    pub fn new_with_ledger(
+        validator_index: u32,
+        keypair: Keypair,
+        validator_set: ValidatorSet,
+        transport: T,
+        ledger: Arc<Mutex<ChainLedger>>,
+        round_timeout: Duration,
+    ) -> Self {
+        let initial_height = ledger
+            .lock()
+            .map(|guard| guard.latest_height() + 1)
+            .unwrap_or(0);
+        Self::new_internal(
+            validator_index,
+            keypair,
+            validator_set,
+            transport,
+            initial_height,
+            round_timeout,
+            Some(ledger),
+        )
+    }
+
+    fn new_internal(
+        validator_index: u32,
+        keypair: Keypair,
+        validator_set: ValidatorSet,
+        transport: T,
+        initial_height: u64,
+        round_timeout: Duration,
+        ledger: Option<Arc<Mutex<ChainLedger>>>,
+    ) -> Self {
         Self {
             validator_index,
             validator_set,
             transport,
             current_height: initial_height,
             current_round: 0,
+            pending_transactions: Vec::new(),
             vote_accumulator: VoteAccumulator::new(),
             round_timeout,
             pending_proposal: None,
+            pending_proposer_index: None,
             engine: BftEngine::new(Some(keypair), Some(validator_index)),
+            ledger,
         }
     }
 
     pub fn quorum_threshold(&self) -> usize {
         self.validator_set.quorum_threshold() as usize
+    }
+
+    pub async fn propose_local(
+        &mut self,
+        envelope: BlockProposalEnvelope,
+    ) -> Result<(), ReactorError> {
+        self.handle_proposal(envelope).await
     }
 
     pub async fn step(&mut self) -> Result<Option<CommitCertificate>, ReactorError> {
@@ -111,70 +189,112 @@ impl<T: BftTransport> BftReactor<T> {
         tokio::select! {
             message = self.transport.recv() => {
                 match message? {
-                    ConsensusMessage::Proposal(block) => self.handle_proposal(block).await?,
+                    ConsensusMessage::Proposal(envelope) => self.handle_proposal(envelope).await?,
                     ConsensusMessage::Vote(vote) => {
-                        if let Some(certificate) = self.handle_vote(vote)? {
+                        if let Some(certificate) = self.handle_vote(vote).await? {
                             self.advance_height(certificate.height.saturating_add(1));
                             return Ok(Some(certificate));
                         }
                     }
-                    ConsensusMessage::Transaction(_) => {}
+                    ConsensusMessage::Transaction {
+                        transaction,
+                        sender_pubkey,
+                    } => self.pending_transactions.push((transaction, sender_pubkey)),
                 }
+
             }
             _ = &mut timeout => self.handle_round_timeout(),
         }
-
         Ok(None)
     }
 
-    async fn handle_proposal(&mut self, block: Block) -> Result<(), ReactorError> {
-        if block.header.height != self.current_height
-            || block.header.round != self.current_round
-        {
+    pub fn drain_transactions(
+        &mut self,
+    ) -> Vec<(crate::transaction::types::Transaction, [u8; 32])> {
+        std::mem::take(&mut self.pending_transactions)
+    }
+
+    async fn handle_proposal(
+        &mut self,
+        envelope: BlockProposalEnvelope,
+    ) -> Result<(), ReactorError> {
+        let block = &envelope.block;
+        if block.header.height != self.current_height || block.header.round < self.current_round {
             return Ok(());
         }
+        if block.header.round > self.current_round {
+            self.current_round = block.header.round;
+            self.vote_accumulator.prune_below_height(self.current_height);
+            self.pending_proposal = None;
+            self.pending_proposer_index = None;
+        }
+        envelope
+            .verify(GENESIS_CHAIN_ID, &self.validator_set)
+            .map_err(|error| ReactorError::InvalidProposal(error.to_string()))?;
+
+        let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
+        let miner = self
+            .validator_set
+            .get_validator(envelope.proposer_index)
+            .ok_or_else(|| ReactorError::InvalidProposal("unknown proposer".into()))?
+            .validator_id;
+        ledger
+            .lock()
+            .map_err(|_| ReactorError::InvalidProposal("ledger lock poisoned".into()))?
+            .validate_block_proposal(block, &miner)
+            .map_err(|error| ReactorError::InvalidProposal(error.to_string()))?;
 
         if self.pending_proposal.is_some() {
             return Ok(());
         }
-
-        let block_hash = block.hash();
-        let vote = self
-            .engine
-            .produce_precommit(block_hash, self.current_height, self.current_round)?;
-        self.pending_proposal = Some(block);
-        self.vote_accumulator.add_vote(vote.clone());
+        self.pending_proposal = Some(block.clone());
+        self.pending_proposer_index = Some(envelope.proposer_index);
+        let vote =
+            self.engine
+                .produce_prevote(block.hash(), self.current_height, self.current_round)?;
+        self.vote_accumulator.add_vote_checked(vote.clone())?;
         self.transport.broadcast_vote(vote).await?;
         Ok(())
     }
 
-    fn handle_vote(&mut self, vote: Vote) -> Result<Option<CommitCertificate>, ReactorError> {
-        if vote.phase != PHASE_PRECOMMIT
-            || vote.height != self.current_height
+    async fn handle_vote(&mut self, vote: Vote) -> Result<Option<CommitCertificate>, ReactorError> {
+        if vote.height != self.current_height
             || vote.round != self.current_round
+            || (vote.phase != PHASE_PREVOTE && vote.phase != PHASE_PRECOMMIT)
         {
             return Ok(None);
         }
-
         vote.verify(&self.validator_set)
             .map_err(|error| ReactorError::InvalidVote(error.to_string()))?;
         let block_hash = vote.block_hash;
-        self.vote_accumulator.add_vote(vote);
+        self.vote_accumulator.add_vote_checked(vote)?;
 
         if self
             .vote_accumulator
-            .votes_for(&block_hash, self.current_round)
-            .map_or(0, |votes| votes.len())
-            < self.quorum_threshold()
+            .votes_for(&block_hash, self.current_round, PHASE_PREVOTE)
+            .map_or(false, |votes| self.has_quorum(votes))
+            && self
+                .vote_accumulator
+                .votes_for(&block_hash, self.current_round, PHASE_PRECOMMIT)
+                .is_none()
         {
-            return Ok(None);
+            let precommit = self.engine.produce_precommit(
+                block_hash,
+                self.current_height,
+                self.current_round,
+            )?;
+            self.vote_accumulator.add_vote_checked(precommit.clone())?;
+            self.transport.broadcast_vote(precommit).await?;
         }
 
-        let votes = self
-            .vote_accumulator
-            .votes_for(&block_hash, self.current_round)
-            .map(ToOwned::to_owned)
-            .ok_or_else(|| ReactorError::InvalidVote("quorum votes disappeared".into()))?;
+        let votes =
+            match self
+                .vote_accumulator
+                .votes_for(&block_hash, self.current_round, PHASE_PRECOMMIT)
+            {
+                Some(votes) if self.has_quorum(votes) => votes.to_vec(),
+                _ => return Ok(None),
+            };
         let certificate = self.engine.create_commit_certificate(
             &self.validator_set,
             block_hash,
@@ -182,19 +302,52 @@ impl<T: BftTransport> BftReactor<T> {
             self.current_round,
             votes,
         )?;
+        let mut block = self
+            .pending_proposal
+            .clone()
+            .ok_or_else(|| ReactorError::InvalidProposal("certificate has no proposal".into()))?;
+        block.commit_certificate = Some(certificate.clone());
+        let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
+        let miner_index = self
+            .pending_proposer_index
+            .ok_or_else(|| ReactorError::InvalidProposal("proposal proposer is missing".into()))?;
+        let miner = self
+            .validator_set
+            .get_validator(miner_index)
+            .ok_or_else(|| ReactorError::InvalidVote("unknown local validator".into()))?
+            .validator_id;
+        ledger
+            .lock()
+            .map_err(|_| ReactorError::InvalidProposal("ledger lock poisoned".into()))?
+            .apply_block(block, &miner)?;
         Ok(Some(certificate))
+    }
+
+    fn has_quorum(&self, votes: &[Vote]) -> bool {
+        let voting_power = votes
+            .iter()
+            .filter_map(|vote| {
+                self.validator_set
+                    .get_validator(vote.validator_index)
+                    .map(|validator| validator.voting_weight)
+            })
+            .sum::<u64>();
+        voting_power >= self.validator_set.quorum_threshold()
     }
 
     fn handle_round_timeout(&mut self) {
         self.current_round = self.current_round.saturating_add(1);
         self.pending_proposal = None;
-        self.vote_accumulator.prune_below_height(self.current_height);
+        self.pending_proposer_index = None;
+        self.vote_accumulator
+            .prune_below_height(self.current_height);
     }
 
     fn advance_height(&mut self, new_height: u64) {
         self.current_height = new_height;
         self.current_round = 0;
         self.pending_proposal = None;
+        self.pending_proposer_index = None;
         self.vote_accumulator.prune_below_height(new_height);
     }
 }

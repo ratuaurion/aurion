@@ -6,7 +6,7 @@
 //! implement the same trait without coupling the reactor to a transport SDK.
 
 use crate::codec::CanonicalEncode;
-use crate::consensus::bft::block::Block;
+use crate::consensus::bft::block::BlockProposalEnvelope;
 use crate::consensus::bft::vote::{Vote, VOTE_BYTES};
 use crate::transaction::types::Transaction;
 use std::sync::Arc;
@@ -27,20 +27,34 @@ pub enum TransportError {
     ChannelClosed(String),
     #[error("transport receiver lagged by {0} messages")]
     Lagged(u64),
+    #[error("invalid transport payload: {0}")]
+    InvalidPayload(String),
+    #[error("Zenoh operation failed: {0}")]
+    Zenoh(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConsensusMessage {
-    Proposal(Block),
+    Proposal(BlockProposalEnvelope),
     Vote(Vote),
-    Transaction(Transaction),
+    Transaction {
+        transaction: Transaction,
+        sender_pubkey: [u8; 32],
+    },
 }
 
 #[allow(async_fn_in_trait)]
 pub trait BftTransport: Send + Sync {
-    async fn broadcast_proposal(&self, proposal: Block) -> Result<(), TransportError>;
+    async fn broadcast_proposal(
+        &self,
+        proposal: BlockProposalEnvelope,
+    ) -> Result<(), TransportError>;
     async fn broadcast_vote(&self, vote: Vote) -> Result<(), TransportError>;
-    async fn broadcast_transaction(&self, transaction: Transaction) -> Result<(), TransportError>;
+    async fn broadcast_transaction(
+        &self,
+        transaction: Transaction,
+        sender_pubkey: [u8; 32],
+    ) -> Result<(), TransportError>;
     async fn recv(&mut self) -> Result<ConsensusMessage, TransportError>;
 }
 
@@ -62,6 +76,10 @@ impl InMemoryNetworkHub {
             receiver: self.sender.subscribe(),
         }
     }
+
+    pub fn subscriber_count(&self) -> usize {
+        self.sender.receiver_count()
+    }
 }
 
 pub struct InMemoryBftTransport {
@@ -77,7 +95,10 @@ impl InMemoryBftTransport {
 }
 
 impl BftTransport for InMemoryBftTransport {
-    async fn broadcast_proposal(&self, proposal: Block) -> Result<(), TransportError> {
+    async fn broadcast_proposal(
+        &self,
+        proposal: BlockProposalEnvelope,
+    ) -> Result<(), TransportError> {
         let actual = proposal.to_canonical_bytes().len();
         if actual > MAX_PROPOSAL_WIRE_BYTES {
             return Err(TransportError::ProposalTooLarge {
@@ -107,7 +128,11 @@ impl BftTransport for InMemoryBftTransport {
             .map_err(|error| TransportError::ChannelClosed(error.to_string()))
     }
 
-    async fn broadcast_transaction(&self, transaction: Transaction) -> Result<(), TransportError> {
+    async fn broadcast_transaction(
+        &self,
+        transaction: Transaction,
+        sender_pubkey: [u8; 32],
+    ) -> Result<(), TransportError> {
         let actual = transaction.to_canonical_bytes().len();
         if actual > MAX_TRANSACTION_WIRE_BYTES {
             return Err(TransportError::TransactionTooLarge {
@@ -119,7 +144,10 @@ impl BftTransport for InMemoryBftTransport {
         self.sender
             .send((
                 self.validator_index,
-                ConsensusMessage::Transaction(transaction),
+                ConsensusMessage::Transaction {
+                    transaction,
+                    sender_pubkey,
+                },
             ))
             .map(|_| ())
             .map_err(|error| TransportError::ChannelClosed(error.to_string()))
@@ -150,6 +178,7 @@ pub type SharedInMemoryNetworkHub = Arc<InMemoryNetworkHub>;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::consensus::bft::block::Block;
     use crate::consensus::bft::header::BlockHeader;
     use crate::core::Hash256;
     use crate::crypto::Keypair;
@@ -204,7 +233,12 @@ mod tests {
         let mut receiver = hub.connect(1);
         let sender = hub.connect(0);
 
-        sender.broadcast_proposal(empty_block()).await.unwrap();
+        let proposal = crate::consensus::bft::block::BlockProposalEnvelope {
+            block: empty_block(),
+            proposer_index: 0,
+            signature: [0u8; 64],
+        };
+        sender.broadcast_proposal(proposal).await.unwrap();
         assert!(matches!(
             receiver.recv().await.unwrap(),
             ConsensusMessage::Proposal(_)
