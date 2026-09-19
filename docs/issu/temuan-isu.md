@@ -196,6 +196,12 @@ Dampaknya:
 - Golden test byte-level `tests/golden_vectors.rs` mengunci canonical bytes,
   preimage, hash preimage, tanda tangan, TxID, header, dan BlockHash, serta
   memverifikasi signature lintas wallet/validator.
+- Drift timestamp genesis (dokumen `1773570000` vs kode & artifact
+  `1773532800`) dihilangkan: `AURION-GENESIS-SPECIFICATION.md` dan Vektor 6
+  (`AURION-REFERENCE-TEST-VECTORS.md`, header 124 B + GenesisHash)
+  diregenerasi ke `1773532800` (15 Maret 2026 00:00:00 UTC), konsisten dengan
+  `MAINNET_GENESIS_BLOCK.json`, `GENESIS_CEREMONY.json`, `build_genesis`, dan
+  `tests/mainnet_launch.rs`.
 
 ### AUR-ISSUE-004: Keystore Menggunakan Kriptografi Custom
 
@@ -247,6 +253,10 @@ langsung ditebak. CLI juga menerima password melalui argumen command line
 - password kosong ditolak, konfirmasi mismatch ditolak;
 - test ditambahkan pada `password.rs`, total suite lib menjadi 153 passed.
   Guardrail: 100% canonical, zero conflicts.
+- Residu argv pada `import` ditutup: `--mnemonic "<24 words>"` kini diabaikan
+  dengan warning keras; mnemonic hanya diterima via `--mnemonic-stdin`, env
+  `AURION_WALLET_MNEMONIC`, atau prompt interaktif tanpa echo melalui
+  `resolve_mnemonic` di `password.rs`.
 
 ### AUR-ISSUE-006: Address Creator dan Developer Placeholder
 

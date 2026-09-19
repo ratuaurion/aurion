@@ -200,8 +200,8 @@ pub const GENESIS_PROTOCOL_VERSION: u32 = 1;
 /// Network Chain ID (Mainnet = 1001)
 pub const GENESIS_CHAIN_ID: u32 = 1001;
 
-/// Genesis Unix Timestamp (Contoh Epoch Resmi Peluncuran)
-pub const GENESIS_TIMESTAMP_MAINNET: u64 = 1773570000;
+/// Genesis Unix Timestamp Resmi Peluncuran Mainnet (15 Maret 2026 00:00:00 UTC)
+pub const GENESIS_TIMESTAMP_MAINNET: u64 = 1773532800;
 
 /// Total Suplai Terbit pada Blok 0 (35% = 2.310.000.000.000.000 Q)
 pub const GENESIS_INITIAL_EMITTED_QUANTA: u128 = 2_310_000_000_000_000;

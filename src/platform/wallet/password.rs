@@ -13,6 +13,9 @@ use std::io::{self, BufRead, IsTerminal};
 /// Nama environment variable kanonikal untuk password wallet.
 pub const ENV_WALLET_PASSWORD: &str = "AURION_WALLET_PASSWORD";
 
+/// Nama environment variable kanonikal untuk mnemonic/seed phrase wallet.
+pub const ENV_WALLET_MNEMONIC: &str = "AURION_WALLET_MNEMONIC";
+
 #[derive(Debug, thiserror::Error)]
 pub enum PasswordError {
     #[error("Gagal membaca password: {0}")]
@@ -75,9 +78,19 @@ pub fn resolve_password(
     Ok(pwd)
 }
 
+/// Mengambil mnemonic/seed phrase dengan LTE 3-tingkat yang sama seperti password:
+/// 1. Stdin (flag `--mnemonic-stdin` atau input non-TTY / pipa).
+/// 2. Environment variable `AURION_WALLET_MNEMONIC`.
+/// 3. Prompt terminal interaktif via `rpassword` (tanpa echo).
+///
+/// Nilai mnemonic tidak pernah diterima melalui argv agar tidak bocor ke
+/// process table, shell history, maupun audit log.
+pub fn resolve_mnemonic(from_stdin: bool, prompt_text: &str) -> Result<String, PasswordError> {
+    resolve_password(from_stdin, Some(ENV_WALLET_MNEMONIC), prompt_text, false)
+}
+
 /// Menghapus `\r` dan `\n` dari akhir baris yang dibaca.
-fn trim_line_endings(line: &str) -> String {
-    line.trim_end_matches('\n')
+fn trim_line_endings(line: &str) -> String {    line.trim_end_matches('\n')
         .trim_end_matches('\r')
         .to_string()
 }
@@ -97,6 +110,14 @@ mod tests {
     #[test]
     fn test_env_constant_defined() {
         assert_eq!(ENV_WALLET_PASSWORD, "AURION_WALLET_PASSWORD");
+        assert_eq!(ENV_WALLET_MNEMONIC, "AURION_WALLET_MNEMONIC");
+    }
+
+    #[test]
+    fn test_empty_mnemonic_rejected_when_non_tty_stdin() {
+        // Stdin pada harness test bukan TTY; tanpa input apa pun, hasilnya Empty.
+        let res = resolve_mnemonic(true, "Mnemonic");
+        assert!(res.is_err());
     }
 
     #[test]

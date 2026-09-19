@@ -7,7 +7,9 @@ use crate::crypto::blake3_hash;
 use crate::wallet::bip39::{entropy_to_mnemonic_24, mnemonic_to_entropy_24, mnemonic_to_seed};
 use crate::wallet::derivation::DerivedAccount;
 use crate::wallet::keystore::Keystore;
-use crate::wallet::password::{resolve_password, ENV_WALLET_PASSWORD};
+use crate::wallet::password::{
+    resolve_mnemonic, resolve_password, ENV_WALLET_MNEMONIC, ENV_WALLET_PASSWORD,
+};
 use crate::wallet::signing::ClearSigningDetails;
 use std::fs;
 
@@ -108,18 +110,26 @@ fn handle_create(args: &[String]) {
 }
 
 fn handle_import(args: &[String]) {
-    let mut mnemonic = String::new();
+    let mut mnemonic: Option<String> = None;
     let mut name = "imported".to_string();
     let mut password: Option<String> = None;
+    let mut mnemonic_from_stdin = false;
 
     let mut i = 0;
     while i < args.len() {
         match args[i].as_str() {
             "--mnemonic" => {
+                eprintln!(
+                    "[AURION WALLET WARNING] Opsi --mnemonic pada argv TIDAK AMAN (bocor ke process table, \
+                     shell history, dan audit log). Diabaikan. Gunakan --mnemonic-stdin, env {ENV_WALLET_MNEMONIC}, \
+                     atau prompt interaktif tanpa echo."
+                );
                 if i + 1 < args.len() {
-                    mnemonic = args[i + 1].clone();
                     i += 1;
                 }
+            }
+            "--mnemonic-stdin" => {
+                mnemonic_from_stdin = true;
             }
             "--name" => {
                 if i + 1 < args.len() {
@@ -141,8 +151,19 @@ fn handle_import(args: &[String]) {
         i += 1;
     }
 
+    if mnemonic.is_none() {
+        match resolve_mnemonic(mnemonic_from_stdin, "Masukkan mnemonic wallet (24 kata)") {
+            Ok(m) => mnemonic = Some(m),
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal memperoleh mnemonic: {e}");
+                return;
+            }
+        }
+    }
+    let mnemonic = mnemonic.expect("mnemonic guaranteed by earlier branch");
+
     if mnemonic.trim().is_empty() {
-        eprintln!("[AURION WALLET ERROR] Parameter --mnemonic wajib diisi (24 kata).");
+        eprintln!("[AURION WALLET ERROR] Mnemonic wajib diisi (24 kata).");
         return;
     }
 
@@ -345,7 +366,7 @@ fn print_wallet_help() {
     println!("Aurion Sovereign Wallet Subsystem CLI (/bin/aurion wallet)");
     println!("Penggunaan:");
     println!("  aurion wallet create [--name <name>] [--password-stdin]");
-    println!("  aurion wallet import --mnemonic \"<24 words>\" [--name <name>] [--password-stdin]");
+    println!("  aurion wallet import --mnemonic-stdin [--name <name>] [--password-stdin]");
     println!("  aurion wallet address [--keystore <path>]");
     println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>]");
     println!("Keamanan password:");
@@ -353,4 +374,7 @@ fn print_wallet_help() {
     println!("  - --password-stdin membaca password dari stdin (aman untuk pipa/CI).");
     println!("  - Env {ENV_WALLET_PASSWORD} dibaca bila stdin adalah terminal.");
     println!("  - Opsi --password/-p PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
+    println!("Keamanan mnemonic:");
+    println!("  - Mnemonic dibaca dari stdin (--mnemonic-stdin), env {ENV_WALLET_MNEMONIC}, atau prompt interaktif tanpa echo.");
+    println!("  - Opsi --mnemonic \"<24 words>\" PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
 }

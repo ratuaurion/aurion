@@ -892,10 +892,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 .unwrap_or(0)
                 .min(3);
 
-            let val_key = if is_dev_mode {
-                let keys = CanonicalCeremonyKeypairs::new_deterministic();
-                keys.validators[val_idx].clone()
-            } else if is_status_or_dry {
+            let val_key = if is_dev_mode || is_status_or_dry {
                 let keys = CanonicalCeremonyKeypairs::new_deterministic();
                 keys.validators[val_idx].clone()
             } else {

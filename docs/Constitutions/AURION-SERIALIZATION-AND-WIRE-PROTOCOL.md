@@ -252,7 +252,7 @@ Node A (Inisiator)                             Node B (Penerima)
         │   - Chain ID: 1001                           │
        │   - Genesis Hash: 0xABCD...                  │
        │   - Best Height: 1250                        │
-       │   - Timestamp: 1773570000                    │
+       │   - Timestamp: 1773532800                    │
        │   - Node ID (pk_A) & Challenge Sig           │
        │                                              │
        │◄────────────── HANDSHAKE_ACK ────────────────┤
