@@ -85,10 +85,31 @@ $$\mathbf{S_{\max} = 66.000.000\ AUR = 6.600.000.000.000.000\ Quantum\ (10^8\ \t
 
 | Entitas Akun Genesis | Alamat Kanonikal (Bech32m Mainnet) | Saldo dalam AUR | Saldo dalam Quantum ($Q$) | Status Hak |
 | :--- | :--- | ---:| ---:| :--- |
-| **Creator Vault** | `aur1q_creator_vault_sovereign_mainnet_genesis_key_001` | $19.800.000\ \text{AUR}$ | $1.980.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
-| **Developer Vault** | `aur1q_developer_vault_r_and_d_faucet_source_key_002` | $3.300.000\ \text{AUR}$ | $330.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
+| **Creator Vault** | `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql` | $19.800.000\ \text{AUR}$ | $1.980.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
+| **Developer Vault** | `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y` | $3.300.000\ \text{AUR}$ | $330.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
 | **Cadangan Penambangan** | *Virtual Reserve (Belum Terbit)* | $42.900.000\ \text{AUR}$ | $4.290.000.000.000.000\ Q$ | Terbit via PoW / BFT Block Rewards ($H \ge 1$) |
 | **TOTAL INITIAL STATE** | — | $\mathbf{23.100.000\ \text{AUR}}$ | $\mathbf{2.310.000.000.000.000\ Q}$ | **Total Suplai Beredar Awal (35%)** |
+
+### 3.1.1 Kunci Kanonikal, Public Key, dan Derivasi Akun Genesis
+
+Nilai berikut **terkunci** pada artefak yang diratifikasi (`GENESIS_CEREMONY.json`
+dan `MAINNET_GENESIS_BLOCK.json`). Kedua artefak Mainnet di-embed ke binary
+aktif; `canonical_mainnet_genesis()` merekonstruksi state dari transkrip embedded
+dan memverifikasi hash blok serta state root terhadap konstanta kanonikal.
+File genesis pada disk tidak pernah menjadi sumber kebenaran Mainnet. Nilai
+direproduksi oleh `CanonicalCeremonyKeypairs::new_deterministic()` dan
+diverifikasi oleh `tests/mainnet_launch.rs`. HRP alamat Mainnet adalah `aur`
+(Bech32m, 62 karakter).
+
+| Peran | Address (Bech32m Mainnet) | Address (Hex, 32 B) | Public Key (Ed25519, Hex) | Derivation Path |
+| :--- | :--- | :--- | :--- | :--- |
+| **Creator** | `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql` | `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad` | `8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c` | `m/44'/9999'/0'/0'/0'` |
+| **Developer** | `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y` | `708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc` | `8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394` | `m/44'/9999'/0'/0'/0'` |
+
+Kedua akun inilah yang mengisi state genesis; SMT root dari keduanya terkunci
+sebagai `StateRoot_0 = 61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850`
+(field `state_root` pada header blok nol), sedangkan `GenesisHash` blok nol adalah
+`d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9`.
 
 ### 3.2 Invarian Suplai Awal Blok Nol
 Pada pembentukan state genesis $\sigma_0$:
