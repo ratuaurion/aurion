@@ -6,6 +6,8 @@ pub mod engine;
 pub mod epoch;
 pub mod governance;
 pub mod header;
+pub mod reactor;
+pub mod transport;
 pub mod vote;
 
 pub use block::{Block, DST_MERKLE_BRANCH};
@@ -19,4 +21,9 @@ pub use epoch::{
 };
 pub use governance::{GovernanceEngine, ProposalStatus, ProposalSummary, UpgradeProposal};
 pub use header::{BlockHeader, BLOCK_HEADER_BYTES};
+pub use reactor::{BftReactor, ReactorError, VoteAccumulator};
+pub use transport::{
+    BftTransport, ConsensusMessage, InMemoryBftTransport, InMemoryNetworkHub,
+    MAX_PROPOSAL_WIRE_BYTES, MAX_TRANSACTION_WIRE_BYTES, TransportError,
+};
 pub use vote::{Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE, VOTE_BYTES};
