@@ -135,14 +135,25 @@ BASIS (tanpa payload): 184 Bytes; TOTAL: 188 + N Bytes
 
 ### 3.5 Sertifikat Komitmen (Commit Certificate)
 Menampung bukti kuorum supermayoritas $> 2/3$ tanda tangan validator:
+- `block_hash`: `Hash256` (32 B)
 - `height`: `u64 (BE)` (8 B)
 - `round`: `u64 (BE)` (8 B)
-- `block_hash`: `Hash256` (32 B)
-- `signatures_count`: `u32 (BE)` (4 B)
-- `signatures`: Array $K$ elemen, masing-masing:
+- `precommits_count`: `u32 (BE)` (4 B)
+- `precommits`: Array $K$ elemen, masing-masing berupa `Vote` kanonikal:
+  - `phase`: `u8` (1 B), wajib `0x02` (PRECOMMIT) di dalam sertifikat
+  - `height`: `u64 (BE)` (8 B)
+  - `round`: `u64 (BE)` (8 B)
+  - `block_hash`: `Hash256` (32 B)
   - `validator_index`: `u32 (BE)` (4 B)
-  - `signature`: `[u8; 64]` (64 B)
-  *(Sub-total per tanda tangan: 68 Bytes)*
+  - `signature`: `Signature` Ed25519 (64 B)
+  *(Sub-total per precommit: 117 Bytes)*
+
+Ukuran kanonikal sertifikat adalah `52 + (117 × K)` Bytes. `K` dibatasi
+hingga `65.535` oleh decoder sebelum alokasi, dan buffer harus memuat tepat
+`117 × K` Bytes yang tersisa. Verifikasi sertifikat juga mensyaratkan seluruh
+precommit memiliki `block_hash`, `height`, dan `round` yang sama dengan header
+sertifikat, tidak duplikat validator, tanda tangan valid, serta bobot total
+lebih besar dari dua pertiga total bobot `V_E`.
 
 ---
 

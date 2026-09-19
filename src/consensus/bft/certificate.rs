@@ -2,10 +2,12 @@
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::{Address, Hash256};
-use crate::consensus::vote::{Vote, PHASE_PRECOMMIT};
+use crate::consensus::vote::{Vote, PHASE_PRECOMMIT, VOTE_BYTES};
 use thiserror::Error;
 
 pub const VALIDATOR_ENTRY_BYTES: usize = 72;
+pub const COMMIT_CERTIFICATE_FIXED_BYTES: usize = 32 + 8 + 8 + 4;
+pub const MAX_COMMIT_CERTIFICATE_VOTES: usize = 65_535;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum CertificateError {
@@ -17,6 +19,10 @@ pub enum CertificateError {
     DuplicateVote(u32),
     #[error("Mismatched block hash in vote")]
     MismatchedBlockHash,
+    #[error("Mismatched height in vote")]
+    MismatchedHeight,
+    #[error("Mismatched round in vote")]
+    MismatchedRound,
     #[error("Invalid vote phase: expected Precommit (0x02), got {0:#04x}")]
     InvalidPhase(u8),
     #[error("Vote signature verification failed for validator index {0}")]
@@ -110,6 +116,12 @@ impl CommitCertificate {
             if vote.block_hash != self.block_hash {
                 return Err(CertificateError::MismatchedBlockHash);
             }
+            if vote.height != self.height {
+                return Err(CertificateError::MismatchedHeight);
+            }
+            if vote.round != self.round {
+                return Err(CertificateError::MismatchedRound);
+            }
 
             if seen_indices.contains(&vote.validator_index) {
                 return Err(CertificateError::DuplicateVote(vote.validator_index));
@@ -156,7 +168,22 @@ impl CanonicalDecode for CommitCertificate {
         let height = u64::decode_canonical(bytes, cursor)?;
         let round = u64::decode_canonical(bytes, cursor)?;
         let count = u32::decode_canonical(bytes, cursor)?;
-        let mut precommits = Vec::with_capacity(count as usize);
+        let count = count as usize;
+        if count > MAX_COMMIT_CERTIFICATE_VOTES {
+            return Err(CodecError::ExcessiveAllocation {
+                max: MAX_COMMIT_CERTIFICATE_VOTES,
+                requested: count,
+            });
+        }
+        let required_vote_bytes = count * VOTE_BYTES;
+        let available = bytes.len().saturating_sub(*cursor);
+        if available < required_vote_bytes {
+            return Err(CodecError::UnexpectedEof {
+                needed: required_vote_bytes,
+                available,
+            });
+        }
+        let mut precommits = Vec::with_capacity(count);
         for _ in 0..count {
             precommits.push(Vote::decode_canonical(bytes, cursor)?);
         }
@@ -170,3 +197,52 @@ impl CanonicalDecode for CommitCertificate {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core::Hash256;
+
+    #[test]
+    fn canonical_certificate_vector() {
+        let certificate = CommitCertificate {
+            block_hash: Hash256::from_bytes([0x11; 32]),
+            height: 7,
+            round: 3,
+            precommits: vec![Vote {
+                phase: PHASE_PRECOMMIT,
+                height: 7,
+                round: 3,
+                block_hash: Hash256::from_bytes([0x11; 32]),
+                validator_index: 2,
+                signature: crate::core::Signature::from_bytes([0x22; 64]),
+            }],
+        };
+        let bytes = certificate.to_canonical_bytes();
+
+        assert_eq!(bytes.len(), COMMIT_CERTIFICATE_FIXED_BYTES + VOTE_BYTES);
+        assert_eq!(&bytes[..32], &[0x11; 32]);
+        assert_eq!(&bytes[32..40], &7u64.to_be_bytes());
+        assert_eq!(&bytes[40..48], &3u64.to_be_bytes());
+        assert_eq!(&bytes[48..52], &1u32.to_be_bytes());
+        assert_eq!(bytes[52], PHASE_PRECOMMIT);
+        assert_eq!(&bytes[52 + 1 + 8 + 8 + 32..52 + 1 + 8 + 8 + 32 + 4], &2u32.to_be_bytes());
+        assert_eq!(&bytes[bytes.len() - 64..], &[0x22; 64]);
+
+        let decoded = CommitCertificate::decode_canonical_exact(&bytes).expect("decode vector");
+        assert_eq!(decoded, certificate);
+    }
+
+    #[test]
+    fn decoder_rejects_excessive_precommit_count_before_allocation() {
+        let mut bytes = vec![0u8; COMMIT_CERTIFICATE_FIXED_BYTES];
+        bytes[48..52].copy_from_slice(&(MAX_COMMIT_CERTIFICATE_VOTES as u32 + 1).to_be_bytes());
+
+        assert_eq!(
+            CommitCertificate::decode_canonical_exact(&bytes),
+            Err(CodecError::ExcessiveAllocation {
+                max: MAX_COMMIT_CERTIFICATE_VOTES,
+                requested: MAX_COMMIT_CERTIFICATE_VOTES + 1,
+            })
+        );
+    }
+}

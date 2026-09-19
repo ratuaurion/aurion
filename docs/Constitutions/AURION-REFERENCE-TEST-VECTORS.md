@@ -209,6 +209,27 @@ signature       : 64 Bytes Signature valid
 ```
 - **Total Panjang Biner Vote:** Tepat **$117\ \text{Bytes}$**.
 
+### 8.2 Vektor Sertifikat Komitmen (Satu Precommit)
+Vektor struktural berikut mengunci urutan field `CommitCertificate` dan ukuran
+elemen vote:
+```text
+block_hash      : 11 repeated 32 times
+height          : 7 (0x0000000000000007)
+round           : 3 (0x0000000000000003)
+precommits_count: 1 (0x00000001)
+vote.phase      : 0x02 (PRECOMMIT)
+vote.height     : 7
+vote.round      : 3
+vote.block_hash : 11 repeated 32 times
+vote.validator_index: 2 (0x00000002)
+vote.signature  : 22 repeated 64 times
+```
+- **Ukuran tetap:** `52 + (117 × 1) = 169 Bytes`.
+- Decoder wajib menolak `precommits_count > 65.535` sebelum alokasi dan wajib
+  memastikan tersedia `117 × precommits_count` Bytes untuk seluruh vote.
+- Verifier wajib memeriksa signature, duplikasi validator, kesamaan
+  `block_hash`/`height`/`round`, serta quorum `> 2/3` berdasarkan bobot `V_E`.
+
 ---
 
 ## 9. Vektor Uji 8: Eksekusi Fungsi Transisi State (STF Execution)
