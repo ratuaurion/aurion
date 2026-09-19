@@ -49,7 +49,13 @@ impl AurionNode {
         validator_index: Option<u32>,
         store: Arc<dyn crate::storage::StateStore>,
     ) -> Self {
-        Self::new_with_optional_store(config, genesis, validator_keypair, validator_index, Some(store))
+        Self::new_with_optional_store(
+            config,
+            genesis,
+            validator_keypair,
+            validator_index,
+            Some(store),
+        )
     }
 
     /// Inisialisasi simpul Mainnet resmi dengan StateStore persisten.
@@ -89,7 +95,9 @@ impl AurionNode {
             let guard = ledger.lock().unwrap();
             let latest_h = guard.latest_height();
             rpc_context.current_height.store(latest_h, Ordering::SeqCst);
-            rpc_context.finalized_height.store(latest_h, Ordering::SeqCst);
+            rpc_context
+                .finalized_height
+                .store(latest_h, Ordering::SeqCst);
             *rpc_context.accounts.lock().unwrap() = guard.accounts.clone();
             for (h, b) in guard.blocks.iter().enumerate() {
                 rpc_context
@@ -99,7 +107,6 @@ impl AurionNode {
                     .insert(h as u64, b.header.clone());
             }
         }
-
 
         let bft_engine = Arc::new(Mutex::new(BftEngine::new(
             validator_keypair,
@@ -172,6 +179,7 @@ impl AurionNode {
 
         // 2. Komit blok ke dalam ledger dan bersihkan mempool
         let cert_round = cert.round;
+        let certificate_snapshot = cert.clone();
         bft_guard.commit_block(
             &mut ledger_guard,
             &mut mempool_guard,
@@ -200,6 +208,11 @@ impl AurionNode {
             .lock()
             .unwrap()
             .insert(block_height, block_header.clone());
+        self.rpc_context
+            .certificates
+            .lock()
+            .unwrap()
+            .insert(block_height, certificate_snapshot);
 
         // 4. Siarkan notifikasi real-time via WebSocket dan perbarui metrik
         self.rpc_context.metrics.record_block(

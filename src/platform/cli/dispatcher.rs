@@ -1966,8 +1966,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("[AURION DEVNET] Launching node '{node_id}' [role: {role}]");
                     println!("[AURION DEVNET] P2P Bind: {p2p_bind} | RPC Bind: {rpc_bind} | Storage: {data_dir}");
 
+                    let validator_index = node_id
+                        .strip_prefix("val-")
+                        .and_then(|value| value.parse::<usize>().ok())
+                        .unwrap_or(1)
+                        .saturating_sub(1)
+                        .min(3);
+                    let keys = CanonicalCeremonyKeypairs::new_deterministic();
                     let config = NodeConfig {
-                        chain_id: 9999,
+                        chain_id: crate::genesis::builder::GENESIS_CHAIN_ID,
+                        role: crate::runtime::config::NodeRole::Validator,
                         p2p_bind: p2p_bind.clone(),
                         rpc_bind: rpc_bind.clone(),
                         ..Default::default()
@@ -1978,15 +1986,14 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                             .map_err(|e| format!("Devnet node storage initialization failed: {e}"))?,
                     );
 
-                    let creator_addr = Address::from_bytes([1u8; 32]);
-                    let dev_addr = Address::from_bytes([2u8; 32]);
-                    let val_entry = ValidatorEntry {
-                        validator_id: creator_addr,
-                        consensus_pubkey: [1u8; 32],
-                        voting_weight: 100,
-                    };
-                    let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
-                    let node = AurionNode::new_with_store(config, genesis, None, None, store);
+                    let genesis = CeremonyTranscript::canonical_mainnet_genesis();
+                    let node = AurionNode::new_with_store(
+                        config,
+                        genesis,
+                        Some(keys.validators[validator_index].clone()),
+                        Some(validator_index as u32),
+                        store,
+                    );
 
                     println!("[AURION DEVNET] Node '{node_id}' online. Serving RPC on http://{rpc_bind}");
                     if let Err(e) = node.run_rpc_server(None).await {

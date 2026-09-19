@@ -219,8 +219,12 @@ Connection: close\r\n\r\n";
     }
 
     // Endpoint REST Explorer Block (NET-012)
-    if method == "GET" && path.starts_with("/explorer/block/") {
-        let target = &path["/explorer/block/".len()..];
+    if method == "GET" && (path == "/rpc/block/latest" || path.starts_with("/explorer/block/")) {
+        let target = if path == "/rpc/block/latest" {
+            "latest"
+        } else {
+            &path["/explorer/block/".len()..]
+        };
         let height = if target == "latest" {
             Some(context.current_height.load(std::sync::atomic::Ordering::SeqCst))
         } else {
