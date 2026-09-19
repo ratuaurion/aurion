@@ -66,7 +66,8 @@ fn test_keystore_password_encryption_and_tamper_protection() {
     let bech32m = encode_address_bech32m(&address, "aur").unwrap();
     let password = "MySecretMasterPassword!2026";
 
-    let keystore = Keystore::encrypt(&signing_key, password, &bech32m);
+    let keystore = Keystore::encrypt(&signing_key, password, &bech32m)
+        .expect("Enkripsi keystore V2 harus berhasil");
     let json_output = keystore.to_json_string();
 
     let loaded = Keystore::from_json_str(&json_output).expect("Parsing json harus berhasil");

@@ -80,7 +80,8 @@ fn test_zeroize_keystore_encryption_decryption_cycle() {
     let bech32m = aurion::crypto::encode_address_bech32m(&address, "aur").unwrap();
     let password = "SuperSecretPassword123!@#";
 
-    let keystore = Keystore::encrypt(&signing_key, password, &bech32m);
+    let keystore = Keystore::encrypt(&signing_key, password, &bech32m)
+        .expect("Enkripsi keystore V2 harus berhasil");
     let json = keystore.to_json_string();
 
     // 1. Dekripsi dengan password yang benar harus sukses

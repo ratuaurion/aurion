@@ -88,7 +88,13 @@ fn handle_create(args: &[String]) {
     }
     let password = password.expect("password guaranteed by earlier branch");
 
-    let keystore = Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address);
+    let keystore = match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
+            return;
+        }
+    };
     let keystore_json = keystore.to_json_string();
     let filename = format!("{name}.keystore.json");
 
@@ -187,7 +193,13 @@ fn handle_import(args: &[String]) {
     let master_seed = mnemonic_to_seed(&mnemonic, "");
     let derived = DerivedAccount::derive_account(&master_seed, 0, 0);
 
-    let keystore = Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address);
+    let keystore = match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
+        Ok(k) => k,
+        Err(e) => {
+            eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
+            return;
+        }
+    };
     let keystore_json = keystore.to_json_string();
     let filename = format!("{name}.keystore.json");
 
@@ -324,13 +336,24 @@ fn handle_sign_tx(args: &[String]) {
         }
     };
 
-    let signing_key = match keystore.decrypt(&password) {
-        Ok(k) => k,
+    let (signing_key, upgraded) = match keystore.unlock_and_migrate(&password) {
+        Ok(v) => v,
         Err(e) => {
             eprintln!("[AURION WALLET ERROR] Autentikasi kata sandi gagal: {e}");
             return;
         }
     };
+
+    if let Some(upgraded_keystore) = upgraded {
+        match fs::write(&keystore_path, upgraded_keystore.to_json_string()) {
+            Ok(()) => println!(
+                "[AURION WALLET] Keystore legacy dimigrasikan otomatis ke format kanonik V2 (Argon2id + ChaCha20Poly1305)."
+            ),
+            Err(e) => eprintln!(
+                "[AURION WALLET WARNING] Gagal menulis migrasi keystore V2 ke '{keystore_path}': {e}"
+            ),
+        }
+    }
 
     let details = match ClearSigningDetails::new(
         &keystore.address,

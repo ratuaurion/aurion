@@ -371,7 +371,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let creator_stdin = args.iter().any(|a| a == "--creator-password-stdin" || a == "--creator-passphrase-stdin");
                     let creator_pw = resolve_password(creator_stdin, Some("AURION_CREATOR_PASSWORD"), "Masukkan password Creator key", false)
                         .map_err(|e| format!("Gagal memperoleh password Creator key: {e}"))?;
-                    let sk = ks.decrypt(&creator_pw)
+                    let sk = ks.unlock_and_migrate_to_file(&creator_pw, path)
                         .map_err(|e| format!("Failed to decrypt creator keystore: {e}"))?;
                     keys.creator = Keypair::from_seed(&sk.to_bytes());
                 }
@@ -388,7 +388,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let dev_stdin = args.iter().any(|a| a == "--developer-password-stdin" || a == "--dev-password-stdin");
                     let dev_pw = resolve_password(dev_stdin, Some("AURION_DEVELOPER_PASSWORD"), "Masukkan password Developer key", false)
                         .map_err(|e| format!("Gagal memperoleh password Developer key: {e}"))?;
-                    let sk = ks.decrypt(&dev_pw)
+                    let sk = ks.unlock_and_migrate_to_file(&dev_pw, path)
                         .map_err(|e| format!("Failed to decrypt developer keystore: {e}"))?;
                     keys.developer = Keypair::from_seed(&sk.to_bytes());
                 }
@@ -911,7 +911,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let val_stdin = args.iter().any(|a| a == "--validator-password-stdin");
                 let val_pw = resolve_password(val_stdin, Some("AURION_VALIDATOR_PASSWORD"), "Masukkan password kunci validator", false)
                     .map_err(|e| format!("Gagal memperoleh password kunci validator: {e}"))?;
-                let sk = ks.decrypt(&val_pw)
+                let sk = ks.unlock_and_migrate_to_file(&val_pw, &key_path)
                     .map_err(|e| format!("Failed to decrypt validator keystore: {e}"))?;
                 Keypair::from_seed(&sk.to_bytes())
             };

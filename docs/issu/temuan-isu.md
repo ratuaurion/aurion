@@ -33,7 +33,7 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | AUR-ISSUE-001 | Genesis key deterministic tertanam di source | Critical | Closed | ✅ Terverifikasi & diremediasi (gating dev/prod + keystore validator) |
 | AUR-ISSUE-002 | Chain ID berbeda antar komponen | Critical | Closed | ✅ Terverifikasi & diremediasi (u32 seragam, Mainnet=1001) |
 | AUR-ISSUE-003 | Format transaksi kode berbeda dari spesifikasi | Critical | Closed | ✅ Terverifikasi & diremediasi (dokumen mengikuti kode + golden test) |
-| AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Open | ✅ Terverifikasi |
+| AUR-ISSUE-004 | Keystore menggunakan kriptografi custom berisiko | Critical | Closed | ✅ Terverifikasi & diremediasi (Argon2id + ChaCha20Poly1305, envelope V2 + migrasi) |
 | AUR-ISSUE-005 | Password default wallet lemah | High | Closed | ✅ Terverifikasi & sudah diremediasi |
 | AUR-ISSUE-006 | Address Creator/Developer berupa placeholder | High | Open | ✅ Terverifikasi (dokumen) |
 | AUR-ISSUE-007 | Ukuran transaksi tidak konsisten | High | Open | ✅ Terverifikasi |
@@ -206,8 +206,8 @@ Dampaknya:
 ### AUR-ISSUE-004: Keystore Menggunakan Kriptografi Custom
 
 **Prioritas:** Critical
-**Status:** Open
-**Lokasi:** `src/platform/wallet/keystore.rs`
+**Status:** Closed (Remediasi selesai, diverifikasi)
+**Lokasi:** `src/platform/wallet/keystore.rs`, `src/platform/wallet/keystore/legacy.rs`
 
 Keystore menggunakan KDF Blake3 custom, XOR stream cipher custom, nonce yang
 diturunkan dari salt, dan salt pseudo-random berbasis waktu. Format ini belum
@@ -227,6 +227,29 @@ standar, parameter yang sulit diaudit, dan interoperabilitas wallet yang buruk.
 4. Tetapkan parameter KDF, nonce, salt, version, dan migration policy.
 5. Tambahkan test vector dan test tampering.
 6. Sediakan migrasi tanpa mencetak private key ke log atau disk sementara.
+
+**Remediasi (diterapkan):**
+
+- Dependensi kanonik ditambahkan: `argon2 0.5`, `chacha20poly1305 0.10`,
+  `rand 0.8` (CSPRNG OS).
+- Envelope **V2** diimplementasikan di `keystore.rs`: `version: 2` + `address`
+  + blok `kdf` (`algorithm: "argon2id"`, `m_cost: 65536` KiB = 64 MiB,
+  `t_cost: 3`, `p_cost: 4`, `salt` 16 byte acak) + blok `cipher`
+  (`algorithm: "chacha20poly1305"`, `nonce` 12 byte acak, `ciphertext` =
+  32-byte secret + 16-byte Poly1305 tag). Salt & nonce berasal dari `OsRng`.
+- `Keystore::encrypt` kini selalu menghasilkan V2; kegagalan verifikasi AEAD
+  (password salah / ciphertext dimanipulasi) dipetakan ke
+  `KeystoreError::InvalidPassword` tanpa membocorkan plaintext.
+- Jalur legacy `blake3-stream-v1` diisolasi ke
+  `src/platform/wallet/keystore/legacy.rs` dan hanya dipakai untuk membaca.
+- Migrasi otomatis: `Keystore::unlock_and_migrate` dan
+  `unlock_and_migrate_to_file` mengenkripsi ulang keystore V1 menjadi V2 dan
+  menuliskannya kembali; dipakai oleh `wallet sign-tx` serta jalur
+  `genesis ceremony` (creator/developer) dan `validator start`.
+- Test ditambahkan (total suite lib 161 passed): roundtrip V2, password salah,
+  tamper ciphertext (Poly1305 tag menolak), dekripsi legacy V1, migrasi
+  V1→V2, tidak ada upgrade untuk V2, dan disiplin zeroize. `cargo clippy -D
+  warnings` bersih; guardrail 100% canonical.
 
 ### AUR-ISSUE-005: Password Default Wallet Lemah
 

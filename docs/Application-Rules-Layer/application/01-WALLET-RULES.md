@@ -28,6 +28,13 @@
    - **Enkripsi Simetris:** ChaCha20-Poly1305 (IETF RFC 8439) atau AES-256-GCM.
 2. Wallet **MUST NOT** menyimpan kunci privat dalam format teks polos (*plaintext*) pada log file, clipboard, atau crash dump.
 3. Seluruh variabel memori RAM yang menampung seed privat atau kunci penandatanganan **MUST** dibersihkan (*zeroized*) secara aman segera setelah selesai digunakan.
+4. **Envelope Keystore Kanonik (V2):** dompet **MUST** menyimpan kunci privat dalam envelope JSON berversi:
+   - `version: 2` dan `address` (Bech32m).
+   - Blok `kdf`: `algorithm: "argon2id"`, `m_cost: 65536` KiB (64 MiB), `t_cost: 3`, `p_cost: 4`, `salt` 16 byte acak.
+   - Blok `cipher`: `algorithm: "chacha20poly1305"`, `nonce` 12 byte acak, `ciphertext` = payload terenkripsi + 16 byte tag Poly1305.
+   - `salt` dan `nonce` **MUST** dibangkitkan dari CSPRNG kernel (Butir 1.1) dan **MUST NOT** diturunkan dari password, timestamp, atau nilai deterministik lain.
+5. **Migrasi Format Legacy:** keystore versi 1 (cipher `blake3-stream-v1`) **MUST** tetap dapat dibuka. Setelah dekripsi berhasil, dompet **MUST** otomatis menulis ulang berkas ke envelope V2. Jalur cipher legacy **MUST** diisolasi dan **MUST NOT** dipakai untuk enkripsi baru.
+6. **Kegagalan Autentikasi AEAD:** kegagalan verifikasi Poly1305 (password salah atau ciphertext dimodifikasi) **MUST** ditolak tanpa membocorkan plaintext parsial, dan **MUST NOT** menulis private key ke log, disk sementara, atau clipboard.
 
 ### 1.3 Jalur Derivasi Hierarkis (Hierarchical Derivation Path)
 1. Wallet yang mengimplementasikan derivasi kunci hierarkis (BIP-32 / BIP-44 / SLIP-0010 untuk Ed25519) **MUST** menggunakan registered coin type resmi Aurion:
