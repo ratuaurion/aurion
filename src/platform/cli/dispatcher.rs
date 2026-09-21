@@ -8,7 +8,7 @@ use std::sync::Arc;
 use crate::cli::command::CliCommand;
 use crate::cli::output::OutputFormat;
 use crate::consensus::bft::governance::{GovernanceEngine, ProposalSummary, UpgradeProposal};
-use crate::consensus::bft::ZenohBftTransport;
+use crate::consensus::bft::{ZenohBftObserver, ZenohBftTransport};
 use crate::consensus::certificate::ValidatorEntry;
 use crate::core::Address;
 use crate::crypto::Keypair;
@@ -890,6 +890,8 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let locator = get_arg_value(&args, "--locator")
                 .unwrap_or_else(|| "tcp/127.0.0.1:9000".to_string());
 
+            let observer_bind = get_arg_value(&args, "--p2p-bind");
+
             let config = NodeConfig {
                 rpc_bind: rpc_bind.clone(),
                 bootnode: bootnode_endpoint.clone(),
@@ -1082,8 +1084,53 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
 
             println!("[AURION NODE] Press Ctrl+C to stop.");
 
-            if let Err(e) = node.run_rpc_server(None).await {
-                eprintln!("[AURION NODE] Server error: {e}");
+            let node = Arc::new(node);
+            let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+
+            if let Some(bn) = &bootnode_endpoint {
+                let observer_node = Arc::clone(&node);
+                let observer_endpoint = normalize_tcp_endpoint(bn);
+                let observer_listen = observer_bind.clone();
+                let observer_shutdown = shutdown_rx.clone();
+                let observer_chain = node.config.chain_id;
+                tokio::spawn(async move {
+                    match ZenohBftObserver::open(
+                        observer_chain,
+                        observer_listen.as_deref(),
+                        &[observer_endpoint.as_str()],
+                    )
+                    .await
+                    {
+                        Ok(observer) => {
+                            println!(
+                                "[AURION SENTRY] Block ingress subscribed to {observer_endpoint}"
+                            );
+                            let _ingress_handle =
+                                observer_node.spawn_observer_ingress(observer, observer_shutdown);
+                        }
+                        Err(error) => eprintln!(
+                            "[AURION SENTRY] Block ingress subscription failed: {error}"
+                        ),
+                    }
+                });
+            }
+
+            let rpc_node = Arc::clone(&node);
+            let rpc_shutdown = shutdown_rx.clone();
+            let rpc_handle =
+                tokio::spawn(async move { rpc_node.run_rpc_server(Some(rpc_shutdown)).await });
+            tokio::select! {
+                result = rpc_handle => {
+                    if let Ok(Err(error)) = result {
+                        eprintln!("[AURION NODE] Server error: {error}");
+                    }
+                }
+                result = tokio::signal::ctrl_c() => {
+                    if let Err(error) = result {
+                        eprintln!("[AURION NODE] Shutdown signal error: {error}");
+                    }
+                    let _ = shutdown_tx.send(true);
+                }
             }
             Ok(())
         }
@@ -1099,10 +1146,18 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let db_path = get_arg_value(&args, "--data-dir")
                 .unwrap_or_else(|| "data/validator.redb".to_string());
 
+            let p2p_bind = get_arg_value(&args, "--p2p-bind");
+            let bootnode_arg = get_arg_value(&args, "--bootnode");
+            let peer_args = collect_arg_values(&args, "--peer");
+
             let mut config = NodeConfig {
                 rpc_bind: rpc_bind.clone(),
                 ..NodeConfig::new_validator(Vec::new())
             };
+            if let Some(bind) = p2p_bind {
+                config.p2p_bind = bind;
+            }
+            config.bootnode = bootnode_arg;
 
             let store = Arc::new(
                 RedbStorageEngine::open_or_create(&db_path)
@@ -1181,7 +1236,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     current_height: current_h,
                     p2p_bind: node.config.p2p_bind.clone(),
                     rpc_bind: node.config.rpc_bind.clone(),
-                    bootnode: None,
+                    bootnode: node.config.bootnode.clone(),
                     status: "READY",
                 };
 
@@ -1223,24 +1278,14 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             println!("[AURION VALIDATOR] Press Ctrl+C to stop.");
 
             let shutdown = tokio::sync::watch::channel(false);
-            let endpoint = if node.config.p2p_bind.starts_with("tcp/") {
-                node.config.p2p_bind.clone()
-            } else {
-                format!("tcp/{}", node.config.p2p_bind)
-            };
-            let connect = node
-                .config
-                .bootnode
-                .as_deref()
-                .map(|peer| {
-                    if peer.starts_with("tcp/") {
-                        peer.to_string()
-                    } else {
-                        format!("tcp/{peer}")
-                    }
-                })
-                .into_iter()
-                .collect::<Vec<_>>();
+            let endpoint = normalize_tcp_endpoint(&node.config.p2p_bind);
+            let mut connect = Vec::new();
+            if let Some(peer) = node.config.bootnode.as_deref() {
+                connect.push(normalize_tcp_endpoint(peer));
+            }
+            for peer in &peer_args {
+                connect.push(normalize_tcp_endpoint(peer));
+            }
             let connect_refs = connect.iter().map(String::as_str).collect::<Vec<_>>();
             let zenoh = ZenohBftTransport::open(
                 val_idx as u32,
@@ -3497,6 +3542,24 @@ fn get_arg_value(args: &[String], key: &str) -> Option<String> {
         }
     }
     None
+}
+
+fn collect_arg_values(args: &[String], key: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    for (i, arg) in args.iter().enumerate() {
+        if arg == key && i + 1 < args.len() {
+            values.push(args[i + 1].clone());
+        }
+    }
+    values
+}
+
+fn normalize_tcp_endpoint(endpoint: &str) -> String {
+    if endpoint.starts_with("tcp/") {
+        endpoint.to_string()
+    } else {
+        format!("tcp/{endpoint}")
+    }
 }
 
 fn print_master_help() {

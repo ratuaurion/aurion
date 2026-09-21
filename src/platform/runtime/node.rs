@@ -4,8 +4,8 @@
 //! Menyatukan ChainLedger, MempoolEngine, BftEngine, SubscriptionManager, dan RpcServer.
 
 use crate::consensus::bft::{
-    BftEngine, BftReactor, BftTransport, BlockProposalEnvelope, CommitCertificate,
-    ZenohBftTransport,
+    publish_committed_block, BftEngine, BftReactor, BftTransport, BlockProposalEnvelope,
+    CommitCertificate, ZenohBftObserver, ZenohBftTransport,
 };
 use crate::consensus::block::Block;
 use crate::consensus::engine::BftEngineError;
@@ -222,6 +222,94 @@ impl AurionNode {
         Ok(applied)
     }
 
+    /// Terapkan blok terkomit yang diterima dari jaringan BFT (mode observer).
+    ///
+    /// Blok divalidasi ulang STF-nya dan sertifikat kuorumnya diverifikasi oleh
+    /// `apply_block`, sehingga Sentry tidak mempercayai peer secara buta.
+    pub fn ingest_committed_block(&self, block: Block) -> Result<u64, NodeError> {
+        let height = block.height();
+        let hash = block.hash().to_hex();
+        let already_applied = {
+            let ledger = self
+                .ledger
+                .lock()
+                .map_err(|_| NodeError::StateLockPoisoned)?;
+            height <= ledger.latest_height()
+        };
+        if already_applied {
+            return Ok(height);
+        }
+        let validators = self
+            .ledger
+            .lock()
+            .map_err(|_| NodeError::StateLockPoisoned)?
+            .validator_set
+            .validators
+            .clone();
+        let mut ledger = self
+            .ledger
+            .lock()
+            .map_err(|_| NodeError::StateLockPoisoned)?;
+        let mut committed = false;
+        for validator in validators {
+            if ledger
+                .validate_block_proposal(&block, &validator.validator_id)
+                .is_ok()
+                && ledger
+                    .apply_block(block.clone(), &validator.validator_id)
+                    .is_ok()
+            {
+                committed = true;
+                break;
+            }
+        }
+        drop(ledger);
+        if !committed {
+            return Err(NodeError::Transport(format!(
+                "committed block {height} failed sentry validation"
+            )));
+        }
+        self.sync_rpc_context();
+        println!("[AURION SENTRY] Ingested committed block height #{height} (hash: {hash})");
+        Ok(height)
+    }
+
+    /// Loop ingress blok terkomit dari observer non-voting hingga shutdown.
+    pub fn spawn_observer_ingress(
+        self: Arc<Self>,
+        mut observer: ZenohBftObserver,
+        mut shutdown_rx: watch::Receiver<bool>,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            loop {
+                if *shutdown_rx.borrow() {
+                    break;
+                }
+                tokio::select! {
+                    changed = shutdown_rx.changed() => {
+                        if changed.is_err() || *shutdown_rx.borrow() {
+                            break;
+                        }
+                    }
+                    block = observer.recv() => {
+                        match block {
+                            Ok(block) => {
+                                if let Err(error) = self.ingest_committed_block(block) {
+                                    eprintln!(
+                                        "[AURION SENTRY] committed block ingestion rejected: {error}"
+                                    );
+                                }
+                            }
+                            Err(error) => {
+                                eprintln!("[AURION SENTRY] committed block ingress error: {error}");
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }
+
     pub async fn spawn_consensus_engine(
         self: Arc<Self>,
         validator_index: u32,
@@ -256,6 +344,7 @@ impl AurionNode {
             .map_err(|_| NodeError::StateLockPoisoned)?
             .validator_set
             .clone();
+        let publish_session = Arc::clone(&zenoh_session);
         let transport =
             ZenohBftTransport::from_session(zenoh_session, validator_index, self.config.chain_id)
                 .await
@@ -372,6 +461,29 @@ impl AurionNode {
                         match result {
                             Ok(Some(_certificate)) => {
                                 node.sync_rpc_context();
+                                let committed_block = node
+                                    .ledger
+                                    .lock()
+                                    .ok()
+                                    .map(|ledger| ledger.latest_block().clone());
+                                if let Some(block) = committed_block {
+                                    let session = Arc::clone(&publish_session);
+                                    let chain_id = node.config.chain_id;
+                                    tokio::spawn(async move {
+                                        if let Err(error) = publish_committed_block(
+                                            &session,
+                                            chain_id,
+                                            validator_index,
+                                            &block,
+                                        )
+                                        .await
+                                        {
+                                            eprintln!(
+                                                "[AURION CONSENSUS] validator {validator_index} committed block publish failed: {error}"
+                                            );
+                                        }
+                                    });
+                                }
                                 proposed = None;
                             }
                             Ok(None) => {}

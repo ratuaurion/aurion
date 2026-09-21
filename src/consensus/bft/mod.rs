@@ -28,5 +28,5 @@ pub use transport::{
     BftTransport, ConsensusMessage, InMemoryBftTransport, InMemoryNetworkHub,
     MAX_PROPOSAL_WIRE_BYTES, MAX_TRANSACTION_WIRE_BYTES, TransportError,
 };
-pub use zenoh::ZenohBftTransport;
+pub use zenoh::{publish_committed_block, ZenohBftObserver, ZenohBftTransport};
 pub use vote::{Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE, VOTE_BYTES};

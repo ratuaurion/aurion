@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use super::block::BlockProposalEnvelope;
+use super::block::{Block, BlockProposalEnvelope};
 use super::transport::{
     BftTransport, ConsensusMessage, TransportError, MAX_PROPOSAL_WIRE_BYTES,
     MAX_TRANSACTION_WIRE_BYTES,
@@ -20,10 +20,13 @@ use zenoh::Session;
 const PROPOSAL_TOPIC: &str = "consensus/proposal";
 const VOTE_TOPIC: &str = "consensus/vote";
 const TRANSACTION_TOPIC: &str = "mempool/tx";
+const COMMITTED_TOPIC: &str = "consensus/committed_block";
 const MESSAGE_PROPOSAL: u8 = 0x01;
 const MESSAGE_VOTE: u8 = 0x02;
 const MESSAGE_TRANSACTION: u8 = 0x03;
+const MESSAGE_COMMITTED_BLOCK: u8 = 0x04;
 const FRAME_PREFIX_BYTES: usize = 5;
+const MAX_COMMITTED_BLOCK_WIRE_BYTES: usize = 1024 * 1024;
 
 pub struct ZenohBftTransport {
     validator_index: u32,
@@ -154,6 +157,155 @@ impl ZenohBftTransport {
             .map_err(|error| TransportError::Zenoh(error.to_string()))?;
         Ok(())
     }
+}
+
+/// Publikasikan blok yang telah memiliki sertifikat komitmen kanonikal ke
+/// topik committed-block, agar observer (Sentry/FullNode) dapat menyinkronkan
+/// ledger lokal tanpa ikut memancarkan vote/proposal.
+pub async fn publish_committed_block(
+    session: &Session,
+    chain_id: u32,
+    sender_index: u32,
+    block: &Block,
+) -> Result<(), TransportError> {
+    if chain_id != GENESIS_CHAIN_ID {
+        return Err(TransportError::InvalidPayload(format!(
+            "non-canonical chain ID {chain_id}"
+        )));
+    }
+    let payload = block.to_canonical_bytes();
+    if payload.len() > MAX_COMMITTED_BLOCK_WIRE_BYTES {
+        return Err(TransportError::InvalidPayload(format!(
+            "committed block exceeds wire limit: {} > {MAX_COMMITTED_BLOCK_WIRE_BYTES} bytes",
+            payload.len()
+        )));
+    }
+    let mut frame = Vec::with_capacity(FRAME_PREFIX_BYTES + payload.len());
+    frame.extend_from_slice(&sender_index.to_be_bytes());
+    frame.push(MESSAGE_COMMITTED_BLOCK);
+    frame.extend_from_slice(&payload);
+    let key = format!("aurion/{chain_id}/{COMMITTED_TOPIC}");
+    session
+        .put(key_expr(&key)?, frame)
+        .await
+        .map_err(|error| TransportError::Zenoh(error.to_string()))?;
+    Ok(())
+}
+
+/// Observer non-voting untuk sinkronisasi ledger: berlangganan blok terkomit
+/// dari jaringan BFT tanpa pernah mengirim pesan konsensus.
+pub struct ZenohBftObserver {
+    _session: Arc<Session>,
+    receiver: mpsc::Receiver<Result<Block, TransportError>>,
+}
+
+impl ZenohBftObserver {
+    pub async fn open(
+        chain_id: u32,
+        listen_endpoint: Option<&str>,
+        connect_endpoints: &[&str],
+    ) -> Result<Self, TransportError> {
+        if chain_id != GENESIS_CHAIN_ID {
+            return Err(TransportError::InvalidPayload(format!(
+                "non-canonical chain ID {chain_id}"
+            )));
+        }
+        let mut config = ZenohConfig::default();
+        config
+            .insert_json5("mode", r#""peer""#)
+            .map_err(|error| TransportError::Zenoh(format!("{error:?}")))?;
+        config
+            .insert_json5("scouting/multicast/enabled", "false")
+            .map_err(|error| TransportError::Zenoh(format!("{error:?}")))?;
+        match listen_endpoint {
+            Some(endpoint) => config
+                .insert_json5("listen/endpoints", &format!(r#"["{endpoint}"]"#))
+                .map_err(|error| TransportError::Zenoh(format!("{error:?}")))?,
+            None => config
+                .insert_json5("listen/endpoints", "[]")
+                .map_err(|error| TransportError::Zenoh(format!("{error:?}")))?,
+        };
+        if !connect_endpoints.is_empty() {
+            let endpoints = connect_endpoints
+                .iter()
+                .map(|endpoint| format!(r#""{endpoint}""#))
+                .collect::<Vec<_>>()
+                .join(",");
+            config
+                .insert_json5("connect/endpoints", &format!("[{endpoints}]"))
+                .map_err(|error| TransportError::Zenoh(format!("{error:?}")))?;
+        }
+        let session = Arc::new(
+            zenoh::open(config)
+                .await
+                .map_err(|error| TransportError::Zenoh(error.to_string()))?,
+        );
+        let key = format!("aurion/{chain_id}/{COMMITTED_TOPIC}");
+        let subscriber = session
+            .declare_subscriber(key_expr(&key)?)
+            .await
+            .map_err(|error| TransportError::Zenoh(error.to_string()))?;
+        let (sender, receiver) = mpsc::channel(256);
+        tokio::spawn(async move {
+            loop {
+                let sample = match subscriber.recv_async().await {
+                    Ok(sample) => sample,
+                    Err(error) => {
+                        let _ = sender
+                            .send(Err(TransportError::Zenoh(error.to_string())))
+                            .await;
+                        break;
+                    }
+                };
+                let bytes = sample.payload().to_bytes();
+                match decode_committed_frame(&bytes) {
+                    Ok(block) => {
+                        if sender.send(Ok(block)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(error) => {
+                        if sender.send(Err(error)).await.is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        Ok(Self {
+            _session: Arc::clone(&session),
+            receiver,
+        })
+    }
+
+    pub async fn recv(&mut self) -> Result<Block, TransportError> {
+        self.receiver.recv().await.ok_or_else(|| {
+            TransportError::ChannelClosed("committed block channel closed".into())
+        })?
+    }
+}
+
+fn decode_committed_frame(bytes: &[u8]) -> Result<Block, TransportError> {
+    if bytes.len() < FRAME_PREFIX_BYTES {
+        return Err(TransportError::InvalidPayload(
+            "truncated committed block frame".into(),
+        ));
+    }
+    if bytes[4] != MESSAGE_COMMITTED_BLOCK {
+        return Err(TransportError::InvalidPayload(
+            "message type/topic mismatch".into(),
+        ));
+    }
+    let payload = &bytes[FRAME_PREFIX_BYTES..];
+    let mut cursor = 0;
+    let block = Block::decode_canonical(payload, &mut cursor)
+        .map_err(|error| TransportError::InvalidPayload(error.to_string()))?;
+    if cursor != payload.len() {
+        return Err(TransportError::InvalidPayload(
+            "trailing bytes in committed block payload".into(),
+        ));
+    }
+    Ok(block)
 }
 
 impl BftTransport for ZenohBftTransport {
