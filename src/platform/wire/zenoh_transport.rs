@@ -2,18 +2,33 @@
 //! Menghubungkan Frame Wire Kanonikal 52-Byte Aurion ke Mesh Pub/Sub Zenoh.
 //! Mendukung Peer-to-Peer, NAT-Traversal, dan Interoperabilitas Bootnode.
 
+use crate::codec::{CanonicalDecode, CanonicalEncode};
+use crate::core::Hash256;
+use crate::crypto::Keypair;
 use crate::genesis::builder::GENESIS_CHAIN_ID;
 use crate::wire::frame::{parse_network_frame, serialize_network_frame, WireError, WireFrameHeader};
-use crate::wire::messages::{
-    MSG_BFT_COMMIT_CERT, MSG_BFT_PRECOMMIT, MSG_BFT_PREVOTE, MSG_BFT_PROPOSAL, MSG_HANDSHAKE_ACK,
-    MSG_HANDSHAKE_HELLO, MSG_SYNC_BLOCK, MSG_SYNC_GET_BLOCK, MSG_SYNC_GET_HEADERS,
-    MSG_SYNC_HEADERS, MSG_TX_GOSSIP,
+use crate::wire::handshake::{
+    validate_handshake_ack, HandshakeAck, HandshakeError, HandshakeHello,
 };
+use crate::wire::messages::{
+    MSG_BFT_COMMIT_CERT, MSG_BFT_PRECOMMIT, MSG_BFT_PREVOTE, MSG_BFT_PROPOSAL, MSG_GET_PEERS,
+    MSG_HANDSHAKE_ACK, MSG_HANDSHAKE_HELLO, MSG_PEERS_ADDR, MSG_SYNC_BLOCK, MSG_SYNC_GET_BLOCK,
+    MSG_SYNC_GET_HEADERS, MSG_SYNC_HEADERS, MSG_TX_GOSSIP,
+};
+use rand::RngCore;
+use std::path::Path;
 use std::sync::Arc;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
 use zenoh::config::Config as ZenohConfig;
 use zenoh::key_expr::KeyExpr;
 use zenoh::Session;
+
+/// Batas waktu tunggu balasan `HANDSHAKE_ACK` dari bootnode (detik).
+pub const HANDSHAKE_ACK_TIMEOUT_SECS: u64 = 10;
+
+/// Peran node kanonikal (selaras `NodeRole::FullNode` pada bootnode).
+pub const PEER_ROLE_FULL_NODE: u8 = 0x02;
 
 #[derive(Debug, Error)]
 pub enum TransportError {
@@ -23,6 +38,50 @@ pub enum TransportError {
     Wire(#[from] WireError),
     #[error("Invalid key expression format: {0}")]
     KeyExpr(String),
+    #[error("Mutual handshake failed: {0}")]
+    Handshake(#[from] HandshakeError),
+    #[error("Timed out waiting for bootnode HANDSHAKE_ACK")]
+    HandshakeTimeout,
+    #[error("Node identity key I/O error: {0}")]
+    IdentityIo(String),
+    #[error("Invalid node identity key: {0}")]
+    InvalidIdentity(String),
+    #[error("Peer announce serialization error: {0}")]
+    Serialization(String),
+}
+
+/// Memuat keypair identitas node yang persisten, atau membangkitkan dan
+/// menyimpannya ke disk pada proses pertama (seed 32-byte heksadesimal).
+pub fn load_or_create_identity(path: &Path) -> Result<Keypair, TransportError> {
+    if path.exists() {
+        let contents =
+            std::fs::read_to_string(path).map_err(|e| TransportError::IdentityIo(e.to_string()))?;
+        let mut seed = [0u8; 32];
+        hex::decode_to_slice(contents.trim(), &mut seed)
+            .map_err(|e| TransportError::InvalidIdentity(e.to_string()))?;
+        return Ok(Keypair::from_seed(&seed));
+    }
+
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| TransportError::IdentityIo(e.to_string()))?;
+        }
+    }
+
+    let mut seed = [0u8; 32];
+    rand::rngs::OsRng.fill_bytes(&mut seed);
+    let keypair = Keypair::from_seed(&seed);
+    std::fs::write(path, hex::encode(seed))
+        .map_err(|e| TransportError::IdentityIo(e.to_string()))?;
+    Ok(keypair)
+}
+
+fn current_unix_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
 }
 
 /// Konfigurasi endpoint dan mode transport simpul Aurion.
@@ -57,8 +116,9 @@ pub struct AurionKeyExpressions {
     pub mempool_tx: String,
     pub sync_headers: String,
     pub sync_blocks: String,
-    pub peer_announce: String,
-    pub peer_list: String,
+    pub pex_announce: String,
+    pub pex_query: String,
+    pub pex_response: String,
 }
 
 impl AurionKeyExpressions {
@@ -73,8 +133,9 @@ impl AurionKeyExpressions {
             mempool_tx: format!("{prefix}/mempool/tx"),
             sync_headers: format!("{prefix}/sync/headers"),
             sync_blocks: format!("{prefix}/sync/blocks"),
-            peer_announce: "aurion/net/v1/peers/announce".to_string(),
-            peer_list: "aurion/net/v1/peers/list".to_string(),
+            pex_announce: format!("{prefix}/pex/announce"),
+            pex_query: format!("{prefix}/pex/query"),
+            pex_response: format!("{prefix}/pex/response"),
             prefix,
         }
     }
@@ -89,6 +150,8 @@ impl AurionKeyExpressions {
             MSG_TX_GOSSIP => &self.mempool_tx,
             MSG_SYNC_GET_HEADERS | MSG_SYNC_HEADERS => &self.sync_headers,
             MSG_SYNC_GET_BLOCK | MSG_SYNC_BLOCK => &self.sync_blocks,
+            MSG_PEERS_ADDR => &self.pex_announce,
+            MSG_GET_PEERS => &self.pex_query,
             _ => &self.prefix,
         }
     }
@@ -171,43 +234,87 @@ impl ZenohTransport {
         Ok(())
     }
 
-    /// Mendaftarkan node ke bootnode via PEX (Peer Exchange) heartbeat announce.
-    pub async fn announce_peer(&self, locator: &str, role: &str) -> Result<(), TransportError> {
-        let payload = serde_json::json!({
-            "locator": locator,
-            "role": role,
-        });
-        let payload_bytes = payload.to_string().into_bytes();
-        let key_expr: KeyExpr = self.keys.peer_announce
+    /// Melakukan mutual handshake kanonikal dengan bootnode: mengirim
+    /// `HANDSHAKE_HELLO` ke topik kanonikal dan menunggu `HANDSHAKE_ACK` yang
+    /// tervalidasi kriptografis sebelum sesi dianggap terautentikasi.
+    pub async fn perform_handshake(
+        &self,
+        keypair: &Keypair,
+        genesis_hash: &Hash256,
+        best_height: u64,
+    ) -> Result<(), TransportError> {
+        let ack_subscriber = self
+            .session
+            .declare_subscriber(&self.keys.handshake_ack)
+            .await?;
+
+        let hello = HandshakeHello::new(
+            self.config.chain_id,
+            *genesis_hash,
+            best_height,
+            current_unix_secs(),
+            keypair,
+        );
+        let frame_bytes =
+            serialize_network_frame(MSG_HANDSHAKE_HELLO, &hello.to_canonical_bytes())?;
+        let hello_key: KeyExpr = self
+            .keys
+            .handshake_hello
             .as_str()
             .try_into()
             .map_err(|e| TransportError::KeyExpr(format!("{e:?}")))?;
+        self.session.put(hello_key, frame_bytes).await?;
 
-        self.session.put(key_expr, payload_bytes).await?;
-        Ok(())
-    }
-
-    /// Mengambil daftar peer aktif dari bootnode.
-    pub async fn query_active_peers(&self) -> Result<Vec<String>, TransportError> {
-        let key_expr: KeyExpr = self.keys.peer_list
-            .as_str()
-            .try_into()
-            .map_err(|e| TransportError::KeyExpr(format!("{e:?}")))?;
-
-        let replies = self.session.get(key_expr).await?;
-        let mut result = Vec::new();
-        while let Ok(reply) = replies.recv_async().await {
-            if let Ok(sample) = reply.result() {
-                if let Ok(peers) = serde_json::from_slice::<Vec<serde_json::Value>>(&sample.payload().to_bytes()) {
-                    for p in peers {
-                        if let Some(loc) = p.get("locator").and_then(|l| l.as_str()) {
-                            result.push(loc.to_string());
+        let deadline =
+            tokio::time::Instant::now() + Duration::from_secs(HANDSHAKE_ACK_TIMEOUT_SECS);
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return Err(TransportError::HandshakeTimeout);
+            }
+            match tokio::time::timeout(remaining, ack_subscriber.recv_async()).await {
+                Ok(Ok(sample)) => {
+                    let raw = sample.payload().to_bytes();
+                    if let Ok((_, payload)) = parse_network_frame(&raw) {
+                        let mut cursor = 0usize;
+                        if let Ok(ack) = HandshakeAck::decode_canonical(payload, &mut cursor) {
+                            validate_handshake_ack(&ack, current_unix_secs())?;
+                            return Ok(());
                         }
                     }
                 }
+                Ok(Err(_)) => return Err(TransportError::HandshakeTimeout),
+                Err(_) => return Err(TransportError::HandshakeTimeout),
             }
         }
-        Ok(result)
+    }
+
+    /// Mengumumkan identitas node ke bootnode melalui topik PEX kanonikal.
+    /// Hanya diterima bootnode setelah node lolos mutual handshake.
+    pub async fn announce_peer_canonical(
+        &self,
+        keypair: &Keypair,
+        locator: &str,
+        role: u8,
+    ) -> Result<(), TransportError> {
+        let payload = serde_json::json!({
+            "peer_id": keypair.derive_address().to_hex(),
+            "role": role,
+            "p2p_locator": locator,
+            "protocol_version": 1u16,
+            "telemetry_addr": serde_json::Value::Null,
+        });
+        let payload_bytes = serde_json::to_vec(&payload)
+            .map_err(|e| TransportError::Serialization(e.to_string()))?;
+        let frame_bytes = serialize_network_frame(MSG_PEERS_ADDR, &payload_bytes)?;
+        let key_expr: KeyExpr = self
+            .keys
+            .pex_announce
+            .as_str()
+            .try_into()
+            .map_err(|e| TransportError::KeyExpr(format!("{e:?}")))?;
+        self.session.put(key_expr, frame_bytes).await?;
+        Ok(())
     }
 
     /// Dekode dan verifikasi integritas data frame jaringan yang masuk dari Zenoh.

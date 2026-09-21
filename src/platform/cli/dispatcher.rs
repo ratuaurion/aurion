@@ -864,6 +864,16 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             let db_path = get_arg_value(&args, "--data-dir")
                 .unwrap_or_else(|| "data/aurion.redb".to_string());
 
+            let identity_path = get_arg_value(&args, "--identity-key")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| {
+                    std::path::Path::new(&db_path)
+                        .parent()
+                        .filter(|p| !p.as_os_str().is_empty())
+                        .unwrap_or_else(|| std::path::Path::new("."))
+                        .join("node.key")
+                });
+
             let bootnode_endpoint = get_arg_value(&args, "--bootnode").or_else(|| {
                 if args.iter().any(|a| a == "--no-bootnode") {
                     None
@@ -959,40 +969,80 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 node.config.rpc_bind
             );
 
-            // Inisialisasi koneksi PEX ke Bootnode di latar belakang jika aktif
+            // Identitas node persisten + mutual handshake kanonikal ke Bootnode.
             if let Some(bn) = &bootnode_endpoint {
                 println!("[AURION NODE] Connecting to Bootnode Discovery: {bn}...");
                 let bn_target = bn.clone();
                 let loc_target = locator.clone();
+                let identity_path = identity_path.clone();
+                let chain_id = node.config.chain_id;
+                let best_height = current_h;
                 tokio::spawn(async move {
+                    let identity = match crate::wire::load_or_create_identity(&identity_path) {
+                        Ok(identity) => identity,
+                        Err(e) => {
+                            eprintln!("[AURION P2P] Identity initialization failed: {e}");
+                            return;
+                        }
+                    };
+                    let node_id = identity.derive_address().to_hex();
+                    println!(
+                        "[AURION P2P] Node identity: {node_id} (key: {})",
+                        identity_path.display()
+                    );
+
                     let transport_cfg = crate::wire::TransportConfig {
-                        chain_id: 1001,
+                        chain_id,
                         is_peer: true,
                         listen_endpoints: vec![],
                         connect_endpoints: vec![bn_target.clone()],
                     };
 
-                    match crate::wire::ZenohTransport::new(transport_cfg).await {
-                        Ok(transport) => {
-                            println!("[AURION P2P] Connected to Bootnode: {bn_target}");
-                            println!(
-                                "[AURION P2P] Registered locator: {loc_target} (Role: fullnode)"
-                            );
-                            let mut interval =
-                                tokio::time::interval(std::time::Duration::from_secs(5));
-                            loop {
-                                interval.tick().await;
-                                if let Err(e) =
-                                    transport.announce_peer(&loc_target, "fullnode").await
-                                {
-                                    eprintln!(
-                                        "[AURION P2P] Failed to send heartbeat to bootnode: {e}"
-                                    );
-                                }
-                            }
-                        }
+                    let transport = match crate::wire::ZenohTransport::new(transport_cfg).await {
+                        Ok(transport) => transport,
                         Err(e) => {
                             eprintln!("[AURION P2P] Bootnode connection warning: {e} (Continuing in standalone mode)");
+                            return;
+                        }
+                    };
+                    println!("[AURION P2P] Connected to Bootnode: {bn_target}");
+
+                    let mut genesis_bytes = [0u8; 32];
+                    if let Err(e) = hex::decode_to_slice(
+                        crate::genesis::ceremony::CANONICAL_GENESIS_HASH,
+                        &mut genesis_bytes,
+                    ) {
+                        eprintln!("[AURION P2P] Invalid canonical genesis hash: {e}");
+                        return;
+                    }
+                    let genesis_hash = crate::core::Hash256::from_bytes(genesis_bytes);
+
+                    match transport
+                        .perform_handshake(&identity, &genesis_hash, best_height)
+                        .await
+                    {
+                        Ok(()) => println!(
+                            "[AURION P2P] Mutual Handshake SUCCESS with bootnode (node_id={node_id})"
+                        ),
+                        Err(e) => {
+                            eprintln!("[AURION P2P] Handshake failed: {e}");
+                            return;
+                        }
+                    }
+
+                    println!("[AURION P2P] Registered locator: {loc_target} (Role: fullnode)");
+                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                    loop {
+                        interval.tick().await;
+                        if let Err(e) = transport
+                            .announce_peer_canonical(
+                                &identity,
+                                &loc_target,
+                                crate::wire::PEER_ROLE_FULL_NODE,
+                            )
+                            .await
+                        {
+                            eprintln!("[AURION P2P] Failed to announce peer to bootnode: {e}");
                         }
                     }
                 });

@@ -8,7 +8,7 @@ use aurion::wire::handshake::{
 };
 use aurion::wire::messages::*;
 use aurion::wire::peer::{PeerRecord, PeerState, PeerViolation};
-use aurion::wire::zenoh_transport::AurionKeyExpressions;
+use aurion::wire::zenoh_transport::{load_or_create_identity, AurionKeyExpressions};
 use std::net::SocketAddr;
 
 #[test]
@@ -108,5 +108,24 @@ fn test_zenoh_key_expressions_routing() {
     assert_eq!(keys.key_for_message_type(MSG_BFT_PRECOMMIT), "aurion/net/1/bft/votes");
     assert_eq!(keys.key_for_message_type(MSG_BFT_COMMIT_CERT), "aurion/net/1/bft/cert");
     assert_eq!(keys.key_for_message_type(MSG_HANDSHAKE_HELLO), "aurion/net/1/handshake/hello");
-    assert_eq!(keys.peer_announce, "aurion/net/v1/peers/announce");
+    assert_eq!(keys.pex_announce, "aurion/net/1/pex/announce");
+    assert_eq!(keys.pex_query, "aurion/net/1/pex/query");
+    assert_eq!(keys.pex_response, "aurion/net/1/pex/response");
+    assert_eq!(keys.key_for_message_type(MSG_PEERS_ADDR), "aurion/net/1/pex/announce");
+}
+
+#[test]
+fn test_persistent_identity_is_stable_across_reloads() {
+    let tmp = tempfile::tempdir().unwrap();
+    let key_path = tmp.path().join("node.key");
+
+    let first = load_or_create_identity(&key_path).unwrap();
+    assert!(key_path.exists(), "identity key wajib dibuat saat pertama kali");
+
+    let second = load_or_create_identity(&key_path).unwrap();
+    assert_eq!(
+        first.derive_address(),
+        second.derive_address(),
+        "identitas node wajib persisten lintas proses"
+    );
 }

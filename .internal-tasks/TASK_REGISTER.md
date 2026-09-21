@@ -23,7 +23,7 @@
 
 ## Ringkasan Progres Global
 * Status Era: **Era I s/d VI Selesai 100% (Production Sovereign Mainnet) | Era VII-X Selesai 100% (L1 s/d L5 Canonical Stack)**
-* Target Aktif Saat Ini: **SELURUH ROADMAP MASTER AURION 100.0% SELESAI & OPERASIONAL**
+* Target Aktif Saat Ini: **SELURUH ROADMAP MASTER AURION SELESAI & OPERASIONAL; AUR-RUNTIME-010 (Bootstrap P2P Canonical Handshake Node CLI ↔ Bootnode) SELESAI & TERVERIFIKASI LIVE**
 * Status Invariant: **TERKUNCI & TERVERIFIKASI (PASS 260+/260+ TESTS, 0 WARNINGS, 0 UNSAFE, 0 FLOAT)**
 
 ### Aurion Multi-Layer Evolution Status Dashboard
@@ -403,6 +403,61 @@ AUR-RUNTIME-009
    dilanjutkan ke release atau klaim devnet sehat.
 5. L2/L3/L4/L5 tidak boleh masuk ke jalur validasi block L1; semuanya hanya masuk
    melalui kontrak settlement atau messaging yang ditetapkan.
+
+### Kasus Baru: Bootstrap P2P Canonical Handshake — Node CLI ↔ Bootnode (SELESAI)
+
+> **Temuan:** Uji devnet 1-on-1 (2026-09-21) membuktikan `aurion node --bootnode`
+> belum mencapai peering terautentikasi. Bootnode kanonikal menolak PEX sebelum
+> autentikasi (`aurion-bootnode/src/network/zenoh.rs`) dan hanya melayani frame
+> `AUR0` pada `aurion/net/1001/...`, sedangkan CLI Aurion hanya membuka sesi Zenoh
+> lalu mempublikasikan JSON legacy ke `aurion/net/v1/peers/announce`. Bukti:
+> `active_peers=0`, `authenticated_peers=0`, `total_handshakes_received=0`, dan
+> `GET /api/v1/peers` kosong.
+>
+> **Batas arsitektur:** Perbaikan hanya di sisi Aurion (`src/platform/cli/dispatcher.rs`
+> dan `src/platform/wire/zenoh_transport.rs`). `aurion-bootnode` tidak diubah;
+> bootnode tetap blind broker dan tidak ada konsensus/state machine/wallet yang
+> dipindahkan.
+
+| Task ID | Nama Tugas | Status | Syarat Selesai (Acceptance Criteria) | Invariant Terkait |
+| :--- | :--- | :---: | :--- | :--- |
+| **AUR-RUNTIME-010** | **Persistent Node Identity dan Mutual Handshake Kanonikal ke Bootnode** | **SELESAI** | CLI `aurion node` memuat/membuat keypair Ed25519 persisten `<data_dir>/node.key`; mengirim `HANDSHAKE_HELLO` (`0x0001`) AUR0 ke `aurion/net/1001/handshake/hello`; menunggu dan memvalidasi `HANDSHAKE_ACK` (`0x0002`) melalui `validate_handshake_ack`; hanya mengaktifkan PEX pasca-autentikasi; timeout handshake menghasilkan status gagal yang eksplisit; uji live 1-on-1 membuktikan `active_peers >= 1` dan `total_handshakes_received >= 1`. | AUR-ARCH-005, AUR-ARCH-011, AUR-ARCH-012, AUR-WIRE-*, AUR-SEC-* |
+
+#### Non-Negotiable Stop Conditions (AUR-RUNTIME-010)
+
+1. Dilarang memakai `Keypair::generate()` acak per proses; identitas node wajib
+   persisten dan dimuat dari `<data_dir>/node.key`.
+2. Sesi node ke bootnode tidak boleh dinyatakan aktif tanpa `HANDSHAKE_ACK`
+   `0x0002` yang lolos `validate_handshake_ack`.
+3. Zero clippy warning tanpa `#[allow(...)]`, zero unsafe, dan zero float.
+4. Task belum selesai sampai bukti live 1-on-1 menunjukkan `active_peers >= 1`
+   dan `total_handshakes_received >= 1` pada registry bootnode.
+
+#### Verifikasi AUR-RUNTIME-010
+
+```powershell
+cargo check --workspace
+cargo clippy --all-targets -- -D warnings
+cargo test --workspace
+python tools/guardrail.py
+```
+
+#### Bukti Penyelesaian (2026-09-21)
+
+- `cargo check --all-targets` PASS; `cargo clippy --all-targets -- -D warnings` PASS
+  (0 warning, tanpa `#[allow(...)]`); `python tools/guardrail.py` PASS 100%.
+- `tests/p2p_wire.rs` 7/7 PASS (termasuk `test_persistent_identity_is_stable_across_reloads`).
+- Uji live 1-on-1 (bootnode `--bind-ip 127.0.0.1 --port 7447 --http-port 8080`;
+  node `--data-dir <tmp>/data/node.redb --bootnode tcp/127.0.0.1:7447`):
+  `active_peers=1`, `authenticated_peers=1`, `total_handshakes_received=1`,
+  `total_handshakes_authenticated=1`, `pex_announces_received=2`,
+  `pex_announces_rejected_unauthenticated=0`; `GET /api/v1/peers` memuat peer
+  `authenticated: true` (role `FullNode`, locator `tcp/127.0.0.1:9000`); log bootnode
+  `peer authenticated via handshake`. Identitas node persisten terverifikasi
+  (`data/node.key`).
+- Catatan: dua test e2e berat (`adversarial_consensus`,
+  `devnet_multinode_e2e`) flaky di bawah beban paralel penuh namun PASS saat
+  dijalankan terisolasi; keduanya tidak menyentuh jalur wire/handshake yang diubah.
 
 ### Era X: Layer-5 (L5) Global Distributed Infrastructure & Ecosystem Services (`aurion-l5-infrastructure`)
 

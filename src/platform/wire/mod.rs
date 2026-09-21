@@ -6,7 +6,10 @@ pub mod messages;
 pub mod peer;
 pub mod zenoh_transport;
 
-pub use zenoh_transport::{AurionKeyExpressions, TransportConfig, TransportError, ZenohTransport};
+pub use zenoh_transport::{
+    load_or_create_identity, AurionKeyExpressions, TransportConfig, TransportError, ZenohTransport,
+    HANDSHAKE_ACK_TIMEOUT_SECS, PEER_ROLE_FULL_NODE,
+};
 
 pub use frame::{
     parse_network_frame, serialize_network_frame, WireError, WireFrameHeader,
