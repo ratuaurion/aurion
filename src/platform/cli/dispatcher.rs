@@ -22,6 +22,11 @@ use crate::storage::{RedbStorageEngine, StateStore};
 use crate::wallet::keystore::Keystore;
 use crate::wallet::password::resolve_password;
 
+/// Interval peremajaan handshake periodik ke bootnode (detik). Nilai ini harus
+/// lebih kecil dari TTL autentikasi bootnode (120s) agar penanda autentikasi
+/// tidak kedaluwarsa selama node berjalan.
+const PERIODIC_HANDSHAKE_REFRESH_SECS: u64 = 60;
+
 #[derive(Serialize)]
 struct VersionInfo {
     application: &'static str,
@@ -1031,18 +1036,41 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     }
 
                     println!("[AURION P2P] Registered locator: {loc_target} (Role: fullnode)");
-                    let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                    let mut announce_interval =
+                        tokio::time::interval(std::time::Duration::from_secs(5));
+                    let mut handshake_refresh_interval = tokio::time::interval(
+                        std::time::Duration::from_secs(PERIODIC_HANDSHAKE_REFRESH_SECS),
+                    );
+                    // Handshake inisial sudah dikirim di atas; konsumsi tick instan
+                    // pertama agar peremajaan berikutnya berjalan satu interval penuh.
+                    handshake_refresh_interval.tick().await;
                     loop {
-                        interval.tick().await;
-                        if let Err(e) = transport
-                            .announce_peer_canonical(
-                                &identity,
-                                &loc_target,
-                                crate::wire::PEER_ROLE_FULL_NODE,
-                            )
-                            .await
-                        {
-                            eprintln!("[AURION P2P] Failed to announce peer to bootnode: {e}");
+                        tokio::select! {
+                            _ = announce_interval.tick() => {
+                                if let Err(e) = transport
+                                    .announce_peer_canonical(
+                                        &identity,
+                                        &loc_target,
+                                        crate::wire::PEER_ROLE_FULL_NODE,
+                                    )
+                                    .await
+                                {
+                                    eprintln!("[AURION P2P] Failed to announce peer to bootnode: {e}");
+                                }
+                            }
+                            _ = handshake_refresh_interval.tick() => {
+                                match transport
+                                    .perform_handshake(&identity, &genesis_hash, best_height)
+                                    .await
+                                {
+                                    Ok(()) => println!(
+                                        "[AURION P2P] Periodic handshake refreshed with bootnode"
+                                    ),
+                                    Err(e) => eprintln!(
+                                        "[AURION P2P] Periodic handshake refresh failed: {e}"
+                                    ),
+                                }
+                            }
                         }
                     }
                 });
