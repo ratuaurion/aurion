@@ -10,7 +10,6 @@ use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::Keypair;
 use aurion::genesis::builder::GENESIS_CHAIN_ID;
 use aurion::genesis::ceremony::{CanonicalCeremonyKeypairs, CeremonyTranscript};
-use aurion::state::account::Account;
 use aurion::state::chain::ChainLedger;
 use aurion::state::monetary::calculate_block_subsidy;
 use aurion::state::smt::compute_accounts_state_root;
@@ -128,7 +127,7 @@ fn proposal(cluster: &Cluster, height: u64) -> BlockProposalEnvelope {
     apply_transaction(&mut accounts, &mut monetary, &miner, &tx).unwrap();
     let subsidy = calculate_block_subsidy(height);
     if !subsidy.is_zero() {
-        let account = accounts.entry(miner).or_insert_with(Account::default);
+        let account = accounts.entry(miner).or_default();
         account.balance = account.balance.checked_add(subsidy).unwrap();
     }
     let block = Block::new(
@@ -201,7 +200,7 @@ async fn test_consensus_gate_multiblock_redb_and_recovery() {
             );
         }
     }
-    let handles = cluster.handles.drain(..).collect::<Vec<_>>();
+    let handles = std::mem::take(&mut cluster.handles);
     for handle in &handles {
         handle.abort();
     }

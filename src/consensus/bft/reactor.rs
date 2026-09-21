@@ -272,7 +272,7 @@ impl<T: BftTransport> BftReactor<T> {
         if self
             .vote_accumulator
             .votes_for(&block_hash, self.current_round, PHASE_PREVOTE)
-            .map_or(false, |votes| self.has_quorum(votes))
+            .is_some_and(|votes| self.has_quorum(votes))
             && self
                 .vote_accumulator
                 .votes_for(&block_hash, self.current_round, PHASE_PRECOMMIT)

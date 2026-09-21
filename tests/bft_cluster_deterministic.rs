@@ -240,14 +240,13 @@ async fn test_happy_path_two_phase_advancement() {
     }
 
     assert_eq!(node_accounts.len(), VALIDATOR_COUNT);
-    assert_eq!(
+    assert!(
         node_accounts
             .iter()
             .map(compute_accounts_state_root)
             .collect::<Vec<_>>()
             .windows(2)
-            .all(|pair| pair[0] == pair[1]),
-        true
+            .all(|pair| pair[0] == pair[1])
     );
 }
 

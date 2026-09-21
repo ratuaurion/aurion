@@ -9,7 +9,6 @@ use aurion::consensus::header::BlockHeader;
 use aurion::core::Hash256;
 use aurion::genesis::builder::GENESIS_CHAIN_ID;
 use aurion::genesis::ceremony::{CanonicalCeremonyKeypairs, CeremonyTranscript};
-use aurion::state::account::Account;
 use aurion::state::chain::ChainLedger;
 use aurion::state::monetary::calculate_block_subsidy;
 use aurion::state::smt::compute_accounts_state_root;
@@ -121,7 +120,7 @@ fn build_proposal(
     if !subsidy.is_zero() {
         let account = accounts
             .entry(proposer_address)
-            .or_insert_with(Account::default);
+            .or_default();
         account.balance = account
             .balance
             .checked_add(subsidy)

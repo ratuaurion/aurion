@@ -28,7 +28,7 @@ fn certificate_and_block(
     let subsidy = calculate_block_subsidy(1);
     accounts
         .entry(miner)
-        .or_insert_with(Account::default)
+        .or_default()
         .balance = accounts
         .get(&miner)
         .map(|account| account.balance)
