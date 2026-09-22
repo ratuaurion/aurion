@@ -60,6 +60,10 @@ impl Keypair {
         Signature(sig.to_bytes())
     }
 
+    pub fn to_signing_key(&self) -> SigningKey {
+        SigningKey::from_bytes(&self.signing_key.to_bytes())
+    }
+
     /// Derivasi alamat kanonikal langsung dari kunci publik.
     pub fn derive_address(&self) -> crate::core::Address {
         crate::crypto::bech32m::derive_address_from_pubkey(&self.public_key_bytes())

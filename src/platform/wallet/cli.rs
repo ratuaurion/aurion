@@ -11,6 +11,9 @@ use crate::wallet::password::{
     resolve_mnemonic, resolve_password, ENV_WALLET_MNEMONIC, ENV_WALLET_PASSWORD,
 };
 use crate::wallet::signing::ClearSigningDetails;
+use crate::genesis::ceremony::CanonicalCeremonyKeypairs;
+use crate::crypto::encode_address_bech32m;
+use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::fs;
@@ -307,8 +310,7 @@ fn handle_nonce(args: &[String]) {
 }
 
 fn handle_send(args: &[String]) {
-    let keystore_path = get_flag_value(args, "--keystore")
-        .unwrap_or_else(|| "default.keystore.json".to_string());
+    let dev_sender = args.iter().any(|arg| arg == "--dev-sender");
     let recipient = get_flag_value(args, "--to").unwrap_or_default();
     let amount = get_flag_value(args, "--amount")
         .and_then(|value| value.parse::<u128>().ok())
@@ -319,40 +321,51 @@ fn handle_send(args: &[String]) {
     let assume_yes = args.iter().any(|arg| arg == "--yes" || arg == "-y");
     let rpc = rpc_url(args);
 
-    let keystore_raw = match fs::read_to_string(&keystore_path) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] Tidak dapat membuka keystore: {error}");
-            return;
-        }
+    let (sender_address, signing_key): (String, SigningKey) = if dev_sender {
+        let developer = CanonicalCeremonyKeypairs::new_deterministic().developer;
+        let address = encode_address_bech32m(&developer.derive_address(), "aur")
+            .expect("canonical developer address encoding must succeed");
+        eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis developer key for local testing only.");
+        (address, developer.to_signing_key())
+    } else {
+        let keystore_path = get_flag_value(args, "--keystore")
+            .unwrap_or_else(|| "default.keystore.json".to_string());
+        let keystore_raw = match fs::read_to_string(&keystore_path) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] Tidak dapat membuka keystore: {error}");
+                return;
+            }
+        };
+        let keystore = match Keystore::from_json_str(&keystore_raw) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] Format keystore rusak: {error}");
+                return;
+            }
+        };
+        let password = match resolve_password(
+            args.iter().any(|arg| arg == "--password-stdin"),
+            Some(ENV_WALLET_PASSWORD),
+            "Masukkan password wallet",
+            false,
+        ) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {error}");
+                return;
+            }
+        };
+        let (signing_key, _) = match keystore.unlock_and_migrate(&password) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] Gagal membuka keystore: {error}");
+                return;
+            }
+        };
+        (keystore.address, signing_key)
     };
-    let keystore = match Keystore::from_json_str(&keystore_raw) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] Format keystore rusak: {error}");
-            return;
-        }
-    };
-    let password = match resolve_password(
-        args.iter().any(|arg| arg == "--password-stdin"),
-        Some(ENV_WALLET_PASSWORD),
-        "Masukkan password wallet",
-        false,
-    ) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {error}");
-            return;
-        }
-    };
-    let (signing_key, _) = match keystore.unlock_and_migrate(&password) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] Gagal membuka keystore: {error}");
-            return;
-        }
-    };
-    let nonce = match client::get_nonce(&rpc, &keystore.address) {
+    let nonce = match client::get_nonce(&rpc, &sender_address) {
         Ok(value) => value,
         Err(error) => {
             eprintln!("[AURION WALLET ERROR] {error}");
@@ -360,7 +373,7 @@ fn handle_send(args: &[String]) {
         }
     };
     let details = match ClearSigningDetails::new(
-        &keystore.address,
+        &sender_address,
         &recipient,
         amount,
         fee,
@@ -394,7 +407,7 @@ fn handle_send(args: &[String]) {
         Ok(tx_id) => {
             println!("Transaksi berhasil disiarkan!");
             println!("TxID   : 0x{tx_id}");
-            println!("Sender : {}", keystore.address);
+            println!("Sender : {sender_address}");
             println!("To     : {recipient}");
             println!("Amount : {amount} Quanta");
             println!("Nonce  : {nonce}");
@@ -568,7 +581,8 @@ fn print_wallet_help() {
     println!("  aurion wallet address [--keystore <path>]");
     println!("  aurion wallet balance --address <addr> [--rpc <url>]");
     println!("  aurion wallet nonce --address <addr> [--rpc <url>]");
-    println!("  aurion wallet send --to <addr> --amount <quanta> [--fee <quanta>] [--keystore <path>] [--rpc <url>] [--yes|-y]");
+    println!("  aurion wallet send --to <addr> --amount <quanta> [--fee <quanta>] [--keystore <path>] [--rpc <url>] [--yes|-y] [--dev-sender]");
+    println!("  --dev-sender uses the deterministic genesis developer key for local testing only");
     println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>] [--yes|-y]");
     println!("Keamanan password:");
     println!("  - Tanpa flag, password diminta lewat prompt interaktif (no echo, konfirmasi ganda saat create).");
