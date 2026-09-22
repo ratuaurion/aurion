@@ -21,6 +21,7 @@ Evaluasi membuktikan bahwa Aurion memenuhi standar tertinggi industri rekayasa s
 | :---: | :--- | :--- | :---: |
 | **13** | 13-WALLET-MEMPOOL-AND-RUNTIME-HARDENING-ADDENDUM.md | Hardening CSPRNG, BIP-39 kanonikal, keystore address-binding, validasi ingress mempool, mitigasi thread starvation RPC. | **CERTIFIED PASS** |
 | **14** | 14-BFT-CONSENSUS-PACEMAKER-AND-EQUIVOCATION-ADDENDUM.md | Bounded round drift, pacemaker liveness, anti-replay vote deduplication, dan equivocation rejection pada reactor BFT. | **CERTIFIED PASS** |
+| **15** | 15-STORAGE-ACID-AND-GATEWAY-DOS-ADDENDUM.md | Pengerasan ketahanan crash storage Redb (multi-table rollback) dan proteksi DoS memori ingress RPC (128 KiB limit). | **CERTIFIED PASS** |
 
 ---
 

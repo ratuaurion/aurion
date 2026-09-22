@@ -57,6 +57,28 @@ Addendum 14 memvalidasi remediasi Era XII pada layer konsensus BFT dan menutup t
 
 Dari sisi bukti empiris, `cargo test -p aurion --lib consensus::bft`, `cargo test --test adversarial_consensus`, dan `cargo test --test bft_reactor_integration` semua kembali sukses, serta `python tools/guardrail.py` dan `cargo clippy --all-targets -- -D warnings` tidak menghasilkan kegagalan.
 
+### Addendum 15 — Storage ACID & Gateway Ingress DoS Hardening
+
+Addendum 15 memvalidasi remediasi Era XIII pada boundary persistence dan gateway:
+
+| Area | Bukti | Hasil |
+| :--- | :--- | :---: |
+| **AUR-STOR-001** | `tests/storage_crash_recovery.rs` meng-abort write transaction Redb sebelum commit dan memastikan committed state terakhir tetap utuh tanpa partial-write leak | **1/1 PASS** |
+| **AUR-RPC-002** | `tests/rpc_payload_limit.rs` menguji payload valid di bawah ambang dan payload di atas `128 * 1024` yang ditolak sebelum buffering besar | **2/2 PASS** |
+| **Gateway response** | Oversized HTTP request menerima status `413 Payload Too Large` dan error JSON-RPC deskriptif | **PASS** |
+| **Guardrail canonical integrity** | `python tools/guardrail.py` memverifikasi zero unsafe, zero floating-point, isolasi deprecated tree, dan sinkronisasi 38 dokumen | **100% PASS** |
+
+Bukti dieksekusi melalui perintah berikut:
+
+```powershell
+cargo test --test storage_crash_recovery -- --nocapture
+cargo test --test rpc_payload_limit -- --nocapture
+cargo clippy --all-targets -- -D warnings
+python tools/guardrail.py
+```
+
+Seluruh command terkait mengembalikan exit code `0`. Hasil ini menutup temuan `FINDING-STOR-01` dan `FINDING-RPC-01` dalam Addendum 15.
+
 ---
 
 ## 2. Bukti Eksekusi Test Runner Internal (`aurion audit run`)

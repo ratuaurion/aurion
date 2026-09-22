@@ -38,6 +38,7 @@ pub enum ReactorError {
 #[derive(Default)]
 pub struct VoteAccumulator {
     votes: HashMap<(crate::core::Hash256, u64, u8), Vec<Vote>>,
+    vote_slots: HashMap<(u64, u64, u8, u32), crate::core::Hash256>,
 }
 
 impl VoteAccumulator {
@@ -58,19 +59,37 @@ impl VoteAccumulator {
     }
 
     pub fn add_vote_checked(&mut self, vote: Vote) -> Result<usize, ReactorError> {
+        let slot = (vote.height, vote.round, vote.phase, vote.validator_index);
+        if let Some(existing_hash) = self.vote_slots.get(&slot) {
+            if *existing_hash != vote.block_hash {
+                return Err(ReactorError::InvalidVote(format!(
+                    "equivocation from validator {} at height {}, round {}, phase {:#04x}",
+                    vote.validator_index, vote.height, vote.round, vote.phase
+                )));
+            }
+            return Ok(self
+                .votes
+                .get(&(vote.block_hash, vote.round, vote.phase))
+                .map_or(0, Vec::len));
+        }
+
         let key = (vote.block_hash, vote.round, vote.phase);
         let entry = self.votes.entry(key).or_default();
-        if entry
-            .iter()
-            .any(|existing| existing.validator_index == vote.validator_index)
-        {
-            return Err(ReactorError::InvalidVote(format!(
-                "duplicate vote from validator {} in phase {:#04x}",
-                vote.validator_index, vote.phase
-            )));
-        }
+        self.vote_slots.insert(slot, vote.block_hash);
         entry.push(vote);
         Ok(entry.len())
+    }
+
+    fn is_duplicate(&self, vote: &Vote) -> Result<bool, ReactorError> {
+        let slot = (vote.height, vote.round, vote.phase, vote.validator_index);
+        match self.vote_slots.get(&slot) {
+            Some(existing_hash) if *existing_hash == vote.block_hash => Ok(true),
+            Some(_) => Err(ReactorError::InvalidVote(format!(
+                "equivocation from validator {} at height {}, round {}, phase {:#04x}",
+                vote.validator_index, vote.height, vote.round, vote.phase
+            ))),
+            None => Ok(false),
+        }
     }
 
     pub fn votes_for(
@@ -86,6 +105,7 @@ impl VoteAccumulator {
 
     pub fn prune_below_height(&mut self, _current_height: u64) {
         self.votes.clear();
+        self.vote_slots.clear();
     }
 }
 
@@ -224,6 +244,11 @@ impl<T: BftTransport> BftReactor<T> {
         if block.header.height != self.current_height || block.header.round < self.current_round {
             return Ok(());
         }
+        if self.pending_proposal.as_ref().is_some_and(|pending| {
+            pending.hash() == block.hash() && pending.header.round == block.header.round
+        }) {
+            return Ok(());
+        }
         if block.header.round.saturating_sub(self.current_round) > MAX_ROUND_DRIFT {
             return Err(ReactorError::InvalidProposal(format!(
                 "proposal round {} exceeds local round {} by more than {}",
@@ -271,6 +296,9 @@ impl<T: BftTransport> BftReactor<T> {
             || vote.round != self.current_round
             || (vote.phase != PHASE_PREVOTE && vote.phase != PHASE_PRECOMMIT)
         {
+            return Ok(None);
+        }
+        if self.vote_accumulator.is_duplicate(&vote)? {
             return Ok(None);
         }
         vote.verify(&self.validator_set)

@@ -3,7 +3,7 @@
 use aurion::codec::CanonicalEncode;
 use aurion::consensus::bft::{
     BftEngine, BftReactor, BftTransport, Block, BlockProposalEnvelope, CommitCertificate,
-    ConsensusMessage, InMemoryNetworkHub, ValidatorSet,
+    ConsensusMessage, InMemoryNetworkHub, ValidatorSet, Vote, VoteAccumulator, PHASE_PRECOMMIT,
 };
 use aurion::consensus::header::BlockHeader;
 use aurion::core::Hash256;
@@ -305,6 +305,38 @@ async fn test_silent_round_zero_leader_advances_to_round_one() {
     for handle in cluster.handles {
         handle.abort();
     }
+}
+
+#[tokio::test]
+async fn test_vote_accumulator_rejects_replay_and_equivocation() {
+    let keys = CanonicalCeremonyKeypairs::new_deterministic();
+    let mut accumulator = VoteAccumulator::new();
+    let block_hash_a = Hash256::from_bytes([0x11; 32]);
+    let block_hash_b = Hash256::from_bytes([0x22; 32]);
+
+    let vote_a = Vote::new_signed(
+        &keys.validators[0],
+        PHASE_PRECOMMIT,
+        1,
+        0,
+        block_hash_a,
+        0,
+    )
+    .expect("valid precommit must sign");
+    let vote_a_dup = vote_a.clone();
+    let vote_b = Vote::new_signed(
+        &keys.validators[0],
+        PHASE_PRECOMMIT,
+        1,
+        0,
+        block_hash_b,
+        0,
+    )
+    .expect("valid alternate precommit must sign");
+
+    assert_eq!(accumulator.add_vote_checked(vote_a.clone()).unwrap(), 1);
+    assert_eq!(accumulator.add_vote_checked(vote_a_dup).unwrap(), 1);
+    assert!(accumulator.add_vote_checked(vote_b).is_err());
 }
 
 #[tokio::test]
