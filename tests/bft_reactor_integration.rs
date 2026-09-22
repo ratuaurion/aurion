@@ -306,3 +306,63 @@ async fn test_silent_round_zero_leader_advances_to_round_one() {
         handle.abort();
     }
 }
+
+#[tokio::test]
+async fn test_silent_round_zero_and_one_leaders_advance_to_round_two() {
+    let mut cluster = make_cluster(4, Duration::from_millis(100));
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    let proposal = build_proposal(
+        &cluster.ledgers[0],
+        &cluster.validator_set,
+        &cluster.keys,
+        2,
+    );
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            let (_index, _height, round) = cluster
+                .progress
+                .recv()
+                .await
+                .expect("reactor task must remain alive");
+            if round >= 2 {
+                break;
+            }
+        }
+    })
+    .await
+    .expect("at least one reactor must reach round two");
+
+    cluster
+        .publisher
+        .broadcast_proposal(proposal)
+        .await
+        .expect("round-two proposal publication must succeed");
+
+    let mut certificates = Vec::new();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while certificates.len() < 4 {
+            let (_, certificate) = cluster
+                .reports
+                .recv()
+                .await
+                .expect("reactor task must remain alive");
+            certificates.push(certificate);
+        }
+    })
+    .await
+    .expect("all reactors must commit the round-two proposal");
+
+    assert!(certificates
+        .iter()
+        .all(|certificate| certificate.round == 2));
+    assert!(cluster.ledgers.iter().all(|ledger| ledger
+        .lock()
+        .expect("ledger lock")
+        .latest_height()
+        == 1));
+
+    for handle in cluster.handles {
+        handle.abort();
+    }
+}

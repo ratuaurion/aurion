@@ -17,6 +17,8 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::time::{self, Instant};
 
+pub const MAX_ROUND_DRIFT: u64 = 10;
+
 #[derive(Debug, Error)]
 pub enum ReactorError {
     #[error("transport failure: {0}")]
@@ -222,15 +224,22 @@ impl<T: BftTransport> BftReactor<T> {
         if block.header.height != self.current_height || block.header.round < self.current_round {
             return Ok(());
         }
+        if block.header.round.saturating_sub(self.current_round) > MAX_ROUND_DRIFT {
+            return Err(ReactorError::InvalidProposal(format!(
+                "proposal round {} exceeds local round {} by more than {}",
+                block.header.round, self.current_round, MAX_ROUND_DRIFT
+            )));
+        }
+        envelope
+            .verify(GENESIS_CHAIN_ID, &self.validator_set)
+            .map_err(|error| ReactorError::InvalidProposal(error.to_string()))?;
+
         if block.header.round > self.current_round {
             self.current_round = block.header.round;
             self.vote_accumulator.prune_below_height(self.current_height);
             self.pending_proposal = None;
             self.pending_proposer_index = None;
         }
-        envelope
-            .verify(GENESIS_CHAIN_ID, &self.validator_set)
-            .map_err(|error| ReactorError::InvalidProposal(error.to_string()))?;
 
         let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
         let miner = self
