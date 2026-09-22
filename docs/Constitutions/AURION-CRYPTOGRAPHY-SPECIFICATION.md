@@ -45,6 +45,14 @@ Untuk mencegah fragmentasi implementasi perangkat lunak pada berbagai bahasa pem
 
 Setiap node atau library yang menggunakan algoritma alternatif (misalnya SHA-256, Keccak-256, secp256k1, atau RSA) diklasifikasikan sebagai **tidak kompatibel dengan protokol Aurion**.
 
+> **Normative Exception (Wallet Client Layer):**
+> SHA-256 tetap dilarang untuk seluruh operasi on-chain, state root, TxID, alamat,
+> konsensus, dan wire hashing. Satu-satunya pengecualian resmi adalah lapisan
+> antarmuka dompet (`src/platform/wallet/bip39.rs`) untuk menghitung checksum
+> 8-bit mnemonic 24-kata sesuai BIP-39 kanonikal, demi interoperabilitas dengan
+> hardware wallet dan library recovery standar. Checksum ini bersifat off-chain
+> dan tidak mengubah primitive hashing protokol Aurion.
+
 ---
 
 ## 2. Standar Fungsi Hash: BLAKE3 (256-Bit)

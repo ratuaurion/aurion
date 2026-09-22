@@ -15,6 +15,7 @@ cast_precision_loss = "deny"
 
 [dependencies]
 blake3 = { version = "1.5", default-features = false }
+sha2 = { version = "0.10", default-features = false }
 ed25519-dalek = { version = "2.1", default-features = false, features = ["fast", "rand_core"] }
 bech32 = "0.11"
 thiserror = "2.0"

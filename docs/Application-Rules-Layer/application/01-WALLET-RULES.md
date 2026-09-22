@@ -45,6 +45,12 @@
    - `0`: Change internal/external (selalu `0` untuk model akun Aurion).
    - `address_index`: Indeks alamat sekuensial (dimulai dari `0`).
 
+### 1.4 Format Mnemonic BIP-39
+1. Wallet Aurion **MUST** menggunakan English 24-word subset BIP-39 dengan entropy 256-bit.
+2. Checksum mnemonic **MUST** menggunakan 8 bit pertama dari SHA-256 entropy sesuai standar BIP-39.
+3. SHA-256 pada klausul ini hanya berlaku untuk checksum encoding mnemonic off-chain dan **MUST NOT** digunakan untuk hashing konsensus, transaksi, alamat, state root, atau wire protocol.
+4. Migrasi checksum dari format legacy Blake3 adalah breaking migration untuk mnemonic; mnemonic legacy tidak dijamin dapat dipulihkan setelah format kanonikal ini diaktifkan.
+
 ---
 
 ## 2. Penanganan Alamat dan Validasi Antarmuka (Address Handling)

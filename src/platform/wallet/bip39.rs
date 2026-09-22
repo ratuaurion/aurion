@@ -1,9 +1,9 @@
 //! Enkoder dan Dekoder Mnemonik BIP-39 (24 Kata / 256-bit Entropi).
 //! Mematuhi Dokumen 01 (01-WALLET-RULES.md Bagian 1.1).
 
-use crate::crypto::blake3_hash;
 use crate::wallet::sha512::pbkdf2_hmac_sha512;
 use crate::wallet::wordlist::BIP39_WORDLIST;
+use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,8 +28,7 @@ impl std::error::Error for MnemonicError {}
 /// Mengonversi 32-byte (256-bit) entropi kriptografis menjadi 24 kata BIP-39.
 #[allow(clippy::chunks_exact_to_as_chunks)]
 pub fn entropy_to_mnemonic_24(entropy: &[u8; 32]) -> String {
-    let hash = blake3_hash(entropy);
-    let checksum_byte = hash.as_bytes()[0];
+    let checksum_byte = Sha256::digest(entropy)[0];
 
     // 256 bit entropi + 8 bit checksum = 264 bit total
     let mut bits = Vec::with_capacity(264);
@@ -87,8 +86,7 @@ pub fn mnemonic_to_entropy_24(mnemonic: &str) -> Result<[u8; 32], MnemonicError>
         checksum_byte = (checksum_byte << 1) | bits[256 + j];
     }
 
-    let expected_hash = blake3_hash(&entropy);
-    let expected_checksum = expected_hash.as_bytes()[0];
+    let expected_checksum = Sha256::digest(entropy)[0];
 
     if checksum_byte != expected_checksum {
         entropy.zeroize();
@@ -130,5 +128,29 @@ mod tests {
 
         let res = mnemonic_to_entropy_24(&tampered);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_bip39_official_vectors_256bit() {
+        let vectors = [
+            (
+                [0x00; 32],
+                "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+            ),
+            (
+                [0x7f; 32],
+                "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title",
+            ),
+            (
+                [0xff; 32],
+                "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo vote",
+            ),
+        ];
+
+        for (entropy, expected_mnemonic) in vectors {
+            let mnemonic = entropy_to_mnemonic_24(&entropy);
+            assert_eq!(mnemonic, expected_mnemonic);
+            assert_eq!(mnemonic_to_entropy_24(&mnemonic), Ok(entropy));
+        }
     }
 }

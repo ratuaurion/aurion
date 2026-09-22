@@ -513,7 +513,7 @@ python tools/guardrail.py
 | Task ID | Nama Tugas | Status | Syarat Selesai (Acceptance Criteria) | Invariant Terkait |
 | :--- | :--- | :---: | :--- | :--- |
 | **AUR-WALLET-001** | **Cryptographic Entropy Hardening on Wallet Creation (OsRng)** | **SELESAI** | Mengganti entropy berbasis timestamp + Blake3 pada `src/platform/wallet/cli.rs` dengan CSPRNG OS untuk menghasilkan entropy 256-bit; tanpa unwrap/panic; unit test membuktikan hasil non-deterministik. | AUR-ARCH-005, AUR-ARCH-011 |
-| **AUR-WALLET-002** | **Mnemonic Checksum & Standard Interoperability** | **[TODO / OPEN]** | Menetapkan keputusan arsitektur antara checksum SHA-256 BIP-39 kanonikal atau format Aurion proprietary yang terisolasi; test vector BIP-39 standar lulus bila opsi kanonikal dipilih. | AUR-ARCH-005, AUR-APP-01 |
+| **AUR-WALLET-002** | **Mnemonic Checksum & Standard Interoperability** | **SELESAI** | Normative spec ratified: SHA-256 khusus untuk checksum BIP-39 English 24-word; breaking migration dari checksum Blake3; test vector BIP-39 standar lulus. | AUR-ARCH-005, AUR-APP-01 |
 | **AUR-WALLET-003** | **Keystore Unlock Key-Address Binding & Clear-Sign Confirmation** | **[TODO / OPEN]** | Unlock menolak keystore jika address envelope tidak cocok dengan public key hasil dekripsi; `wallet sign-tx` meminta konfirmasi eksplisit sebelum signing. | AUR-ARCH-005, AUR-APP-01 |
 | **AUR-WALLET-004** | **Strict Ingress Validation for `chain_id` and `valid_until`** | **[TODO / OPEN]** | RPC dan Mempool menolak `tx.chain_id` yang berbeda dari chain aktif dengan error jelas; menolak transaksi ketika `valid_until <= current_time` atau batas waktu kanonikal; transaksi expired tidak masuk mempool. | AUR-ARCH-005, AUR-APP-02, AUR-APP-03 |
 | **AUR-WALLET-005** | **End-to-End CLI Wallet Broadcast Pipeline (balance, nonce, send)** | **[TODO / OPEN]** | Menambahkan `wallet balance`, `wallet nonce`, dan `wallet send`; `send` mengambil nonce RPC terbaru, menandatangani via keystore, lalu membroadcast raw transaction tanpa salin-tempel hex manual. | AUR-ARCH-001, AUR-ARCH-009, AUR-APP-01, AUR-APP-02 |
@@ -521,6 +521,7 @@ python tools/guardrail.py
 
 ## Log Riwayat Eksekusi
 * **2026-09-22:** Penyelesaian AUR-WALLET-001: mengganti entropy wallet berbasis timestamp + Blake3 dengan `rand::rngs::OsRng`, membungkus buffer 256-bit menggunakan `Zeroizing`, dan menambahkan unit test non-zero/non-collision pada `src/platform/wallet/cli.rs`.
+* **2026-09-22:** Penyelesaian AUR-WALLET-002: ratifikasi pengecualian normatif SHA-256 hanya untuk checksum BIP-39 off-chain, migrasi breaking dari checksum Blake3, dependency `sha2`, dan tiga official 256-bit test vector.
 * **2026-09-15 13:20:** Ratifikasi `README.md` master arsitektur Single Ecosystem / Single Binary.
 * **2026-09-15 13:30:** Inisialisasi `.gitignore`, `CONTEXT_ANCHOR.md`, dan `TASK_REGISTER.md`.
 * **2026-09-15 21:50:** Inisiasi repositori kanonikal git dan push perdana ke GitHub `ratuaurion/aurion`.
