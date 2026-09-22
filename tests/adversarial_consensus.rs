@@ -48,7 +48,9 @@ struct ClusterFixture {
 
 impl ClusterFixture {
     fn new() -> Self {
-        let val_keys: Vec<Keypair> = (0..4).map(|_| Keypair::generate()).collect();
+        let val_keys: Vec<Keypair> = (0..4)
+            .map(|index| Keypair::from_seed(&[(index + 1) as u8; 32]))
+            .collect();
         let val_addrs: Vec<Address> = val_keys
             .iter()
             .map(|kp| derive_address_from_pubkey(&kp.public_key_bytes()))
@@ -157,13 +159,19 @@ fn test_adversarial_offline_validator_tolerance_liveness() {
             .expect("Mempool submission succeeded");
     }
 
-    // Tentukan proposer deterministik untuk H=1, R=0
+    // Tentukan proposer deterministik untuk H=1, R=0.
     let prev_hash = cluster.ledgers[0].latest_block().hash();
-    let proposer_idx = BftEngine::select_proposer(&cluster.validator_set, 1, 0, &prev_hash) as usize;
+    let mut round = 0;
+    let mut actual_proposer =
+        BftEngine::select_proposer(&cluster.validator_set, 1, round, &prev_hash) as usize;
 
-    // Pastikan proposer termasuk validator online (jika idx 3 terpilih, fallback ke round 1)
-    let round = if proposer_idx == 3 { 1 } else { 0 };
-    let actual_proposer = BftEngine::select_proposer(&cluster.validator_set, 1, round, &prev_hash) as usize;
+    // Simulasikan pacemaker: setiap proposer offline memicu view-change hingga
+    // round berikutnya memilih validator yang masih online.
+    while actual_proposer == 3 {
+        round += 1;
+        actual_proposer =
+            BftEngine::select_proposer(&cluster.validator_set, 1, round, &prev_hash) as usize;
+    }
     assert_ne!(actual_proposer, 3, "Proposer must be an online validator");
 
     let miner_addr = cluster.val_addrs[actual_proposer];

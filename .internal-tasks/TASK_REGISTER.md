@@ -526,6 +526,16 @@ python tools/guardrail.py
 * **2026-09-22:** Penyelesaian AUR-WALLET-004: validasi `chain_id` dan `valid_until` di RPC serta strict Mempool mode sebelum insertion, error `InvalidChainId`/`TransactionExpired`, dan test rejection/acceptance. Test adversarial liveness fluktuatif saat paralel tetap lulus terisolasi.
 * **2026-09-22:** Penyelesaian AUR-WALLET-005: klien JSON-RPC ringan, command `wallet balance`/`nonce`/`send`, nonce otomatis, clear-signing, broadcast raw transaction, TxID output, dan sinkronisasi fixture E2E ke Chain ID `1001`.
 * **2026-09-22:** Penyelesaian AUR-RUNTIME-013: dispatch JSON-RPC HTTP/WebSocket dipindahkan ke `tokio::task::spawn_blocking`, termasuk akses state/storage sinkron, dengan pemetaan `JoinError` ke JSON-RPC internal error; test RPC, Clippy, full workspace, dan guardrail lulus.
+
+### Era XII: Consensus BFT & Liveness Hardening (BACKLOG AKTIF)
+| Task ID | Nama Tugas | Status | Target Investigasi / Acceptance Criteria | Invariant Terkait |
+| :--- | :--- | :---: | :--- | :--- |
+| **AUR-CONS-001** | **Deterministic Round Timeout & Test Isolation** | **SELESAI** | Fixture validator memakai seed deterministik `[1; 32]` sampai `[4; 32]`; test liveness mensimulasikan pacemaker dengan step-up round berulang sampai proposer online, lalu membuktikan kuorum 3/4 dan finalitas blok. | AUR-ARCH-002, AUR-ARCH-010 |
+| **AUR-CONS-002** | **Proposer Rotation & View Change Liveness** | **TODO / OPEN** | Menegakkan transisi state saat leader offline dan memastikan kuorum >2/3 dapat menginisiasi view-change tanpa dead-lock internal. | AUR-ARCH-002, AUR-CONS-01 |
+| **AUR-CONS-003** | **Zenoh P2P Gossip Frame Replay Defense** | **TODO / OPEN** | Memverifikasi ketahanan saluran P2P terhadap injeksi vote ganda dan replay serangan ekuivokasi lintas round. | AUR-ARCH-005, AUR-NET-01 |
+
+* **2026-09-22:** Kickoff Era XII. Stress test terisolasi AUR-CONS-001 lulus 5/5, sedangkan suite adversarial paralel gagal intermiten pada assertion proposer online di `tests/adversarial_consensus.rs:167`. Diagnosis: fixture memakai keypair acak dan fallback satu langkah, bukan race port atau timeout reactor.
+* **2026-09-22:** Penyelesaian AUR-CONS-001: fixture `ClusterFixture` memakai seed validator deterministik dan test offline-validator menjalankan step-up round berulang sampai proposer aktif terpilih. Suite adversarial paralel 8/8 PASS; stress test 5/5 PASS; Clippy dan guardrail PASS.
 * **2026-09-15 13:20:** Ratifikasi `README.md` master arsitektur Single Ecosystem / Single Binary.
 * **2026-09-15 13:30:** Inisialisasi `.gitignore`, `CONTEXT_ANCHOR.md`, dan `TASK_REGISTER.md`.
 * **2026-09-15 21:50:** Inisiasi repositori kanonikal git dan push perdana ke GitHub `ratuaurion/aurion`.
