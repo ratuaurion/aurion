@@ -29,6 +29,20 @@ Automated Test Suites:
 └── tests/unified_cli.rs             (15 suites: Single binary CLI dispatchers)
 ```
 
+### Suite Hardening Wallet dan Mempool
+
+Addendum 13 menambahkan bukti pengujian terarah untuk rangkaian hardening wallet:
+
+| Area | Bukti | Hasil |
+| :--- | :--- | :---: |
+| Wallet CLI | 25 unit test wallet untuk entropy, mnemonic, client RPC, keystore, clear-signing, dan pipeline broadcast | **PASS** |
+| BIP-39 | Tiga vektor resmi dengan wordlist 2048 kata dan checksum SHA-256 kanonikal | **PASS** |
+| Keystore | Verifikasi tampering address-binding pada envelope V1/V2 | **PASS** |
+| Mempool/RPC ingress | Penolakan chain ID salah dan `valid_until <= current_time` | **PASS** |
+| Guardrail | Zero unsafe, zero floating-point, dan sinkronisasi dokumentasi | **PASS 100%** |
+
+Isolasi I/O blocking Redb untuk handler RPC dicatat sebagai tiket berikutnya, `AUR-RUNTIME-013`, dan memerlukan suite liveness khusus setelah implementasi.
+
 ---
 
 ## 2. Bukti Eksekusi Test Runner Internal (`aurion audit run`)

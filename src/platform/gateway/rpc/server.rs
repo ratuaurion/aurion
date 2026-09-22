@@ -85,6 +85,23 @@ async fn futures_pending() {
     std::future::pending::<()>().await;
 }
 
+async fn dispatch_on_storage_worker(
+    context: Arc<RpcContext>,
+    request: crate::gateway::rpc::types::JsonRpcRequest,
+    current_time: u64,
+) -> JsonRpcResponse {
+    let request_id = request.id.clone();
+    match tokio::task::spawn_blocking(move || context.dispatch(&request, current_time)).await {
+        Ok(response) => response,
+        Err(error) => JsonRpcResponse::error(
+            request_id,
+            crate::gateway::rpc::errors::internal_error(format!(
+                "Storage worker thread panicked: {error}"
+            )),
+        ),
+    }
+}
+
 /// Menangani setiap koneksi TCP yang masuk.
 async fn handle_connection(
     mut stream: TcpStream,
@@ -296,7 +313,7 @@ Connection: close\r\n\r\n";
 
         let response_payload = match parse_json_rpc_request(&body) {
             Ok(req) => {
-                let resp = context.dispatch(&req, current_time);
+                let resp = dispatch_on_storage_worker(Arc::clone(&context), req, current_time).await;
                 serialize_json_rpc_response(&resp)
             }
             Err(_) => {
@@ -393,7 +410,12 @@ async fn handle_websocket_upgrade(
                                     }
                                 } else {
                                     // Panggilan RPC standar via WebSocket
-                                    let resp = context.dispatch(&req, current_time);
+                                    let resp = dispatch_on_storage_worker(
+                                        Arc::clone(&context),
+                                        req,
+                                        current_time,
+                                    )
+                                    .await;
                                     let frame = make_ws_text_frame(&serialize_json_rpc_response(&resp));
                                     if write_half.write_all(&frame).await.is_err() {
                                         break;

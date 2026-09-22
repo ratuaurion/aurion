@@ -15,6 +15,12 @@ Evaluasi membuktikan bahwa Aurion memenuhi standar tertinggi industri rekayasa s
 - **Nol Dependensi C/C++ pada Engine Inti:** Basis data fisik menggunakan mesin ACID murni Rust `redb 4.3` (`AUR-ARCH-001`).
 - **Nol Kerentanan Kritis / Tinggi yang Belum Terselesaikan:** Seluruh potensi vektor eksploitasi telah diverifikasi dan dimitigasi secara matematis.
 
+### Indeks Dokumen Audit
+
+| No. | Dokumen | Fokus | Status |
+| :---: | :--- | :--- | :---: |
+| **13** | 13-WALLET-MEMPOOL-AND-RUNTIME-HARDENING-ADDENDUM.md | Hardening CSPRNG, BIP-39 kanonikal, keystore address-binding, validasi ingress mempool, mitigasi thread starvation RPC. | **CERTIFIED PASS** |
+
 ---
 
 ## 2. Matriks Temuan Audit (Audit Findings Matrix)
