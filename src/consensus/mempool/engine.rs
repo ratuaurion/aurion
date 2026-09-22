@@ -16,6 +16,10 @@ pub const RBF_MIN_FEE_BUMP_PERCENT: u128 = 10; // Mandat RBF: Kenaikan fee minim
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum MempoolError {
+    #[error("Invalid chain ID: expected {expected}, got {got}")]
+    InvalidChainId { expected: u32, got: u32 },
+    #[error("Transaction expired: valid_until {valid_until}, current time {current_time}")]
+    TransactionExpired { valid_until: u64, current_time: u64 },
     #[error("Sender address does not match public key: derived {derived}, got {declared}")]
     SenderMismatch { derived: Address, declared: Address },
     #[error("Stateless transaction validation failed: {0}")]
@@ -42,6 +46,7 @@ pub struct MempoolEngine {
     pub by_sender_nonce: HashMap<(Address, u64), Hash256>,
     pub max_capacity: usize,
     pub ttl_secs: u64,
+    pub chain_id: Option<u32>,
 }
 
 impl Default for MempoolEngine {
@@ -57,6 +62,17 @@ impl MempoolEngine {
             by_sender_nonce: HashMap::new(),
             max_capacity,
             ttl_secs,
+            chain_id: None,
+        }
+    }
+
+    pub fn with_chain_id(max_capacity: usize, ttl_secs: u64, chain_id: u32) -> Self {
+        Self {
+            entries: HashMap::new(),
+            by_sender_nonce: HashMap::new(),
+            max_capacity,
+            ttl_secs,
+            chain_id: Some(chain_id),
         }
     }
 
@@ -68,6 +84,21 @@ impl MempoolEngine {
         current_time: u64,
         account_state: &Account,
     ) -> Result<Hash256, MempoolError> {
+        if let Some(chain_id) = self.chain_id {
+            if tx.chain_id != chain_id {
+                return Err(MempoolError::InvalidChainId {
+                    expected: chain_id,
+                    got: tx.chain_id,
+                });
+            }
+            if tx.valid_until != 0 && tx.valid_until <= current_time {
+                return Err(MempoolError::TransactionExpired {
+                    valid_until: tx.valid_until,
+                    current_time,
+                });
+            }
+        }
+
         // 1. Verifikasi Kecocokan Kunci Publik Pengirim
         let derived_addr = derive_address_from_pubkey(sender_pubkey);
         if derived_addr != tx.sender {
@@ -254,5 +285,75 @@ impl MempoolEngine {
 
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::{derive_address_from_pubkey, Keypair};
+
+    fn test_transaction(chain_id: u32, valid_until: u64) -> (Transaction, [u8; 32]) {
+        let signing_key = Keypair::from_seed(&[0x44; 32]);
+        let sender_pubkey = signing_key.public_key_bytes();
+        let sender = derive_address_from_pubkey(&sender_pubkey);
+        let mut tx = Transaction {
+            version: 1,
+            chain_id,
+            tx_type: crate::transaction::types::TxType::Transfer,
+            flags: 0,
+            sender,
+            recipient: crate::core::Address([0x55; 32]),
+            nonce: 0,
+            amount: Quantum::new(1),
+            fee: Quantum::new(10_000),
+            valid_until,
+            payload: Vec::new(),
+            signature: crate::core::Signature::ZERO,
+        };
+        tx.signature = signing_key.sign(&tx.signing_preimage());
+        (tx, sender_pubkey)
+    }
+
+    #[test]
+    fn rejects_wrong_chain_before_mempool_insert() {
+        let (tx, pubkey) = test_transaction(9999, 2_000);
+        let mut mempool = MempoolEngine::with_chain_id(10, 3_600, 1001);
+        let result = mempool.submit_transaction(tx, &pubkey, 1_000, &Account::default());
+
+        assert_eq!(
+            result,
+            Err(MempoolError::InvalidChainId {
+                expected: 1001,
+                got: 9999
+            })
+        );
+        assert!(mempool.is_empty());
+    }
+
+    #[test]
+    fn rejects_expired_transaction_before_mempool_insert() {
+        let (tx, pubkey) = test_transaction(1001, 1_000);
+        let mut mempool = MempoolEngine::with_chain_id(10, 3_600, 1001);
+        let result = mempool.submit_transaction(tx, &pubkey, 1_000, &Account::default());
+
+        assert_eq!(
+            result,
+            Err(MempoolError::TransactionExpired {
+                valid_until: 1_000,
+                current_time: 1_000
+            })
+        );
+        assert!(mempool.is_empty());
+    }
+
+    #[test]
+    fn accepts_matching_chain_and_future_expiry() {
+        let (tx, pubkey) = test_transaction(1001, 2_000);
+        let mut mempool = MempoolEngine::with_chain_id(10, 3_600, 1001);
+        let result = mempool.submit_transaction(tx, &pubkey, 1_000, &Account::new(Quantum::new(20_000), 0));
+
+        assert!(result.is_ok());
+        assert_eq!(mempool.len(), 1);
     }
 }

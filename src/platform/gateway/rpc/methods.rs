@@ -37,7 +37,11 @@ impl RpcContext {
             chain_id,
             current_height: Arc::new(AtomicU64::new(0)),
             finalized_height: Arc::new(AtomicU64::new(0)),
-            mempool: Arc::new(Mutex::new(MempoolEngine::default())),
+            mempool: Arc::new(Mutex::new(MempoolEngine::with_chain_id(
+                crate::mempool::DEFAULT_MAX_MEMPOOL_CAPACITY,
+                crate::mempool::DEFAULT_MEMPOOL_TTL_SECS,
+                chain_id,
+            ))),
             accounts: Arc::new(Mutex::new(HashMap::new())),
             headers: Arc::new(Mutex::new(HashMap::new())),
             certificates: Arc::new(Mutex::new(HashMap::new())),
@@ -208,6 +212,19 @@ impl RpcContext {
         let tx = Transaction::decode_canonical(&raw_tx_bytes, &mut cursor).map_err(|e| {
             invalid_params(format!("Canonical transaction decoding failed: {e:?}"))
         })?;
+
+        if tx.chain_id != self.chain_id {
+            return Err(invalid_params(format!(
+                "InvalidChainId: expected {}, got {}",
+                self.chain_id, tx.chain_id
+            )));
+        }
+        if tx.valid_until != 0 && tx.valid_until <= current_time {
+            return Err(invalid_params(format!(
+                "TransactionExpired: valid_until {} is not after current time {}",
+                tx.valid_until, current_time
+            )));
+        }
 
         // Ambil atau inisialisasi state akun pengirim
         let accounts = self.accounts.lock().unwrap();
