@@ -3,7 +3,6 @@
 
 #![allow(clippy::collapsible_match)]
 
-use crate::crypto::blake3_hash;
 use crate::wallet::bip39::{entropy_to_mnemonic_24, mnemonic_to_entropy_24, mnemonic_to_seed};
 use crate::wallet::derivation::DerivedAccount;
 use crate::wallet::keystore::Keystore;
@@ -11,7 +10,17 @@ use crate::wallet::password::{
     resolve_mnemonic, resolve_password, ENV_WALLET_MNEMONIC, ENV_WALLET_PASSWORD,
 };
 use crate::wallet::signing::ClearSigningDetails;
+use rand::rngs::OsRng;
+use rand::RngCore;
 use std::fs;
+use zeroize::Zeroizing;
+
+fn generate_wallet_entropy() -> Zeroizing<[u8; 32]> {
+    let mut entropy = Zeroizing::new([0u8; 32]);
+    let mut rng = OsRng;
+    rng.fill_bytes(&mut *entropy);
+    entropy
+}
 
 pub fn handle_wallet_subcommand(args: &[String]) {
     let subcmd = if !args.is_empty() {
@@ -64,14 +73,8 @@ fn handle_create(args: &[String]) {
         i += 1;
     }
 
-    // Pembangkitan entropi 256-bit
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-    let entropy_hash = blake3_hash(&now.to_be_bytes());
-    let entropy = *entropy_hash.as_bytes();
-
+    // Pembangkitan entropi 256-bit dari CSPRNG sistem operasi.
+    let entropy = generate_wallet_entropy();
     let mnemonic = entropy_to_mnemonic_24(&entropy);
     let master_seed = mnemonic_to_seed(&mnemonic, "");
     let derived = DerivedAccount::derive_account(&master_seed, 0, 0);
@@ -400,4 +403,24 @@ fn print_wallet_help() {
     println!("Keamanan mnemonic:");
     println!("  - Mnemonic dibaca dari stdin (--mnemonic-stdin), env {ENV_WALLET_MNEMONIC}, atau prompt interaktif tanpa echo.");
     println!("  - Opsi --mnemonic \"<24 words>\" PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generate_wallet_entropy;
+
+    #[test]
+    fn wallet_entropy_is_non_zero_and_non_deterministic() {
+        let samples: Vec<[u8; 32]> = (0..8)
+            .map(|_| *generate_wallet_entropy())
+            .collect();
+
+        for sample in &samples {
+            assert_ne!(*sample, [0u8; 32]);
+        }
+
+        for (index, sample) in samples.iter().enumerate() {
+            assert!(samples[index + 1..].iter().all(|other| other != sample));
+        }
+    }
 }

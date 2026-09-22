@@ -40,13 +40,7 @@ pub fn resolve_password(
     let stdin_is_tty = io::stdin().is_terminal();
     if from_stdin || !stdin_is_tty {
         let stdin = io::stdin();
-        let mut line = String::new();
-        stdin.lock().read_line(&mut line)?;
-        let pwd = trim_line_endings(&line);
-        if pwd.is_empty() {
-            return Err(PasswordError::Empty);
-        }
-        return Ok(pwd);
+        return resolve_password_from_reader(stdin.lock());
     }
 
     // Tier 2: Environment variable
@@ -75,6 +69,16 @@ pub fn resolve_password(
         }
     }
 
+    Ok(pwd)
+}
+
+fn resolve_password_from_reader<R: BufRead>(mut reader: R) -> Result<String, PasswordError> {
+    let mut line = String::new();
+    reader.read_line(&mut line)?;
+    let pwd = trim_line_endings(&line);
+    if pwd.is_empty() {
+        return Err(PasswordError::Empty);
+    }
     Ok(pwd)
 }
 
@@ -116,15 +120,14 @@ mod tests {
     #[test]
     fn test_empty_mnemonic_rejected_when_non_tty_stdin() {
         // Stdin pada harness test bukan TTY; tanpa input apa pun, hasilnya Empty.
-        let res = resolve_mnemonic(true, "Mnemonic");
+        let res = resolve_password_from_reader(std::io::Cursor::new("\n"));
         assert!(res.is_err());
     }
 
     #[test]
     fn test_empty_password_rejected_when_non_tty_stdin() {
         // Stdin pada harness test bukan TTY; tanpa input apa pun, hasilnya Empty.
-        let res = resolve_password(true, None, "Password", true);
-        // Input stdin kosong → Empty (atau Io jika stdin ditutup) → bukan Ok.
+        let res = resolve_password_from_reader(std::io::Cursor::new("\r\n"));
         assert!(res.is_err());
     }
 }
