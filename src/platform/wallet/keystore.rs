@@ -12,6 +12,7 @@ use crate::crypto::blake3_derive_key;
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
+use crate::crypto::{derive_address_from_pubkey, encode_address_bech32m};
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -31,6 +32,7 @@ const SECRET_LEN: usize = 32;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum KeystoreError {
     InvalidPassword,
+    AddressMismatch { expected: String, derived: String },
     InvalidJsonFormat(String),
     MissingField(String),
     DecryptionFailed,
@@ -43,6 +45,7 @@ impl std::fmt::Display for KeystoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::InvalidPassword => write!(f, "Kata sandi keystore tidak cocok (Verifikasi MAC gagal)"),
+            Self::AddressMismatch { expected, derived } => write!(f, "Alamat keystore tidak cocok: metadata '{expected}', derivasi '{derived}'"),
             Self::InvalidJsonFormat(e) => write!(f, "Format JSON keystore rusak: {e}"),
             Self::MissingField(field) => write!(f, "Field wajib '{field}' tidak ditemukan pada file keystore"),
             Self::DecryptionFailed => write!(f, "Dekripsi keystore gagal"),
@@ -152,6 +155,19 @@ fn derive_key_argon2id(password: &str, salt: &[u8], params: &KdfParamsV2) -> Res
         .hash_password_into(password.as_bytes(), salt, &mut *derived)
         .map_err(|e| KeystoreError::KdfFailure(e.to_string()))?;
     Ok(derived)
+}
+
+fn verify_address_binding(signing_key: &SigningKey, metadata_address: &str) -> Result<(), KeystoreError> {
+    let address = derive_address_from_pubkey(signing_key.verifying_key().as_bytes());
+    let derived = encode_address_bech32m(&address, "aur")
+        .map_err(|e| KeystoreError::InvalidJsonFormat(e.to_string()))?;
+    if derived.to_lowercase() != metadata_address.trim().to_lowercase() {
+        return Err(KeystoreError::AddressMismatch {
+            expected: metadata_address.to_string(),
+            derived,
+        });
+    }
+    Ok(())
 }
 
 impl Keystore {
@@ -282,6 +298,7 @@ impl Keystore {
         secret.copy_from_slice(plaintext.as_slice());
         let signing_key = SigningKey::from_bytes(&secret);
         secret.zeroize();
+        verify_address_binding(&signing_key, &self.address)?;
 
         Ok(signing_key)
     }
@@ -318,6 +335,7 @@ impl Keystore {
             Some(mut secret) => {
                 let signing_key = SigningKey::from_bytes(&secret);
                 secret.zeroize();
+                verify_address_binding(&signing_key, &self.address)?;
                 Ok(signing_key)
             }
             None => Err(KeystoreError::InvalidPassword),
@@ -441,20 +459,26 @@ mod tests {
         SigningKey::from_bytes(&[0x77u8; SECRET_LEN])
     }
 
-    const TEST_ADDRESS: &str = "aur1testaddresscanonical777777777777777777777777777777777777";
     const TEST_PASSWORD: &str = "SuperSecurePassword123!";
+
+    fn test_address() -> String {
+        let key = test_signing_key();
+        let address = derive_address_from_pubkey(key.verifying_key().as_bytes());
+        encode_address_bech32m(&address, "aur").unwrap()
+    }
 
     #[test]
     fn test_keystore_v2_encryption_decryption_cycle() {
         let signing_key = test_signing_key();
 
-        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, TEST_ADDRESS).expect("Enkripsi V2 harus berhasil");
+        let address = test_address();
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).expect("Enkripsi V2 harus berhasil");
         assert_eq!(keystore.version, 2);
         assert_eq!(keystore.crypto.cipher, AEAD_ALGORITHM);
 
         let json_str = keystore.to_json_string();
         let parsed = Keystore::from_json_str(&json_str).expect("Parsing V2 harus berhasil");
-        assert_eq!(parsed.address, TEST_ADDRESS);
+        assert_eq!(parsed.address, address);
         assert_eq!(parsed.version, 2);
 
         let recovered = parsed.decrypt(TEST_PASSWORD).expect("Dekripsi V2 harus berhasil");
@@ -464,7 +488,8 @@ mod tests {
     #[test]
     fn test_keystore_v2_wrong_password_rejected_by_aead_tag() {
         let signing_key = test_signing_key();
-        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, TEST_ADDRESS).unwrap();
+        let address = test_address();
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).unwrap();
         let parsed = Keystore::from_json_str(&keystore.to_json_string()).unwrap();
 
         let err = parsed.decrypt("WrongPassword").unwrap_err();
@@ -474,7 +499,8 @@ mod tests {
     #[test]
     fn test_keystore_v2_tampered_ciphertext_rejected_by_aead_tag() {
         let signing_key = test_signing_key();
-        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, TEST_ADDRESS).unwrap();
+        let address = test_address();
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).unwrap();
         let mut parsed = Keystore::from_json_str(&keystore.to_json_string()).unwrap();
 
         let mut bad_ciphertext = parsed.crypto.ciphertext.clone();
@@ -488,7 +514,8 @@ mod tests {
     #[test]
     fn test_keystore_v1_legacy_still_decrypts() {
         let signing_key = test_signing_key();
-        let legacy_keystore = Keystore::legacy_fixture(&signing_key, TEST_PASSWORD, TEST_ADDRESS);
+        let address = test_address();
+        let legacy_keystore = Keystore::legacy_fixture(&signing_key, TEST_PASSWORD, &address);
 
         let parsed = Keystore::from_json_str(&legacy_keystore.to_json_string()).unwrap();
         assert!(parsed.is_legacy());
@@ -503,7 +530,8 @@ mod tests {
     #[test]
     fn test_keystore_v1_auto_migrates_to_v2() {
         let signing_key = test_signing_key();
-        let legacy_keystore = Keystore::legacy_fixture(&signing_key, TEST_PASSWORD, TEST_ADDRESS);
+        let address = test_address();
+        let legacy_keystore = Keystore::legacy_fixture(&signing_key, TEST_PASSWORD, &address);
         let parsed = Keystore::from_json_str(&legacy_keystore.to_json_string()).unwrap();
 
         let (recovered, upgraded) = parsed
@@ -526,7 +554,8 @@ mod tests {
     #[test]
     fn test_keystore_v2_unlock_does_not_emit_upgrade() {
         let signing_key = test_signing_key();
-        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, TEST_ADDRESS).unwrap();
+        let address = test_address();
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).unwrap();
 
         let (_, upgraded) = keystore.unlock_and_migrate(TEST_PASSWORD).unwrap();
         assert!(upgraded.is_none());
@@ -537,6 +566,20 @@ mod tests {
         let mut buffer = [0xABu8; SECRET_LEN];
         buffer.zeroize();
         assert!(buffer.iter().all(|byte| *byte == 0));
+    }
+
+    #[test]
+    fn test_keystore_rejects_tampered_address_metadata() {
+        let signing_key = test_signing_key();
+        let address = test_address();
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).unwrap();
+        let mut parsed = Keystore::from_json_str(&keystore.to_json_string()).unwrap();
+        parsed.address = "aur1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq".to_string();
+
+        assert!(matches!(
+            parsed.decrypt(TEST_PASSWORD),
+            Err(KeystoreError::AddressMismatch { .. })
+        ));
     }
 
     #[test]

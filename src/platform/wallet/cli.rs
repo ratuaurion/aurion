@@ -13,6 +13,7 @@ use crate::wallet::signing::ClearSigningDetails;
 use rand::rngs::OsRng;
 use rand::RngCore;
 use std::fs;
+use std::io::{self, BufRead, IsTerminal, Write};
 use zeroize::Zeroizing;
 
 fn generate_wallet_entropy() -> Zeroizing<[u8; 32]> {
@@ -43,6 +44,31 @@ fn parse_password_flags(args: &[String]) -> (bool, String) {
     let from_stdin = args.iter().any(|a| a == "--password-stdin" || a == "--passphrase-stdin");
     let prompt = "Masukkan password wallet";
     (from_stdin, prompt.to_string())
+}
+
+fn confirm_clear_signing(assume_yes: bool) -> Result<(), &'static str> {
+    if assume_yes {
+        return Ok(());
+    }
+    if !io::stdin().is_terminal() {
+        return Err("Lingkungan non-TTY: gunakan flag --yes/-y untuk menandatangani secara non-interaktif");
+    }
+
+    eprint!("Continue signing? [y/N]: ");
+    io::stderr().flush().map_err(|_| "Gagal menampilkan prompt konfirmasi")?;
+    confirm_from_reader(io::stdin().lock())
+}
+
+fn confirm_from_reader<R: BufRead>(mut reader: R) -> Result<(), &'static str> {
+    let mut input = String::new();
+    reader
+        .read_line(&mut input)
+        .map_err(|_| "Gagal membaca konfirmasi penandatanganan")?;
+    if matches!(input.trim(), "y" | "Y") {
+        Ok(())
+    } else {
+        Err("Penandatanganan dibatalkan oleh pengguna")
+    }
 }
 
 fn handle_create(args: &[String]) {
@@ -251,6 +277,7 @@ fn handle_sign_tx(args: &[String]) {
     let mut nonce: u64 = 0;
     let mut memo = String::new();
     let mut chain_id: u32 = crate::genesis::builder::GENESIS_CHAIN_ID;
+    let mut assume_yes = false;
 
     let mut i = 0;
     while i < args.len() {
@@ -305,6 +332,9 @@ fn handle_sign_tx(args: &[String]) {
                     chain_id = args[i + 1].parse::<u32>().unwrap_or(1);
                     i += 1;
                 }
+            }
+            "--yes" | "-y" => {
+                assume_yes = true;
             }
             _ => {}
         }
@@ -376,6 +406,11 @@ fn handle_sign_tx(args: &[String]) {
     // Cetak Clear Signing Prompt
     print!("{}", details.format_clear_signing_prompt());
 
+    if let Err(error) = confirm_clear_signing(assume_yes) {
+        eprintln!("[AURION WALLET ERROR] {error}");
+        return;
+    }
+
     let current_time = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
@@ -394,7 +429,7 @@ fn print_wallet_help() {
     println!("  aurion wallet create [--name <name>] [--password-stdin]");
     println!("  aurion wallet import --mnemonic-stdin [--name <name>] [--password-stdin]");
     println!("  aurion wallet address [--keystore <path>]");
-    println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>]");
+    println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>] [--yes|-y]");
     println!("Keamanan password:");
     println!("  - Tanpa flag, password diminta lewat prompt interaktif (no echo, konfirmasi ganda saat create).");
     println!("  - --password-stdin membaca password dari stdin (aman untuk pipa/CI).");
@@ -407,7 +442,7 @@ fn print_wallet_help() {
 
 #[cfg(test)]
 mod tests {
-    use super::generate_wallet_entropy;
+    use super::{confirm_from_reader, generate_wallet_entropy};
 
     #[test]
     fn wallet_entropy_is_non_zero_and_non_deterministic() {
@@ -422,5 +457,13 @@ mod tests {
         for (index, sample) in samples.iter().enumerate() {
             assert!(samples[index + 1..].iter().all(|other| other != sample));
         }
+    }
+
+    #[test]
+    fn clear_signing_confirmation_accepts_only_yes() {
+        assert!(confirm_from_reader(std::io::Cursor::new("y\n")).is_ok());
+        assert!(confirm_from_reader(std::io::Cursor::new("Y\n")).is_ok());
+        assert!(confirm_from_reader(std::io::Cursor::new("n\n")).is_err());
+        assert!(confirm_from_reader(std::io::Cursor::new("\n")).is_err());
     }
 }
