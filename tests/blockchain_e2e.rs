@@ -67,7 +67,7 @@ fn test_end_to_end_blockchain_lifecycle() {
 
     let mut tx = Transaction {
         version: 1,
-        chain_id: 1,
+        chain_id: 1001,
         tx_type: TxType::Transfer,
         flags: 0,
         sender: creator_addr,

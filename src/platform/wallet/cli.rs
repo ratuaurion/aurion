@@ -4,6 +4,7 @@
 #![allow(clippy::collapsible_match)]
 
 use crate::wallet::bip39::{entropy_to_mnemonic_24, mnemonic_to_entropy_24, mnemonic_to_seed};
+use crate::wallet::client;
 use crate::wallet::derivation::DerivedAccount;
 use crate::wallet::keystore::Keystore;
 use crate::wallet::password::{
@@ -34,6 +35,9 @@ pub fn handle_wallet_subcommand(args: &[String]) {
         "create" => handle_create(&args[1..]),
         "import" => handle_import(&args[1..]),
         "address" => handle_address(&args[1..]),
+        "balance" => handle_balance(&args[1..]),
+        "nonce" => handle_nonce(&args[1..]),
+        "send" => handle_send(&args[1..]),
         "sign-tx" => handle_sign_tx(&args[1..]),
         _ => print_wallet_help(),
     }
@@ -268,6 +272,139 @@ fn handle_address(args: &[String]) {
     }
 }
 
+fn get_flag_value(args: &[String], flag: &str) -> Option<String> {
+    args.windows(2)
+        .find(|pair| pair[0] == flag)
+        .map(|pair| pair[1].clone())
+}
+
+fn rpc_url(args: &[String]) -> String {
+    get_flag_value(args, "--rpc").unwrap_or_else(|| "http://127.0.0.1:8545".to_string())
+}
+
+fn handle_balance(args: &[String]) {
+    let address = get_flag_value(args, "--address").or_else(|| args.first().cloned());
+    let Some(address) = address else {
+        eprintln!("[AURION WALLET ERROR] Gunakan: wallet balance --address <ADDR> [--rpc <URL>]");
+        return;
+    };
+    match client::get_balance(&rpc_url(args), &address) {
+        Ok(balance) => println!("Balance: {balance} Quanta"),
+        Err(error) => eprintln!("[AURION WALLET ERROR] {error}"),
+    }
+}
+
+fn handle_nonce(args: &[String]) {
+    let address = get_flag_value(args, "--address").or_else(|| args.first().cloned());
+    let Some(address) = address else {
+        eprintln!("[AURION WALLET ERROR] Gunakan: wallet nonce --address <ADDR> [--rpc <URL>]");
+        return;
+    };
+    match client::get_nonce(&rpc_url(args), &address) {
+        Ok(nonce) => println!("Nonce: {nonce}"),
+        Err(error) => eprintln!("[AURION WALLET ERROR] {error}"),
+    }
+}
+
+fn handle_send(args: &[String]) {
+    let keystore_path = get_flag_value(args, "--keystore")
+        .unwrap_or_else(|| "default.keystore.json".to_string());
+    let recipient = get_flag_value(args, "--to").unwrap_or_default();
+    let amount = get_flag_value(args, "--amount")
+        .and_then(|value| value.parse::<u128>().ok())
+        .unwrap_or(0);
+    let fee = get_flag_value(args, "--fee")
+        .and_then(|value| value.parse::<u128>().ok())
+        .unwrap_or(10_000);
+    let assume_yes = args.iter().any(|arg| arg == "--yes" || arg == "-y");
+    let rpc = rpc_url(args);
+
+    let keystore_raw = match fs::read_to_string(&keystore_path) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] Tidak dapat membuka keystore: {error}");
+            return;
+        }
+    };
+    let keystore = match Keystore::from_json_str(&keystore_raw) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] Format keystore rusak: {error}");
+            return;
+        }
+    };
+    let password = match resolve_password(
+        args.iter().any(|arg| arg == "--password-stdin"),
+        Some(ENV_WALLET_PASSWORD),
+        "Masukkan password wallet",
+        false,
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] Gagal memperoleh password: {error}");
+            return;
+        }
+    };
+    let (signing_key, _) = match keystore.unlock_and_migrate(&password) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] Gagal membuka keystore: {error}");
+            return;
+        }
+    };
+    let nonce = match client::get_nonce(&rpc, &keystore.address) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] {error}");
+            return;
+        }
+    };
+    let details = match ClearSigningDetails::new(
+        &keystore.address,
+        &recipient,
+        amount,
+        fee,
+        nonce,
+        "",
+    ) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("[AURION WALLET ERROR] Validasi transaksi gagal: {error}");
+            return;
+        }
+    };
+    print!("{}", details.format_clear_signing_prompt());
+    if assume_yes {
+        // Automation explicitly opted into signing.
+    } else if let Err(error) = confirm_clear_signing(false) {
+        eprintln!("[AURION WALLET ERROR] {error}");
+        return;
+    }
+    let current_time = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let (tx, raw_hex) = details.sign(
+        &signing_key,
+        crate::genesis::builder::GENESIS_CHAIN_ID,
+        current_time + 3600,
+    );
+    let sender_pubkey = hex::encode(signing_key.verifying_key().as_bytes());
+    match client::broadcast_raw_tx(&rpc, &raw_hex, &sender_pubkey) {
+        Ok(tx_id) => {
+            println!("Transaksi berhasil disiarkan!");
+            println!("TxID   : 0x{tx_id}");
+            println!("Sender : {}", keystore.address);
+            println!("To     : {recipient}");
+            println!("Amount : {amount} Quanta");
+            println!("Nonce  : {nonce}");
+            println!("Status : PENDING (Menunggu finalitas blok)");
+            let _ = tx;
+        }
+        Err(error) => eprintln!("[AURION WALLET ERROR] {error}"),
+    }
+}
+
 fn handle_sign_tx(args: &[String]) {
     let mut keystore_path = "default.keystore.json".to_string();
     let mut password: Option<String> = None;
@@ -429,6 +566,9 @@ fn print_wallet_help() {
     println!("  aurion wallet create [--name <name>] [--password-stdin]");
     println!("  aurion wallet import --mnemonic-stdin [--name <name>] [--password-stdin]");
     println!("  aurion wallet address [--keystore <path>]");
+    println!("  aurion wallet balance --address <addr> [--rpc <url>]");
+    println!("  aurion wallet nonce --address <addr> [--rpc <url>]");
+    println!("  aurion wallet send --to <addr> --amount <quanta> [--fee <quanta>] [--keystore <path>] [--rpc <url>] [--yes|-y]");
     println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>] [--yes|-y]");
     println!("Keamanan password:");
     println!("  - Tanpa flag, password diminta lewat prompt interaktif (no echo, konfirmasi ganda saat create).");
