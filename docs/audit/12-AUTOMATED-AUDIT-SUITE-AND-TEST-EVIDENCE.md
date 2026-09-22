@@ -43,6 +43,20 @@ Addendum 13 menambahkan bukti pengujian terarah untuk rangkaian hardening wallet
 
 Isolasi I/O blocking Redb untuk handler RPC dicatat sebagai tiket berikutnya, `AUR-RUNTIME-013`, dan memerlukan suite liveness khusus setelah implementasi.
 
+### Addendum 14 — BFT Consensus Pacemaker & Equivocation Hardening
+
+Addendum 14 memvalidasi remediasi Era XII pada layer konsensus BFT dan menutup tiga temuan utama yang berkaitan dengan pacemaker, liveness, dan anti-replay voting:
+
+| Area | Bukti | Hasil |
+| :--- | :--- | :---: |
+| AUR-CONS-001 | Standardisasi fixture deterministik dan langkah liveness step-up pada reactor | **PASS** |
+| AUR-CONS-002 | Bounded round drift (`MAX_ROUND_DRIFT = 10`) dan validasi proposal sebelum mutasi state | **PASS** |
+| AUR-CONS-003 | Vote deduplication slot-based dan penolakan ekuivokasi suara | **PASS** |
+| Integrasi multi-reactor | 5/5 `bft_reactor_integration` beroperasi dengan round-2 catch-up stabil | **PASS** |
+| Guardrail | Zero unsafe, zero floating-point, dan sinkronisasi spesifikasi dokumentasi | **PASS 100%** |
+
+Dari sisi bukti empiris, `cargo test -p aurion --lib consensus::bft`, `cargo test --test adversarial_consensus`, dan `cargo test --test bft_reactor_integration` semua kembali sukses, serta `python tools/guardrail.py` dan `cargo clippy --all-targets -- -D warnings` tidak menghasilkan kegagalan.
+
 ---
 
 ## 2. Bukti Eksekusi Test Runner Internal (`aurion audit run`)
