@@ -9,6 +9,10 @@ LOG_ROOT="${RUNTIME_ROOT}/logs"
 BOOTNODE_BIN="${BOOTNODE_ROOT}/target/release/aurion-bootnode"
 AURION_BIN="${AURION_ROOT}/target/release/aurion"
 TIMEOUT_SECONDS="${AURION_WSL_TIMEOUT_SECONDS:-90}"
+KEEP_ALIVE=0
+if [[ "${1:-}" == "--keep-alive" || "${1:-}" == "-k" ]]; then
+    KEEP_ALIVE=1
+fi
 
 BOOTNODE_PID=""
 VALIDATOR_PIDS=()
@@ -115,6 +119,19 @@ while (( SECONDS < deadline )); do
         if (( heights[0] >= 2 && heights[1] >= 2 && heights[2] >= 2 && heights[3] >= 2 )); then
             log "PASS: bootnode discovery and four-validator BFT reached height >= 2."
             log "Explorer: open http://localhost:3000 after starting aurion-explorer with NEXT_PUBLIC_API_URL=http://localhost:8080."
+            if (( KEEP_ALIVE == 1 )); then
+                printf '\n%s\n' '================================================================='
+                printf '%s\n' 'AURION LOCAL DEVNET IS LIVE (WSL2)'
+                printf '%s\n' '================================================================='
+                printf '%s\n' 'Bootnode P2P       : tcp://127.0.0.1:7000'
+                printf '%s\n' 'Bootnode Telemetry : http://127.0.0.1:8080 (WS: ws://127.0.0.1:8080/ws/telemetry)'
+                printf '%s\n' 'Validator 0 RPC    : http://127.0.0.1:8545'
+                printf '%s\n' 'Explorer URL        : http://localhost:3000'
+                printf '\n%s\n' 'Start Explorer in another terminal:'
+                printf '%s\n' '  cd /mnt/c/Projects/aurion-explorer && npm run dev'
+                printf '\n%s\n' 'Press ENTER or Ctrl+C to stop all nodes.'
+                read -r _ < /dev/tty 2>/dev/null || wait
+            fi
             exit 0
         fi
     fi
