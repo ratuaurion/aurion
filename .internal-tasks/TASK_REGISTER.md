@@ -538,7 +538,7 @@ python tools/guardrail.py
 | Task ID | Nama Tugas | Status | Target Investigasi / Acceptance Criteria | Invariant Terkait |
 | :--- | :--- | :---: | :--- | :--- |
 | **AUR-STOR-001** | **Redb ACID Crash-Consistency & Multi-Table Rollback** | **SELESAI** | Menguji transaksi penulisan blok atomik pada tabel `block header`, `accounts`, dan `tx index`; abort transaksi sebelum `.commit()` harus meninggalkan database pada state terakhir valid tanpa partial-write leak atau corrupt. | AUR-ARCH-005, AUR-ARCH-009, AUR-STORAGE-* |
-| **AUR-RPC-002** | **RPC Payload Size Limit & Ingress Guard** | **TODO / OPEN** | Menetapkan batas HTTP/RPC payload maksimum 128 KB; permintaan berlebih ditolak dengan status HTTP 413 atau `PayloadTooLarge` sebelum masuk ke storage / mempool. | AUR-ARCH-009, AUR-APP-02, AUR-SEC-008 |
+| **AUR-RPC-002** | **RPC Payload Size Limit & Ingress Guard** | **SELESAI** | Menetapkan batas HTTP/RPC payload maksimum 128 KB; permintaan berlebih ditolak dengan status HTTP 413 atau `PayloadTooLarge` sebelum masuk ke storage / mempool. | AUR-ARCH-009, AUR-APP-02, AUR-SEC-008 |
 
 * **2026-09-22:** Kickoff Era XII. Stress test terisolasi AUR-CONS-001 lulus 5/5, sedangkan suite adversarial paralel gagal intermiten pada assertion proposer online di `tests/adversarial_consensus.rs:167`. Diagnosis: fixture memakai keypair acak dan fallback satu langkah, bukan race port atau timeout reactor.
 * **2026-09-22:** Penyelesaian AUR-CONS-001: fixture `ClusterFixture` memakai seed validator deterministik dan test offline-validator menjalankan step-up round berulang sampai proposer aktif terpilih. Suite adversarial paralel 8/8 PASS; stress test 5/5 PASS; Clippy dan guardrail PASS.

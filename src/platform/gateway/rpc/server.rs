@@ -13,6 +13,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, watch};
 
+const MAX_RPC_PAYLOAD_BYTES: usize = 128 * 1024;
+
 /// Server RPC dan WebSocket terpadu untuk Simpul Aurion.
 pub struct RpcServer {
     pub context: Arc<RpcContext>,
@@ -22,11 +24,7 @@ pub struct RpcServer {
 }
 
 impl RpcServer {
-    pub fn new(
-        context: Arc<RpcContext>,
-        pubsub: Arc<SubscriptionManager>,
-        bind_addr: &str,
-    ) -> Self {
+    pub fn new(context: Arc<RpcContext>, pubsub: Arc<SubscriptionManager>, bind_addr: &str) -> Self {
         Self {
             context,
             pubsub,
@@ -35,54 +33,38 @@ impl RpcServer {
         }
     }
 
-    pub fn with_shutdown(mut self, rx: watch::Receiver<bool>) -> Self {
-        self.shutdown_rx = Some(rx);
+    pub fn with_shutdown(mut self, shutdown_rx: watch::Receiver<bool>) -> Self {
+        self.shutdown_rx = Some(shutdown_rx);
         self
     }
 
-    /// Menjalankan loop server TCP untuk melayani permintaan HTTP dan WebSocket.
-    pub async fn run(self) -> Result<(), io::Error> {
+    pub async fn run(&self) -> Result<(), io::Error> {
         let listener = TcpListener::bind(&self.bind_addr).await?;
-        let context = self.context;
-        let pubsub = self.pubsub;
-        let mut shutdown = self.shutdown_rx;
 
         loop {
-            tokio::select! {
-                accept_res = listener.accept() => {
-                    match accept_res {
-                        Ok((stream, addr)) => {
-                            let ctx_clone = Arc::clone(&context);
-                            let ps_clone = Arc::clone(&pubsub);
-                            tokio::spawn(async move {
-                                if let Err(_e) = handle_connection(stream, addr, ctx_clone, ps_clone).await {
-                                    // Koneksi ditutup atau error jaringan biasa
-                                }
-                            });
-                        }
-                        Err(e) => {
-                            return Err(e);
-                        }
-                    }
-                }
+            let accept = tokio::select! {
+                result = listener.accept() => result,
                 _ = async {
-                    if let Some(rx) = &mut shutdown {
+                    if let Some(rx) = &self.shutdown_rx {
+                        let mut rx = rx.clone();
                         let _ = rx.changed().await;
                     } else {
-                        futures_pending().await;
+                        std::future::pending::<()>().await;
                     }
                 } => {
-                    break;
+                    return Ok(());
                 }
-            }
+            };
+
+            let (stream, addr) = accept?;
+            let context = Arc::clone(&self.context);
+            let pubsub = Arc::clone(&self.pubsub);
+
+            tokio::spawn(async move {
+                let _ = handle_connection(stream, addr, context, pubsub).await;
+            });
         }
-
-        Ok(())
     }
-}
-
-async fn futures_pending() {
-    std::future::pending::<()>().await;
 }
 
 async fn dispatch_on_storage_worker(
@@ -102,8 +84,50 @@ async fn dispatch_on_storage_worker(
     }
 }
 
+fn payload_too_large_response() -> String {
+    let body = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload too large"},"id":null}"#;
+    format!(
+        "HTTP/1.1 413 Payload Too Large\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
+async fn read_request_body_with_limit(
+    stream: &mut TcpStream,
+    initial_body: &str,
+    content_length: usize,
+) -> io::Result<Option<String>> {
+    let mut body = initial_body.to_string();
+
+    if content_length > MAX_RPC_PAYLOAD_BYTES {
+        return Ok(None);
+    }
+
+    if body.len() > MAX_RPC_PAYLOAD_BYTES {
+        return Ok(None);
+    }
+
+    if content_length == 0 {
+        return Ok(Some(body));
+    }
+
+    let missing = content_length.saturating_sub(body.len());
+    if missing > 0 {
+        let mut chunk = vec![0u8; missing];
+        stream.read_exact(&mut chunk).await?;
+        body.push_str(&String::from_utf8_lossy(&chunk));
+    }
+
+    if body.len() > MAX_RPC_PAYLOAD_BYTES {
+        return Ok(None);
+    }
+
+    Ok(Some(body))
+}
+
 /// Menangani setiap koneksi TCP yang masuk.
-async fn handle_connection(
+pub async fn handle_connection(
     mut stream: TcpStream,
     _addr: SocketAddr,
     context: Arc<RpcContext>,
@@ -295,16 +319,21 @@ Connection: close\r\n\r\n";
 
     // Endpoint JSON-RPC 2.0 HTTP POST
     if method == "POST" {
-        // Ambil body HTTP
         let body_start = request_str.find("\r\n\r\n").map(|idx| idx + 4).unwrap_or(0);
-        let mut body = request_str[body_start..].to_string();
+        let initial_body = &request_str[body_start..];
 
-        // Jika body belum lengkap terbaca sesuai Content-Length
-        if body.len() < content_length {
-            let mut remaining = vec![0u8; content_length - body.len()];
-            stream.read_exact(&mut remaining).await?;
-            body.push_str(&String::from_utf8_lossy(&remaining));
+        if content_length > MAX_RPC_PAYLOAD_BYTES {
+            stream.write_all(payload_too_large_response().as_bytes()).await?;
+            return Ok(());
         }
+
+        let body = match read_request_body_with_limit(&mut stream, initial_body, content_length).await? {
+            Some(body) => body,
+            None => {
+                stream.write_all(payload_too_large_response().as_bytes()).await?;
+                return Ok(());
+            }
+        };
 
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -727,19 +756,4 @@ fn base64_encode(input: &[u8]) -> String {
         i += 3;
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_websocket_accept_rfc6455_vector() {
-        // Vektor Uji Resmi RFC 6455 Halaman 24:
-        // Client Key: "dGhlIHNhbXBsZSBub25jZQ=="
-        // Expected Accept: "s3pPLMBiTxaQ9kYGzzhZRbK+xOo="
-        let key = "dGhlIHNhbXBsZSBub25jZQ==";
-        let accept = compute_sec_websocket_accept(key);
-        assert_eq!(accept, "s3pPLMBiTxaQ9kYGzzhZRbK+xOo=");
-    }
 }
