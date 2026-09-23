@@ -3,6 +3,7 @@
 
 pub mod consistency;
 pub mod errors;
+pub mod explorer_api;
 pub mod methods;
 pub mod pubsub;
 pub mod server;

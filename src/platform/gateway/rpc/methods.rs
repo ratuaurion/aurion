@@ -2,6 +2,7 @@
 //! Mematuhi Dokumen 02 (02-RPC-API-RULES.md Bagian 4).
 
 use crate::codec::CanonicalDecode;
+use crate::consensus::bft::Block;
 use crate::consensus::certificate::CommitCertificate;
 use crate::consensus::header::BlockHeader;
 use crate::core::{Address, Hash256, Quantum};
@@ -13,9 +14,22 @@ use crate::gateway::rpc::types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 use crate::mempool::MempoolEngine;
 use crate::state::account::Account;
 use crate::transaction::types::Transaction;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Kapasitas buffer transaksi terkonfirmasi terkini untuk endpoint `/api/v1/transactions/recent`.
+pub const RECENT_TX_CAPACITY: usize = 256;
+
+/// Ringkasan transaksi terkonfirmasi untuk telemetri explorer (Zero-Float, integer murni).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CommittedTxSummary {
+    pub height: u64,
+    pub tx_id: Hash256,
+    pub tx: Transaction,
+    pub received_at: u64,
+}
 
 /// Konteks state bersama untuk melayani query dan submit JSON-RPC 2.0.
 pub struct RpcContext {
@@ -29,10 +43,17 @@ pub struct RpcContext {
     pub faucet: Arc<Mutex<Option<FaucetDispenser>>>,
     pub metrics: Arc<crate::platform::telemetry::MetricsRegistry>,
     pub health: Arc<crate::platform::telemetry::HealthReporter>,
+    pub process_started_at: Arc<AtomicU64>,
+    pub tx_counts: Arc<Mutex<HashMap<u64, u64>>>,
+    pub recent_transactions: Arc<Mutex<VecDeque<CommittedTxSummary>>>,
 }
 
 impl RpcContext {
     pub fn new(chain_id: u32) -> Self {
+        let started_at = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
         Self {
             chain_id,
             current_height: Arc::new(AtomicU64::new(0)),
@@ -52,6 +73,50 @@ impl RpcContext {
                 crate::runtime::config::NodeRole::FullNode,
                 0,
             )),
+            process_started_at: Arc::new(AtomicU64::new(started_at)),
+            tx_counts: Arc::new(Mutex::new(HashMap::new())),
+            recent_transactions: Arc::new(Mutex::new(VecDeque::new())),
+        }
+    }
+
+    /// Durasi uptime proses simpul dalam detik (basis integer murni, Zero-Float).
+    pub fn node_uptime_secs(&self) -> u64 {
+        let started = self.process_started_at.load(Ordering::SeqCst);
+        if started == 0 {
+            return 0;
+        }
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_secs())
+            .unwrap_or(0);
+        now.saturating_sub(started)
+    }
+
+    /// Rekam ringkasan blok terkomit (tx_count & transaksi terbaru) untuk endpoint explorer.
+    ///
+    /// Idempoten: blok dengan tinggi yang sudah tercatat tidak diproses ulang,
+    /// sehingga `sync_rpc_context` yang dijalankan berulang tidak menimbulkan duplikasi.
+    pub fn record_committed_block(&self, block: &Block) {
+        let height = block.height();
+        let mut counts = self.tx_counts.lock().unwrap();
+        if counts.contains_key(&height) {
+            return;
+        }
+        counts.insert(height, block.transactions.len() as u64);
+        drop(counts);
+
+        let timestamp = block.header.timestamp;
+        let mut recent = self.recent_transactions.lock().unwrap();
+        for tx in &block.transactions {
+            recent.push_back(CommittedTxSummary {
+                height,
+                tx_id: tx.compute_tx_id(),
+                tx: tx.clone(),
+                received_at: timestamp,
+            });
+        }
+        while recent.len() > RECENT_TX_CAPACITY {
+            recent.pop_front();
         }
     }
 

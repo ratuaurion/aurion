@@ -1,6 +1,7 @@
 //! Server JSON-RPC 2.0 dan WebSocket Simpul Aurion.
 //! Mematuhi Dokumen 02 (02-RPC-API-RULES.md) dan Invariant AUR-ARCH-011 & AUR-ARCH-012.
 
+use crate::gateway::rpc::explorer_api;
 use crate::gateway::rpc::methods::RpcContext;
 use crate::gateway::rpc::pubsub::{SubscriptionManager, SubscriptionTopic};
 use crate::gateway::rpc::types::{
@@ -93,6 +94,16 @@ fn payload_too_large_response() -> String {
     )
 }
 
+/// Menulis respon HTTP 200 JSON dengan header CORS universal untuk REST Explorer API v1.
+async fn write_json_200<W: AsyncWriteExt + Unpin>(writer: &mut W, body: &str) -> io::Result<()> {
+    let response = format!(
+        "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    );
+    writer.write_all(response.as_bytes()).await
+}
+
 async fn read_request_body_with_limit(
     stream: &mut TcpStream,
     initial_body: &str,
@@ -177,7 +188,7 @@ pub async fn handle_connection(
 
     if is_ws_upgrade {
         if let Some(key) = ws_key {
-            return handle_websocket_upgrade(stream, &key, context, pubsub).await;
+            return handle_websocket_upgrade(stream, &key, path, context, pubsub).await;
         }
     }
 
@@ -317,6 +328,34 @@ Connection: close\r\n\r\n";
         return Ok(());
     }
 
+    // Endpoint REST Explorer API v1 (Opsi B — Gateway Terpadu)
+    if method == "GET" && path == "/api/v1/network/stats" {
+        let body = explorer_api::render_network_stats(&context);
+        return write_json_200(&mut stream, &body).await;
+    }
+
+    if method == "GET" && path == "/api/v1/peers" {
+        let body = explorer_api::render_peers(&context);
+        return write_json_200(&mut stream, &body).await;
+    }
+
+    if method == "GET"
+        && (path == "/api/v1/blocks/latest" || path.starts_with("/api/v1/blocks/latest?"))
+    {
+        let limit = explorer_api::parse_limit(path);
+        let body = explorer_api::render_latest_blocks(&context, limit);
+        return write_json_200(&mut stream, &body).await;
+    }
+
+    if method == "GET"
+        && (path == "/api/v1/transactions/recent"
+            || path.starts_with("/api/v1/transactions/recent?"))
+    {
+        let limit = explorer_api::parse_limit(path);
+        let body = explorer_api::render_recent_transactions(&context, limit);
+        return write_json_200(&mut stream, &body).await;
+    }
+
     // Endpoint JSON-RPC 2.0 HTTP POST
     if method == "POST" {
         let body_start = request_str.find("\r\n\r\n").map(|idx| idx + 4).unwrap_or(0);
@@ -373,6 +412,7 @@ Connection: close\r\n\r\n";
 async fn handle_websocket_upgrade(
     mut stream: TcpStream,
     sec_key: &str,
+    path: &str,
     context: Arc<RpcContext>,
     pubsub: Arc<SubscriptionManager>,
 ) -> Result<(), io::Error> {
@@ -382,6 +422,11 @@ async fn handle_websocket_upgrade(
         accept_key
     );
     stream.write_all(handshake_resp.as_bytes()).await?;
+
+    // Jalur telemetri explorer (/ws/telemetry) mendapat siklus poke terpisah.
+    if path == "/ws/telemetry" {
+        return handle_telemetry_websocket(stream, pubsub).await;
+    }
 
     let (mut read_half, mut write_half) = stream.into_split();
     let (tx, mut rx) = mpsc::unbounded_channel::<String>();
@@ -489,6 +534,48 @@ async fn handle_websocket_upgrade(
         pubsub.unsubscribe(sub_id);
     }
 
+    Ok(())
+}
+
+/// Menangani WebSocket telemetri explorer (`GET /ws/telemetry`).
+///
+/// Pendengar ini berlangganan topik `newHeads`; setiap blok baru yang ter-commit
+/// memicu event poke `{ "event": "new_block" }` sehingga `aurion-explorer`
+/// langsung melakukan sinkronisasi ulang pada poll berikutnya.
+async fn handle_telemetry_websocket(
+    stream: TcpStream,
+    pubsub: Arc<SubscriptionManager>,
+) -> Result<(), io::Error> {
+    let (mut read_half, mut write_half) = stream.into_split();
+    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+    let _sub_id = pubsub.subscribe(SubscriptionTopic::NewHeads, tx.clone());
+
+    // Poke awal saat koneksi dibuka agar explorer segera sinkron.
+    if write_half
+        .write_all(&make_ws_text_frame(r#"{"event":"connected"}"#))
+        .await
+        .is_err()
+    {
+        return Ok(());
+    }
+
+    let mut ws_reader = WsFrameReader::new();
+    loop {
+        tokio::select! {
+            Some(_payload) = rx.recv() => {
+                let frame = make_ws_text_frame(r#"{"event":"new_block"}"#);
+                if write_half.write_all(&frame).await.is_err() {
+                    break;
+                }
+            }
+            res = ws_reader.read_frame(&mut read_half) => {
+                match res {
+                    Ok(Some(WsFrame::Close)) | Ok(None) | Err(_) => break,
+                    _ => {}
+                }
+            }
+        }
+    }
     Ok(())
 }
 

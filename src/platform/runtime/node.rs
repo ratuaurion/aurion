@@ -126,6 +126,9 @@ impl AurionNode {
                     .unwrap()
                     .insert(h as u64, b.header.clone());
             }
+            for b in &guard.blocks {
+                rpc_context.record_committed_block(b);
+            }
         }
 
         let bft_engine = Arc::new(Mutex::new(BftEngine::new(
@@ -173,6 +176,10 @@ impl AurionNode {
             if let Some(cert) = &block.commit_certificate {
                 certs_guard.insert(block.height(), cert.clone());
             }
+        }
+
+        for block in &ledger_guard.blocks {
+            self.rpc_context.record_committed_block(block);
         }
     }
 
@@ -576,6 +583,7 @@ impl AurionNode {
             .lock()
             .unwrap()
             .insert(block_height, certificate_snapshot);
+        self.rpc_context.record_committed_block(&block);
 
         // 4. Siarkan notifikasi real-time via WebSocket dan perbarui metrik
         self.rpc_context.metrics.record_block(
