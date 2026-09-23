@@ -5,7 +5,7 @@ wallet, dan protokol wire Aurion. Fokus dokumen adalah isu teknis dan keamanan;
 temuan guardrail administratif tidak dibahas di sini.
 
 Setiap temuan pada dokumen ini telah diverifikasi ulang terhadap isi source code,
-dokumen konstitusi, dan artefak pada commit terakhir `dd34f7c` (09-2026-09-19).
+dokumen konstitusi, dan artefak pada commit terakhir `a93897c` (09-2026-09-23).
 Kolom **verifikasi** menjelaskan bukti lokasi dan status akurasi temuan.
 
 ## 1. Status Audit
@@ -40,6 +40,7 @@ code, zero floating-point, 38/38 dokumen spesifikasi hadir.
 | AUR-ISSUE-008 | Format CommitCertificate berbeda dari dokumentasi | High | Closed | ✅ Terverifikasi & diremediasi (format Vote 117B kanonikal + decoder bounded) |
 | AUR-ISSUE-009 | Validasi frame belum menegakkan semua batas | High | Closed | ✅ Terverifikasi & diremediasi (strict wire validation + tests) |
 | AUR-ISSUE-010 | Genesis artifact belum diverifikasi terhadap binary aktif | High | Closed | ✅ Terverifikasi & diremediasi (embedded artifact + hash/state-root assertions) |
+| AUR-ISSUE-011 | Gateway validator macet (wedge) di bawah beban klien berkelanjutan | High | Open | ✅ Terverifikasi (reproduksi 3-node, konsensus tetap sehat) |
 
 ## 3. Temuan Detail
 
@@ -494,6 +495,52 @@ belum menolak genesis mismatch terhadap nilai yang diratifikasi.
 - Dengan demikian file lokal tidak dapat mengubah genesis Mainnet; jaringan
   custom harus menggunakan jalur konfigurasi eksplisit terpisah dan tidak
   memanggil loader Mainnet kanonikal.
+
+### AUR-ISSUE-011: Gateway Validator Macet (Wedge) di Bawah Beban Klien
+
+**Prioritas:** High
+**Status:** Open
+**Lokasi:** `src/platform/gateway/rpc/server.rs`, `src/platform/gateway/rpc/explorer_api.rs`, `src/platform/runtime/node.rs` (jalur `sync_rpc_context` + `record_committed_block`)
+
+Gateway HTTP/WS pada proses validator macet total secara per-node di bawah beban klien berkelanjutan, sementara konsensus node tetap sehat. Ditangkap saat uji Live E2E explorer (commit `a93897c`, binary release, kluster WSL).
+
+**Reproduksi (12-09-2026, kluster 3-node `validator start --dev --index {0,1,2}`):**
+
+- Topologi mesh lokal: node0 `:7001/:8545`, node1 `:7002/:8546`, node2 `:7003/:8547`;
+- **Data dir redb di `/tmp/aurion_solo/*.redb` (filesystem Linux native, BUKAN `/mnt/c`)**;
+- Konsensus sehat: height node0 41 → 83 selama ~32 dtk (~1.3 blok/dtk), hingga node0 dipolis.
+- Wedge pada **node0 wilayah :8545 saja** setelah pols berkelanjutan (JSON-RPC height tiap 4 dtk + `/api/v1/network/stats` + `/api/v1/blocks/latest` + WS telemetry + curl):
+  - `ss`: `LISTEN recv-q=8` (backlog kernel penuh) — listener tidak lagi `accept()`;
+  - socket `CLOSE-WAIT` menumpuk (107 & 177) dan `ESTAB` dengan 627/642 byte terbaca belum terkirim;
+  - CPU proses 0.1% (idle), log bersih tanpa error/panic, thread count tetap (~11), fd ~39-40 (bukan leak);
+- Kontrol sehat pada sesi yang sama: node1 `:8546` & node2 `:8547` `recv-q=0` melayani `/api/v1/network/stats` cepat (`uptime_secs=186`); JSON-RPC height node1 `=83`; standalone `aurion rpc --bind 127.0.0.1:18545` (kode sama) stabil >90 dtk di bawah beban campur (~20 ms);
+- Anomali run sebelumnya (4-node): node1/node2 wedged **tanpa pernah dipanggil `/api/v1`** (hanya `/healthz`), height antar node divergen (77 vs 33) — wedge bersifat per-node stokastik.
+
+**Atribusi (mengeliminasi kandidat):**
+
+- ✗ BUKAN kode baru gateway: wedge terjadi tanpa `/api/v1` dipanggil (bukti run 4-node);
+- ✗ BUKAN konsensus: height terus naik (node1 `=83`) dan gateway node tetangga sehat;
+- ✗ BUKAN thread/fd leak: jumlah thread & fd stabil, CPU idle;
+- ✗ BUKAN I/O Redb di `/mnt/c` (9P): reproduksi memakai data dir native `/tmp` dan tetap wedge;
+- ◯ Konsisten dengan **sync-blocking di handler** (hipotesis pengguna #3): operasi blocking (pembacaan Redb + `std::sync::Mutex` di jalur render) pada worker runtime Tokio dapat membuat giliran kerja *accept* kelaparan. Perlu konfirmasi lebih lanjut.
+
+**Kandidat remediasi (belum diterapkan):**
+
+1. Pindahkan pembacaan Redb di handler (`explorer_api.rs` / `server.rs`) ke
+   `tokio::task::spawn_blocking` atau gunakan lock async agar tidak memblokir
+   worker Tokio;
+2. Periksa jalur `sync_rpc_context` + `record_committed_block` di `node.rs`
+   agar penulisan `recent_transactions`/`tx_counts` tidak menahan lock saat
+   terjadi kontensi memori pool/gateway;
+3. Konsensus BFT: selaraskan `propose_timeout` / `vote_timeout` agar toleran
+   CPU lambat di virtualisasi (mengurangi divergensi run 4-node);
+4. Reproduksi lanjutan yang disarankan: beban polling *hanya* seperti explorer
+   (beberapa request/10 dtk) untuk menentukan threshold trigger, dan pengulangan
+   kluster 4-node native Windows untuk memisahkan faktor WSL.
+
+**Verifikasi terbuka:** pastikan kembali nama field JSON respons
+`/api/v1/blocks/latest` (Height/Timestamp/Hash) terhadap kontrak TypeScript
+`aurion-explorer` ketika kluster sehat.
 
 ## 4. Urutan Perbaikan
 
