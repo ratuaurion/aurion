@@ -1,4 +1,4 @@
-//! Server JSON-RPC 2.0 dan WebSocket Simpul Aurion.
+﻿//! Server JSON-RPC 2.0 dan WebSocket Simpul Aurion.
 //! Mematuhi Dokumen 02 (02-RPC-API-RULES.md) dan Invariant AUR-ARCH-011 & AUR-ARCH-012.
 
 use crate::gateway::rpc::explorer_api;
@@ -94,14 +94,27 @@ fn payload_too_large_response() -> String {
     )
 }
 
-/// Menulis respon HTTP 200 JSON dengan header CORS universal untuk REST Explorer API v1.
-async fn write_json_200<W: AsyncWriteExt + Unpin>(writer: &mut W, body: &str) -> io::Result<()> {
+/// Menulis respon HTTP 200 JSON dengan header CORS universal untuk REST Explorer API v1,
+/// lalu menutup sisi tulis soket secara eksplisit agar FIN terkirim segera dan
+/// koneksi tidak tersangkut dalam status CLOSE_WAIT di sisi server.
+async fn write_json_200(writer: &mut TcpStream, body: &str) -> io::Result<()> {
     let response = format!(
         "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),
         body
     );
-    writer.write_all(response.as_bytes()).await
+    write_response_and_shutdown(writer, response).await
+}
+
+/// Menulis sisa byte respon lalu mengakhiri sisi tulis soket (shutdown write).
+///
+/// Langkah ini memicu pengiriman FIN segera setelah payload terkirim sehingga
+/// kernel dapat menuntaskan handshake penutupan dan soket tidak bertahan dalam
+/// status CLOSE_WAIT / TIME_WAIT yang menumpuk (AUR-ISSUE-011).
+async fn write_response_and_shutdown(stream: &mut TcpStream, response: impl AsRef<str>) -> io::Result<()> {
+    let written = stream.write_all(response.as_ref().as_bytes()).await;
+    let _ = stream.shutdown().await;
+    written
 }
 
 async fn read_request_body_with_limit(
@@ -201,7 +214,7 @@ Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
 Access-Control-Max-Age: 86400\r\n\
 Content-Length: 0\r\n\
 Connection: close\r\n\r\n";
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
@@ -213,7 +226,7 @@ Connection: close\r\n\r\n";
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
@@ -225,7 +238,7 @@ Connection: close\r\n\r\n";
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
@@ -242,7 +255,7 @@ Connection: close\r\n\r\n";
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
@@ -254,19 +267,24 @@ Connection: close\r\n\r\n";
             html.len(),
             html
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
-    // Endpoint REST Explorer Stats (NET-012)
+// Endpoint REST Explorer Stats (NET-012)
     if method == "GET" && (path == "/explorer/stats" || path == "/explorer/summary") {
-        let body = crate::gateway::explorer::render_explorer_stats(&context);
+        let ctx = Arc::clone(&context);
+        let body = tokio::task::spawn_blocking(move || {
+            crate::gateway::explorer::render_explorer_stats(&ctx)
+        })
+        .await
+        .unwrap_or_default();
         let response = format!(
             "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
@@ -284,13 +302,19 @@ Connection: close\r\n\r\n";
         };
 
         if let Some(h) = height {
-            if let Some(body) = crate::gateway::explorer::render_block_by_height(&context, h) {
+            let ctx = Arc::clone(&context);
+            let body = tokio::task::spawn_blocking(move || {
+                crate::gateway::explorer::render_block_by_height(&ctx, h)
+            })
+            .await
+            .unwrap_or(None);
+            if let Some(body) = body {
                 let response = format!(
                     "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                     body.len(),
                     body
                 );
-                stream.write_all(response.as_bytes()).await?;
+                write_response_and_shutdown(&mut stream, response).await?;
                 return Ok(());
             }
         }
@@ -301,20 +325,26 @@ Connection: close\r\n\r\n";
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
     // Endpoint REST Explorer Transaction (NET-012)
     if method == "GET" && path.starts_with("/explorer/tx/") {
-        let tx_hash = &path["/explorer/tx/".len()..];
-        if let Some(body) = crate::gateway::explorer::render_tx_by_hash(&context, tx_hash) {
+        let tx_hash = path["/explorer/tx/".len()..].to_string();
+        let ctx = Arc::clone(&context);
+        let body = tokio::task::spawn_blocking(move || {
+            crate::gateway::explorer::render_tx_by_hash(&ctx, &tx_hash)
+        })
+        .await
+        .unwrap_or(None);
+        if let Some(body) = body {
             let response = format!(
                 "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 body.len(),
                 body
             );
-            stream.write_all(response.as_bytes()).await?;
+            write_response_and_shutdown(&mut stream, response).await?;
             return Ok(());
         }
 
@@ -324,11 +354,11 @@ Connection: close\r\n\r\n";
             body.len(),
             body
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
-    // Endpoint REST Explorer API v1 (Opsi B — Gateway Terpadu)
+    // Endpoint REST Explorer API v1 (Opsi B â€” Gateway Terpadu)
     if method == "GET" && path == "/api/v1/network/stats" {
         let body = explorer_api::render_network_stats(&context);
         return write_json_200(&mut stream, &body).await;
@@ -343,7 +373,11 @@ Connection: close\r\n\r\n";
         && (path == "/api/v1/blocks/latest" || path.starts_with("/api/v1/blocks/latest?"))
     {
         let limit = explorer_api::parse_limit(path);
-        let body = explorer_api::render_latest_blocks(&context, limit);
+        let ctx = Arc::clone(&context);
+        let body =
+            tokio::task::spawn_blocking(move || explorer_api::render_latest_blocks(&ctx, limit))
+                .await
+                .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 
@@ -352,7 +386,11 @@ Connection: close\r\n\r\n";
             || path.starts_with("/api/v1/transactions/recent?"))
     {
         let limit = explorer_api::parse_limit(path);
-        let body = explorer_api::render_recent_transactions(&context, limit);
+        let ctx = Arc::clone(&context);
+        let body =
+            tokio::task::spawn_blocking(move || explorer_api::render_recent_transactions(&ctx, limit))
+                .await
+                .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 
@@ -362,14 +400,14 @@ Connection: close\r\n\r\n";
         let initial_body = &request_str[body_start..];
 
         if content_length > MAX_RPC_PAYLOAD_BYTES {
-            stream.write_all(payload_too_large_response().as_bytes()).await?;
+            write_response_and_shutdown(&mut stream, payload_too_large_response()).await?;
             return Ok(());
         }
 
         let body = match read_request_body_with_limit(&mut stream, initial_body, content_length).await? {
             Some(body) => body,
             None => {
-                stream.write_all(payload_too_large_response().as_bytes()).await?;
+                write_response_and_shutdown(&mut stream, payload_too_large_response()).await?;
                 return Ok(());
             }
         };
@@ -398,13 +436,13 @@ Connection: close\r\n\r\n";
             response_payload.len(),
             response_payload
         );
-        stream.write_all(response.as_bytes()).await?;
+        write_response_and_shutdown(&mut stream, response).await?;
         return Ok(());
     }
 
     // Default: Method Not Allowed
     let not_allowed = "HTTP/1.1 405 Method Not Allowed\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-    stream.write_all(not_allowed.as_bytes()).await?;
+    write_response_and_shutdown(&mut stream, not_allowed).await?;
     Ok(())
 }
 

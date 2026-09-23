@@ -18,6 +18,7 @@
 //! - `GET /api/v1/transactions/recent?limit=N`
 
 use crate::codec::CanonicalEncode;
+use crate::consensus::bft::header::BlockHeader;
 use crate::gateway::rpc::methods::{CommittedTxSummary, RpcContext};
 use crate::runtime::config::NodeConfig;
 use crate::transaction::types::{transaction_wire_size, Transaction};
@@ -91,28 +92,39 @@ pub fn render_peers(ctx: &RpcContext) -> String {
 }
 
 /// Render `GET /api/v1/blocks/latest?limit=N` dari katalog header in-memory.
+///
+/// Mutex `headers` dan `tx_counts` hanya di-lock sesaat untuk mengkloning data
+/// kecil (header + tx_count), lalu dilepas sebelum serialisasi JSON agar tidak
+/// menahan worker Tokio / bersaing lama dengan jalur konsensus (AUR-ISSUE-011).
 pub fn render_latest_blocks(ctx: &RpcContext, limit: usize) -> String {
     let height = ctx.current_height.load(Ordering::SeqCst);
     if height == 0 {
         return r#"{"status":"ok","count":0,"blocks":[]}"#.to_string();
     }
 
-    let headers_guard = ctx.headers.lock().unwrap();
-    let tx_counts_guard = ctx.tx_counts.lock().unwrap();
     let count = limit.min(height.saturating_add(1) as usize);
     let start = height.saturating_sub(count.saturating_sub(1) as u64);
 
-    let mut blocks_json = Vec::with_capacity(count);
-    for h in start..=height {
-        if let Some(header) = headers_guard.get(&h) {
-            let block_hash = hex::encode(header.compute_block_hash().as_bytes());
-            let prev_hash = hex::encode(header.prev_block_hash.as_bytes());
-            let tx_count = tx_counts_guard.get(&h).copied().unwrap_or(0);
-            blocks_json.push(format!(
-                r#"{{"height":{},"hash":"0x{}","prev_hash":"0x{}","timestamp":{},"tx_count":{},"received_at":{}}}"#,
-                h, block_hash, prev_hash, header.timestamp, tx_count, header.timestamp
-            ));
+    let mut items: Vec<(u64, BlockHeader, u64)> = Vec::with_capacity(count);
+    {
+        let headers_guard = ctx.headers.lock().unwrap();
+        let tx_counts_guard = ctx.tx_counts.lock().unwrap();
+        for h in start..=height {
+            if let Some(header) = headers_guard.get(&h) {
+                let tx_count = tx_counts_guard.get(&h).copied().unwrap_or(0);
+                items.push((h, header.clone(), tx_count));
+            }
         }
+    }
+
+    let mut blocks_json = Vec::with_capacity(items.len());
+    for (h, header, tx_count) in items {
+        let block_hash = hex::encode(header.compute_block_hash().as_bytes());
+        let prev_hash = hex::encode(header.prev_block_hash.as_bytes());
+        blocks_json.push(format!(
+            r#"{{"height":{},"hash":"0x{}","prev_hash":"0x{}","timestamp":{},"tx_count":{},"received_at":{}}}"#,
+            h, block_hash, prev_hash, header.timestamp, tx_count, header.timestamp
+        ));
     }
 
     format!(
@@ -127,23 +139,35 @@ pub fn render_latest_blocks(ctx: &RpcContext, limit: usize) -> String {
 pub fn render_recent_transactions(ctx: &RpcContext, limit: usize) -> String {
     let mut txs_json = Vec::new();
 
-    let recent = ctx.recent_transactions.lock().unwrap();
-    let start_idx = recent.len().saturating_sub(limit);
-    for summary in recent.iter().skip(start_idx) {
+    // Lock hanya sesaat untuk mengkloning ringkasan terbaru; serialisasi dilakukan
+    // setelah mutex dilepas agar jalur konsensus tidak tertahan (AUR-ISSUE-011).
+    let summaries: Vec<CommittedTxSummary> = {
+        let recent = ctx.recent_transactions.lock().unwrap();
+        let start_idx = recent.len().saturating_sub(limit);
+        recent.iter().skip(start_idx).cloned().collect()
+    };
+    for summary in &summaries {
         txs_json.push(render_tx_summary(summary));
     }
-    drop(recent);
 
     let remaining = limit.saturating_sub(txs_json.len());
     if remaining > 0 {
-        let mempool = ctx.mempool.lock().unwrap();
-        for (tx_id, entry) in mempool.entries.iter().take(remaining) {
+        let pending: Vec<(crate::core::Hash256, Transaction, u64)> = {
+            let mempool = ctx.mempool.lock().unwrap();
+            mempool
+                .entries
+                .iter()
+                .take(remaining)
+                .map(|(tx_id, entry)| (*tx_id, entry.tx.clone(), entry.admitted_timestamp))
+                .collect()
+        };
+        for (tx_id, tx, admitted_timestamp) in pending {
             txs_json.push(format!(
                 r#"{{"tx_hash":"0x{}","raw_payload":"{}","size_bytes":{},"received_at":{}}}"#,
                 hex::encode(tx_id.as_bytes()),
-                canonical_tx_hex(&entry.tx),
-                transaction_wire_size(entry.tx.payload.len()),
-                entry.admitted_timestamp
+                canonical_tx_hex(&tx),
+                transaction_wire_size(tx.payload.len()),
+                admitted_timestamp
             ));
         }
     }
