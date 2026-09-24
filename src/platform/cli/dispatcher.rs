@@ -1049,27 +1049,28 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     loop {
                         tokio::select! {
                             _ = announce_interval.tick() => {
-                                if let Err(e) = transport
-                                    .announce_peer_canonical(
-                                        &identity,
-                                        &loc_target,
-                                        crate::wire::PEER_ROLE_FULL_NODE,
-                                    )
-                                    .await
-                                {
-                                    eprintln!("[AURION P2P] Failed to announce peer to bootnode: {e}");
+                                let fut = transport.announce_peer_canonical(
+                                    &identity,
+                                    &loc_target,
+                                    crate::wire::PEER_ROLE_FULL_NODE,
+                                );
+                                match tokio::time::timeout(std::time::Duration::from_secs(4), fut).await {
+                                    Ok(Ok(())) => {}
+                                    Ok(Err(e)) => eprintln!("[AURION P2P] Failed to announce peer to bootnode: {e}"),
+                                    Err(_) => eprintln!("[AURION P2P] Peer announce timed out (4s)"),
                                 }
                             }
                             _ = handshake_refresh_interval.tick() => {
-                                match transport
-                                    .perform_handshake(&identity, &genesis_hash, best_height)
-                                    .await
-                                {
-                                    Ok(()) => println!(
+                                let fut = transport.perform_handshake(&identity, &genesis_hash, best_height);
+                                match tokio::time::timeout(std::time::Duration::from_secs(12), fut).await {
+                                    Ok(Ok(())) => println!(
                                         "[AURION P2P] Periodic handshake refreshed with bootnode"
                                     ),
-                                    Err(e) => eprintln!(
+                                    Ok(Err(e)) => eprintln!(
                                         "[AURION P2P] Periodic handshake refresh failed: {e}"
+                                    ),
+                                    Err(_) => eprintln!(
+                                        "[AURION P2P] Periodic handshake refresh timed out (12s)"
                                     ),
                                 }
                             }
@@ -1365,27 +1366,28 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                                 loop {
                                     tokio::select! {
                                         _ = announce_interval.tick() => {
-                                            if let Err(e) = transport
-                                                .announce_peer_canonical(
-                                                    &identity,
-                                                    &loc_target,
-                                                    crate::wire::PEER_ROLE_VALIDATOR,
-                                                )
-                                                .await
-                                            {
-                                                eprintln!("[AURION VALIDATOR] PEX announce error: {e}");
+                                            let fut = transport.announce_peer_canonical(
+                                                &identity,
+                                                &loc_target,
+                                                crate::wire::PEER_ROLE_VALIDATOR,
+                                            );
+                                            match tokio::time::timeout(std::time::Duration::from_secs(4), fut).await {
+                                                Ok(Ok(())) => {}
+                                                Ok(Err(e)) => eprintln!("[AURION VALIDATOR] PEX announce error: {e}"),
+                                                Err(_) => eprintln!("[AURION VALIDATOR] PEX announce timed out (4s)"),
                                             }
                                         }
                                         _ = handshake_refresh.tick() => {
-                                            match transport
-                                                .perform_handshake(&identity, &genesis_hash, current_h)
-                                                .await
-                                            {
-                                                Ok(()) => {
+                                            let fut = transport.perform_handshake(&identity, &genesis_hash, current_h);
+                                            match tokio::time::timeout(std::time::Duration::from_secs(12), fut).await {
+                                                Ok(Ok(())) => {
                                                     println!("[AURION VALIDATOR] Bootnode handshake refreshed");
                                                 }
-                                                Err(e) => {
+                                                Ok(Err(e)) => {
                                                     eprintln!("[AURION VALIDATOR] Bootnode handshake refresh warning: {e}");
+                                                }
+                                                Err(_) => {
+                                                    eprintln!("[AURION VALIDATOR] Bootnode handshake refresh timed out (12s)");
                                                 }
                                             }
                                         }
