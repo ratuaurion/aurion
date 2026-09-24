@@ -478,6 +478,16 @@ impl AurionNode {
                                     .ok()
                                     .map(|ledger| ledger.latest_block().clone());
                                 if let Some(block) = committed_block {
+                                    let tx_ids: Vec<crate::core::Hash256> =
+                                        block.transactions.iter().map(|tx| tx.compute_tx_id()).collect();
+                                    if !tx_ids.is_empty() {
+                                        if let Ok(mut mempool) = node.mempool.lock() {
+                                            mempool.remove_finalized(&tx_ids);
+                                        }
+                                        if let Ok(mut rpc_mempool) = node.rpc_context.mempool.lock() {
+                                            rpc_mempool.remove_finalized(&tx_ids);
+                                        }
+                                    }
                                     let session = Arc::clone(&publish_session);
                                     let chain_id = node.config.chain_id;
                                     tokio::spawn(async move {

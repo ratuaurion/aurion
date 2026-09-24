@@ -6,7 +6,7 @@ use crate::consensus::bft::Block;
 use crate::consensus::certificate::CommitCertificate;
 use crate::consensus::header::BlockHeader;
 use crate::core::{Address, Hash256, Quantum};
-use crate::crypto::decode_address_bech32m;
+use crate::crypto::{decode_address_bech32m, encode_address_bech32m};
 use crate::gateway::faucet::FaucetDispenser;
 use crate::gateway::rpc::consistency::ConsistencySelector;
 use crate::gateway::rpc::errors::*;
@@ -319,11 +319,39 @@ impl RpcContext {
         tx_id_arr.copy_from_slice(&tx_id_bytes);
         let target_id = Hash256(tx_id_arr);
 
+        // 1. Cek apakah transaksi sudah difinalisasi dan masuk blok (recent_transactions)
+        let recent = self.recent_transactions.lock().unwrap();
+        if let Some(summary) = recent.iter().find(|s| s.tx_id == target_id) {
+            let sender = encode_address_bech32m(&summary.tx.sender, "aur")
+                .unwrap_or_else(|_| summary.tx.sender.to_hex());
+            let recipient = encode_address_bech32m(&summary.tx.recipient, "aur")
+                .unwrap_or_else(|_| summary.tx.recipient.to_hex());
+            return Ok(format!(
+                r#"{{"tx_id":"{}","status":"CONFIRMED","block_height":{},"timestamp":{},"sender":"{}","recipient":"{}","nonce":{},"amount":"{}","fee":"{}"}}"#,
+                tx_id_hex,
+                summary.height,
+                summary.received_at,
+                sender,
+                recipient,
+                summary.tx.nonce,
+                summary.tx.amount.as_u128(),
+                summary.tx.fee.as_u128()
+            ));
+        }
+        drop(recent);
+
+        // 2. Cek apakah transaksi masih antre di mempool (Pending)
         let mempool = self.mempool.lock().unwrap();
         if let Some(entry) = mempool.entries.get(&target_id) {
+            let sender = encode_address_bech32m(&entry.tx.sender, "aur")
+                .unwrap_or_else(|_| entry.tx.sender.to_hex());
+            let recipient = encode_address_bech32m(&entry.tx.recipient, "aur")
+                .unwrap_or_else(|_| entry.tx.recipient.to_hex());
             Ok(format!(
-                r#"{{"tx_id":"{}","status":"MEMPOOL","nonce":{},"amount":"{}","fee":"{}"}}"#,
+                r#"{{"tx_id":"{}","status":"MEMPOOL","sender":"{}","recipient":"{}","nonce":{},"amount":"{}","fee":"{}"}}"#,
                 tx_id_hex,
+                sender,
+                recipient,
                 entry.tx.nonce,
                 entry.tx.amount.as_u128(),
                 entry.tx.fee.as_u128()
