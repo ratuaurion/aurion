@@ -8,7 +8,7 @@ pub mod zenoh_transport;
 
 pub use zenoh_transport::{
     load_or_create_identity, AurionKeyExpressions, TransportConfig, TransportError, ZenohTransport,
-    HANDSHAKE_ACK_TIMEOUT_SECS, PEER_ROLE_FULL_NODE,
+    HANDSHAKE_ACK_TIMEOUT_SECS, PEER_ROLE_FULL_NODE, PEER_ROLE_VALIDATOR,
 };
 
 pub use frame::{

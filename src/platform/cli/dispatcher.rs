@@ -1299,12 +1299,95 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 .clone()
                 .spawn_consensus_engine_with_shutdown(
                     val_idx as u32,
-                    val_key,
+                    val_key.clone(),
                     zenoh.session(),
                     shutdown.1.clone(),
                 )
                 .await
                 .map_err(|error| format!("Validator consensus initialization failed: {error}"))?;
+
+            if let Some(bn) = node.config.bootnode.as_deref() {
+                let bn_target = bn.to_string();
+                let loc_target = endpoint.clone();
+                let identity = val_key.clone();
+                let chain_id = node.config.chain_id;
+                let current_h = node
+                    .ledger
+                    .lock()
+                    .map(|l| l.latest_height())
+                    .unwrap_or(0);
+                let session = zenoh.session().clone();
+                tokio::spawn(async move {
+                    let transport_cfg = crate::wire::TransportConfig {
+                        chain_id,
+                        is_peer: true,
+                        listen_endpoints: vec![],
+                        connect_endpoints: vec![bn_target.clone()],
+                    };
+                    let transport = crate::wire::ZenohTransport {
+                        config: transport_cfg,
+                        keys: crate::wire::AurionKeyExpressions::new(chain_id),
+                        session,
+                    };
+                    let mut genesis_bytes = [0u8; 32];
+                    if let Ok(()) = hex::decode_to_slice(
+                        crate::genesis::ceremony::CANONICAL_GENESIS_HASH,
+                        &mut genesis_bytes,
+                    ) {
+                        let genesis_hash = crate::core::Hash256::from_bytes(genesis_bytes);
+                        match transport
+                            .perform_handshake(&identity, &genesis_hash, current_h)
+                            .await
+                        {
+                            Ok(()) => {
+                                println!(
+                                    "[AURION VALIDATOR] Bootnode mutual handshake SUCCESS (Role: validator)"
+                                );
+                                if let Err(e) = transport
+                                    .announce_peer_canonical(
+                                        &identity,
+                                        &loc_target,
+                                        crate::wire::PEER_ROLE_VALIDATOR,
+                                    )
+                                    .await
+                                {
+                                    eprintln!(
+                                        "[AURION VALIDATOR] Failed to announce validator to bootnode: {e}"
+                                    );
+                                }
+                                let mut announce_interval =
+                                    tokio::time::interval(std::time::Duration::from_secs(5));
+                                let mut handshake_refresh = tokio::time::interval(
+                                    std::time::Duration::from_secs(PERIODIC_HANDSHAKE_REFRESH_SECS),
+                                );
+                                handshake_refresh.tick().await;
+                                loop {
+                                    tokio::select! {
+                                        _ = announce_interval.tick() => {
+                                            let _ = transport
+                                                .announce_peer_canonical(
+                                                    &identity,
+                                                    &loc_target,
+                                                    crate::wire::PEER_ROLE_VALIDATOR,
+                                                )
+                                                .await;
+                                        }
+                                        _ = handshake_refresh.tick() => {
+                                            let _ = transport
+                                                .perform_handshake(&identity, &genesis_hash, current_h)
+                                                .await;
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("[AURION VALIDATOR] Bootnode handshake warning: {e}");
+                            }
+                        }
+                    }
+                });
+            }
+
             let rpc_node = node.clone();
             let rpc_shutdown = shutdown.1.clone();
             let rpc_handle =

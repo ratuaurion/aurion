@@ -27,7 +27,10 @@ use zenoh::Session;
 /// Batas waktu tunggu balasan `HANDSHAKE_ACK` dari bootnode (detik).
 pub const HANDSHAKE_ACK_TIMEOUT_SECS: u64 = 10;
 
-/// Peran node kanonikal (selaras `NodeRole::FullNode` pada bootnode).
+/// Peran node kanonikal validator (selaras `NodeRole::Validator` pada bootnode).
+pub const PEER_ROLE_VALIDATOR: u8 = 0x01;
+
+/// Peran node kanonikal full node (selaras `NodeRole::FullNode` pada bootnode).
 pub const PEER_ROLE_FULL_NODE: u8 = 0x02;
 
 #[derive(Debug, Error)]
