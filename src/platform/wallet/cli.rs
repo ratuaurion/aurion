@@ -365,11 +365,15 @@ fn handle_send(args: &[String]) {
         };
         (keystore.address, signing_key)
     };
-    let nonce = match client::get_nonce(&rpc, &sender_address) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] {error}");
-            return;
+    let nonce = if let Some(n) = get_flag_value(args, "--nonce").and_then(|v| v.parse::<u64>().ok()) {
+        n
+    } else {
+        match client::get_nonce(&rpc, &sender_address) {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] {error}");
+                return;
+            }
         }
     };
     let details = match ClearSigningDetails::new(
@@ -581,7 +585,7 @@ fn print_wallet_help() {
     println!("  aurion wallet address [--keystore <path>]");
     println!("  aurion wallet balance --address <addr> [--rpc <url>]");
     println!("  aurion wallet nonce --address <addr> [--rpc <url>]");
-    println!("  aurion wallet send --to <addr> --amount <quanta> [--fee <quanta>] [--keystore <path>] [--rpc <url>] [--yes|-y] [--dev-sender]");
+    println!("  aurion wallet send --to <addr> --amount <quanta> [--fee <quanta>] [--nonce <n>] [--keystore <path>] [--rpc <url>] [--yes|-y] [--dev-sender]");
     println!("  --dev-sender uses the deterministic genesis developer key for local testing only");
     println!("  aurion wallet sign-tx --to <addr> --amount <quanta> --nonce <n> [--keystore <path>] [--password-stdin] [--fee <quanta>] [--memo <text>] [--yes|-y]");
     println!("Keamanan password:");
