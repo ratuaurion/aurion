@@ -166,21 +166,16 @@ impl AurionNode {
 
         *self.rpc_context.accounts.lock().unwrap() = ledger_guard.accounts.clone();
 
+        let latest_block = ledger_guard.latest_block();
         let mut headers_guard = self.rpc_context.headers.lock().unwrap();
-        for block in &ledger_guard.blocks {
-            headers_guard.insert(block.height(), block.header.clone());
-        }
+        headers_guard.insert(latest_block.height(), latest_block.header.clone());
 
         let mut certs_guard = self.rpc_context.certificates.lock().unwrap();
-        for block in &ledger_guard.blocks {
-            if let Some(cert) = &block.commit_certificate {
-                certs_guard.insert(block.height(), cert.clone());
-            }
+        if let Some(cert) = &latest_block.commit_certificate {
+            certs_guard.insert(latest_block.height(), cert.clone());
         }
 
-        for block in &ledger_guard.blocks {
-            self.rpc_context.record_committed_block(block);
-        }
+        self.rpc_context.record_committed_block(latest_block);
     }
 
     /// Replays finalized peer blocks in order before consensus starts.
@@ -406,10 +401,13 @@ impl AurionNode {
                                     &ledger,
                                     &mempool,
                                     reactor.current_round,
-                                    SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .map(|duration| duration.as_secs())
-                                        .unwrap_or(ledger.latest_block().header.timestamp + 1),
+                                    {
+                                        let now_secs = SystemTime::now()
+                                            .duration_since(UNIX_EPOCH)
+                                            .map(|duration| duration.as_secs())
+                                            .unwrap_or(0);
+                                        now_secs.max(ledger.latest_block().header.timestamp + 1)
+                                    },
                                     &miner,
                                     1024 * 1024,
                                 );
@@ -490,6 +488,7 @@ impl AurionNode {
                                     });
                                 }
                                 proposed = None;
+                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             }
                             Ok(None) => {}
                             Err(error) => {

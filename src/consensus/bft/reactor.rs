@@ -17,7 +17,7 @@ use std::time::Duration;
 use thiserror::Error;
 use tokio::time::{self, Instant};
 
-pub const MAX_ROUND_DRIFT: u64 = 10;
+pub const MAX_ROUND_DRIFT: u64 = 1000;
 
 #[derive(Debug, Error)]
 pub enum ReactorError {
