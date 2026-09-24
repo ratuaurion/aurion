@@ -19,6 +19,7 @@
 
 use crate::codec::CanonicalEncode;
 use crate::consensus::bft::header::BlockHeader;
+use crate::crypto::encode_address_bech32m;
 use crate::gateway::rpc::methods::{CommittedTxSummary, RpcContext};
 use crate::runtime::config::NodeConfig;
 use crate::transaction::types::{transaction_wire_size, Transaction};
@@ -162,12 +163,20 @@ pub fn render_recent_transactions(ctx: &RpcContext, limit: usize) -> String {
                 .collect()
         };
         for (tx_id, tx, admitted_timestamp) in pending {
+            let sender = encode_address_bech32m(&tx.sender, "aur")
+                .unwrap_or_else(|_| tx.sender.to_hex());
+            let recipient = encode_address_bech32m(&tx.recipient, "aur")
+                .unwrap_or_else(|_| tx.recipient.to_hex());
             txs_json.push(format!(
-                r#"{{"tx_hash":"0x{}","raw_payload":"{}","size_bytes":{},"received_at":{}}}"#,
+                r#"{{"tx_hash":"0x{}","raw_payload":"{}","size_bytes":{},"received_at":{},"sender":"{}","recipient":"{}","amount":"{}","fee":"{}"}}"#,
                 hex::encode(tx_id.as_bytes()),
                 canonical_tx_hex(&tx),
                 transaction_wire_size(tx.payload.len()),
-                admitted_timestamp
+                admitted_timestamp,
+                sender,
+                recipient,
+                tx.amount.as_u128(),
+                tx.fee.as_u128()
             ));
         }
     }
@@ -180,13 +189,21 @@ pub fn render_recent_transactions(ctx: &RpcContext, limit: usize) -> String {
 }
 
 fn render_tx_summary(summary: &CommittedTxSummary) -> String {
+    let sender = encode_address_bech32m(&summary.tx.sender, "aur")
+        .unwrap_or_else(|_| summary.tx.sender.to_hex());
+    let recipient = encode_address_bech32m(&summary.tx.recipient, "aur")
+        .unwrap_or_else(|_| summary.tx.recipient.to_hex());
     format!(
-        r#"{{"tx_hash":"0x{}","raw_payload":"{}","size_bytes":{},"received_at":{},"block_height":{}}}"#,
+        r#"{{"tx_hash":"0x{}","raw_payload":"{}","size_bytes":{},"received_at":{},"block_height":{},"sender":"{}","recipient":"{}","amount":"{}","fee":"{}"}}"#,
         hex::encode(summary.tx_id.as_bytes()),
         canonical_tx_hex(&summary.tx),
         transaction_wire_size(summary.tx.payload.len()),
         summary.received_at,
-        summary.height
+        summary.height,
+        sender,
+        recipient,
+        summary.tx.amount.as_u128(),
+        summary.tx.fee.as_u128()
     )
 }
 
