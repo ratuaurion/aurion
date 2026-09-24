@@ -1316,7 +1316,6 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .lock()
                     .map(|l| l.latest_height())
                     .unwrap_or(0);
-                let session = zenoh.session().clone();
                 tokio::spawn(async move {
                     let transport_cfg = crate::wire::TransportConfig {
                         chain_id,
@@ -1324,10 +1323,12 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         listen_endpoints: vec![],
                         connect_endpoints: vec![bn_target.clone()],
                     };
-                    let transport = crate::wire::ZenohTransport {
-                        config: transport_cfg,
-                        keys: crate::wire::AurionKeyExpressions::new(chain_id),
-                        session,
+                    let transport = match crate::wire::ZenohTransport::new(transport_cfg).await {
+                        Ok(t) => t,
+                        Err(e) => {
+                            eprintln!("[AURION VALIDATOR] Bootnode connection warning: {e} (Continuing without bootnode)");
+                            return;
+                        }
                     };
                     let mut genesis_bytes = [0u8; 32];
                     if let Ok(()) = hex::decode_to_slice(
@@ -1364,18 +1365,29 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                                 loop {
                                     tokio::select! {
                                         _ = announce_interval.tick() => {
-                                            let _ = transport
+                                            if let Err(e) = transport
                                                 .announce_peer_canonical(
                                                     &identity,
                                                     &loc_target,
                                                     crate::wire::PEER_ROLE_VALIDATOR,
                                                 )
-                                                .await;
+                                                .await
+                                            {
+                                                eprintln!("[AURION VALIDATOR] PEX announce error: {e}");
+                                            }
                                         }
                                         _ = handshake_refresh.tick() => {
-                                            let _ = transport
+                                            match transport
                                                 .perform_handshake(&identity, &genesis_hash, current_h)
-                                                .await;
+                                                .await
+                                            {
+                                                Ok(()) => {
+                                                    println!("[AURION VALIDATOR] Bootnode handshake refreshed");
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[AURION VALIDATOR] Bootnode handshake refresh warning: {e}");
+                                                }
+                                            }
                                         }
                                     }
                                 }
