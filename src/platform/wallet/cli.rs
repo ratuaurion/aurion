@@ -327,6 +327,14 @@ fn handle_send(args: &[String]) {
             .expect("canonical creator address encoding must succeed");
         eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis creator treasury key for local testing only.");
         (address, creator.to_signing_key())
+    } else if let Some(v_idx) = get_flag_value(args, "--val-sender").and_then(|v| v.parse::<usize>().ok()) {
+        let keys = CanonicalCeremonyKeypairs::new_deterministic();
+        let idx = v_idx.saturating_sub(1).min(keys.validators.len() - 1);
+        let val_key = &keys.validators[idx];
+        let address = encode_address_bech32m(&val_key.derive_address(), "aur")
+            .expect("canonical validator address encoding must succeed");
+        eprintln!("[AURION WALLET] Using Canonical Validator {} key: {address}", idx + 1);
+        (address, val_key.to_signing_key())
     } else {
         let keystore_path = get_flag_value(args, "--keystore")
             .unwrap_or_else(|| "default.keystore.json".to_string());
@@ -407,6 +415,8 @@ fn handle_send(args: &[String]) {
         current_time + 3600,
     );
     let sender_pubkey = hex::encode(signing_key.verifying_key().as_bytes());
+    println!("Raw Hex : {raw_hex}");
+    println!("Pubkey  : {sender_pubkey}");
     match client::broadcast_raw_tx(&rpc, &raw_hex, &sender_pubkey) {
         Ok(tx_id) => {
             println!("Transaksi berhasil disiarkan!");
