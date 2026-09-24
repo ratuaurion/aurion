@@ -339,15 +339,16 @@ impl<T: BftTransport> BftReactor<T> {
             self.current_round,
             votes,
         )?;
-        let mut block = self
-            .pending_proposal
-            .clone()
-            .ok_or_else(|| ReactorError::InvalidProposal("certificate has no proposal".into()))?;
+        let mut block = match self.pending_proposal.clone() {
+            Some(b) => b,
+            None => return Ok(None),
+        };
         block.commit_certificate = Some(certificate.clone());
         let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
-        let proposer_index = self
-            .pending_proposer_index
-            .ok_or_else(|| ReactorError::InvalidProposal("proposal proposer is missing".into()))?;
+        let proposer_index = match self.pending_proposer_index {
+            Some(p) => p,
+            None => return Ok(None),
+        };
         let proposer = self
             .validator_set
             .get_validator(proposer_index)

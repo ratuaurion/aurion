@@ -424,13 +424,11 @@ impl AurionNode {
                         eprintln!(
                             "[AURION CONSENSUS] validator {validator_index} local proposal rejected: {error}"
                         );
-                        break;
                     }
                     if let Err(error) = reactor.transport.broadcast_proposal(proposal).await {
                         eprintln!(
                             "[AURION CONSENSUS] validator {validator_index} proposal broadcast failed: {error}"
                         );
-                        break;
                     }
                     proposed = Some((reactor.current_height, reactor.current_round));
                 }
@@ -496,9 +494,8 @@ impl AurionNode {
                             Ok(None) => {}
                             Err(error) => {
                                 eprintln!(
-                                    "[AURION CONSENSUS] validator {validator_index} reactor stopped: {error}"
+                                    "[AURION CONSENSUS] validator {validator_index} reactor warning: {error}"
                                 );
-                                break;
                             }
                         }
                         for (transaction, sender_pubkey) in reactor.drain_transactions() {
