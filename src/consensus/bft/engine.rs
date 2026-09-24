@@ -82,7 +82,7 @@ impl BftEngine {
         mempool: &MempoolEngine,
         round: u64,
         timestamp: u64,
-        miner: &Address,
+        proposer: &Address,
         max_payload_bytes: usize,
     ) -> Block {
         let candidates = mempool.pack_block_candidate(max_payload_bytes);
@@ -94,20 +94,20 @@ impl BftEngine {
         let mut dry_run_accounts = ledger.accounts.clone();
         let mut dry_run_monetary = ledger.monetary.clone();
 
-        // 1. Terapkan subsidi blok ke akun miner / proposer
+        // 1. Terapkan subsidi blok ke akun proposer
         let subsidy = calculate_block_subsidy(height);
         if !subsidy.is_zero() {
             let _ = dry_run_monetary.apply_issuance(subsidy);
-            let miner_acct = dry_run_accounts.entry(*miner).or_default();
-            if let Ok(new_bal) = miner_acct.balance.checked_add(subsidy) {
-                miner_acct.balance = new_bal;
+            let proposer_acct = dry_run_accounts.entry(*proposer).or_default();
+            if let Ok(new_bal) = proposer_acct.balance.checked_add(subsidy) {
+                proposer_acct.balance = new_bal;
             }
         }
 
         let mut valid_txs = Vec::with_capacity(candidates.len());
 
         for tx in candidates {
-            if apply_transaction(&mut dry_run_accounts, &mut dry_run_monetary, miner, &tx).is_ok() {
+            if apply_transaction(&mut dry_run_accounts, &mut dry_run_monetary, proposer, &tx).is_ok() {
                 valid_txs.push(tx);
             }
         }
@@ -188,10 +188,10 @@ impl BftEngine {
         mempool: &mut MempoolEngine,
         mut block: Block,
         cert: CommitCertificate,
-        miner: &Address,
+        proposer: &Address,
     ) -> Result<(), BftEngineError> {
         block.commit_certificate = Some(cert);
-        ledger.apply_block(block.clone(), miner)?;
+        ledger.apply_block(block.clone(), proposer)?;
 
         // Bersihkan transaksi yang difinalisasi dari mempool
         let tx_ids: Vec<Hash256> = block.transactions.iter().map(|tx| tx.compute_tx_id()).collect();

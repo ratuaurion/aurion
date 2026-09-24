@@ -55,6 +55,7 @@ pub struct TransactionReceipt {
     pub fee_quanta: Quantum,
     pub fee_burned_quanta: Quantum,
     pub fee_miner_quanta: Quantum,
+    pub fee_validator_quanta: Quantum,
     pub nonce: u64,
     pub status: TransactionState,
 }
@@ -67,7 +68,7 @@ impl TransactionReceipt {
         transaction_index: u32,
     ) -> Result<Self, MonetaryError> {
         let fee = tx.fee;
-        let (fee_burned, fee_miner) = MonetaryState::split_fee(fee)?;
+        let (fee_burned, fee_validator) = MonetaryState::split_fee(fee)?;
 
         Ok(Self {
             tx_id: tx.compute_tx_id(),
@@ -79,7 +80,8 @@ impl TransactionReceipt {
             amount_quanta: tx.amount,
             fee_quanta: fee,
             fee_burned_quanta: fee_burned,
-            fee_miner_quanta: fee_miner,
+            fee_miner_quanta: fee_validator,
+            fee_validator_quanta: fee_validator,
             nonce: tx.nonce,
             status: TransactionState::Finalized,
         })

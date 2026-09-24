@@ -6,8 +6,8 @@ use aurion::consensus::certificate::{CommitCertificate, ValidatorEntry, Validato
 use aurion::consensus::header::{BlockHeader, BLOCK_HEADER_BYTES};
 use aurion::consensus::vote::{Vote, VOTE_BYTES};
 use aurion::core::{
-    Address, Hash256, MonetaryError, Quantum, Signature, CREATOR_ALLOCATION_QUANTA,
-    DEVELOPER_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
+    Address, Hash256, MonetaryError, Quantum, Signature,
+    MASTER_TREASURY_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
 };
 use aurion::crypto::{
     blake3_derive_key, blake3_hash, decode_address_bech32m, derive_address_from_pubkey,
@@ -95,11 +95,11 @@ fn pillar_1_cryptographic_primitives() {
 #[test]
 fn pillar_2_monetary_policy() {
     let one_aur = Quantum::ONE_AUR;
-    assert_eq!(one_aur.as_u128(), 100_000_000);
+    assert_eq!(one_aur.as_u128(), 1_000_000_000);
 
     let ten_aur = one_aur.checked_mul(10).unwrap();
-    assert_eq!(ten_aur.as_u128(), 1_000_000_000);
-    assert_eq!(ten_aur.to_aur_string(), "10.00000000 AUR");
+    assert_eq!(ten_aur.as_u128(), 10_000_000_000);
+    assert_eq!(ten_aur.to_aur_string(), "10.000000000 AUR");
 
     // Hard Cap Invariant (66M AUR)
     let max = Quantum::MAX_SUPPLY;
@@ -109,11 +109,11 @@ fn pillar_2_monetary_policy() {
         Err(MonetaryError::SupplyCapExceeded(MAX_SUPPLY_QUANTA + 1))
     );
 
-    // Fee Split (20% burn, 80% miner)
-    let fee = Quantum::new(100_000_000); // 1 AUR fee
-    let (burned, miner) = MonetaryState::split_fee(fee).unwrap();
-    assert_eq!(burned.as_u128(), 20_000_000);
-    assert_eq!(miner.as_u128(), 80_000_000);
+    // Fee Allocation (0% burn, 100% validator)
+    let fee = Quantum::new(100_000_000);
+    let (burned, validator) = MonetaryState::split_fee(fee).unwrap();
+    assert_eq!(burned.as_u128(), 0);
+    assert_eq!(validator.as_u128(), 100_000_000);
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn pillar_4_transaction_pipeline() {
 fn pillar_5_state_transition_execution() {
     let sender = Address::from_bytes([1u8; 32]);
     let recipient = Address::from_bytes([2u8; 32]);
-    let miner = Address::from_bytes([3u8; 32]);
+    let proposer = Address::from_bytes([3u8; 32]);
 
     let mut accounts = HashMap::new();
     accounts.insert(sender, Account::new(Quantum::new(1_000_000_000), 0));
@@ -191,10 +191,10 @@ fn pillar_5_state_transition_execution() {
         signature: Signature::from_bytes([0u8; 64]),
     };
 
-    let receipt = apply_transaction(&mut accounts, &mut monetary, &miner, &tx).unwrap();
+    let receipt = apply_transaction(&mut accounts, &mut monetary, &proposer, &tx).unwrap();
 
-    assert_eq!(receipt.burned_fee.as_u128(), 10_000_000); // 20% of 50M
-    assert_eq!(receipt.miner_fee.as_u128(), 40_000_000); // 80% of 50M
+    assert_eq!(receipt.burned_fee.as_u128(), 0);
+    assert_eq!(receipt.validator_fee.as_u128(), 50_000_000);
 
     assert_eq!(
         accounts.get(&sender).unwrap().balance.as_u128(),
@@ -205,8 +205,8 @@ fn pillar_5_state_transition_execution() {
         accounts.get(&recipient).unwrap().balance.as_u128(),
         300_000_000
     );
-    assert_eq!(accounts.get(&miner).unwrap().balance.as_u128(), 40_000_000);
-    assert_eq!(monetary.total_burned.as_u128(), 10_000_000);
+    assert_eq!(accounts.get(&proposer).unwrap().balance.as_u128(), 50_000_000);
+    assert_eq!(monetary.total_burned.as_u128(), 0);
 }
 
 #[test]
@@ -290,7 +290,7 @@ fn pillar_7_wire_framing_and_security() {
 
 #[test]
 fn pillar_8_genesis_block_and_state() {
-    let creator = Address::from_bytes([0xAA; 32]);
+    let treasury = Address::from_bytes([0xAA; 32]);
     let developer = Address::from_bytes([0xBB; 32]);
     let val_entry = ValidatorEntry {
         validator_id: Address::from_bytes([1u8; 32]),
@@ -298,19 +298,17 @@ fn pillar_8_genesis_block_and_state() {
         voting_weight: 100,
     };
 
-    let genesis = build_genesis(creator, developer, vec![val_entry]);
+    let genesis = build_genesis(treasury, developer, vec![val_entry]);
 
     assert_eq!(genesis.header.height, 0);
     assert_eq!(
-        genesis.accounts.get(&creator).unwrap().balance.as_u128(),
-        CREATOR_ALLOCATION_QUANTA
-    );
-    assert_eq!(
-        genesis.accounts.get(&developer).unwrap().balance.as_u128(),
-        DEVELOPER_ALLOCATION_QUANTA
+        genesis.accounts.get(&treasury).unwrap().balance.as_u128(),
+        MASTER_TREASURY_ALLOCATION_QUANTA
     );
 
-    let total = CREATOR_ALLOCATION_QUANTA + DEVELOPER_ALLOCATION_QUANTA;
-    assert_eq!(genesis.monetary.total_issued.as_u128(), total);
+    assert_eq!(
+        genesis.monetary.total_issued.as_u128(),
+        MASTER_TREASURY_ALLOCATION_QUANTA
+    );
     assert_eq!(genesis.monetary.total_burned.as_u128(), 0);
 }

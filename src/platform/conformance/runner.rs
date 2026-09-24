@@ -6,8 +6,8 @@ use crate::consensus::certificate::{CommitCertificate, ValidatorEntry, Validator
 use crate::consensus::header::{BlockHeader, BLOCK_HEADER_BYTES};
 use crate::consensus::vote::{Vote, PHASE_PRECOMMIT, VOTE_BYTES};
 use crate::core::{
-    Address, Hash256, MonetaryError, Quantum, Signature, CREATOR_ALLOCATION_QUANTA,
-    DEVELOPER_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
+    Address, Hash256, MonetaryError, Quantum, Signature,
+    MASTER_TREASURY_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
 };
 use crate::crypto::{
     blake3_hash, decode_address_bech32m, ed25519_verify_strict, encode_address_bech32m, Keypair,
@@ -139,13 +139,13 @@ pub fn run_pillar_2() -> PillarExecutionResult {
     let name = "Monetary Policy & Quantum Scale Invariant (66M AUR Hard Cap)";
 
     let one_aur = Quantum::ONE_AUR;
-    if one_aur.as_u128() != 100_000_000 {
+    if one_aur.as_u128() != 1_000_000_000 {
         return PillarExecutionResult {
             pillar_id: 2,
             name,
-            status: TestStatus::Failed("Quantum scale is not 10^8".to_string()),
+            status: TestStatus::Failed("Quantum scale is not 10^9".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: "1 AUR must equal exactly 100,000,000 Quantum".to_string(),
+            detail: "1 AUR must equal exactly 1,000,000,000 Quantum".to_string(),
         };
     }
 
@@ -163,9 +163,9 @@ pub fn run_pillar_2() -> PillarExecutionResult {
         };
     }
 
-    // 20% Fee Burn split
+    // 100% Fee Validator routing (0% Burn)
     let fee = Quantum::new(100_000_000);
-    let (burned, miner) = match MonetaryState::split_fee(fee) {
+    let (burned, validator) = match MonetaryState::split_fee(fee) {
         Ok(res) => res,
         Err(e) => {
             return PillarExecutionResult {
@@ -178,13 +178,13 @@ pub fn run_pillar_2() -> PillarExecutionResult {
         }
     };
 
-    if burned.as_u128() != 20_000_000 || miner.as_u128() != 80_000_000 {
+    if burned.as_u128() != 0 || validator.as_u128() != 100_000_000 {
         return PillarExecutionResult {
             pillar_id: 2,
             name,
             status: TestStatus::Failed("Fee split ratio incorrect".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: "Fee split must be exactly 20% burn and 80% miner".to_string(),
+            detail: "Fee allocation must be exactly 0% burn and 100% validator".to_string(),
         };
     }
 
@@ -194,7 +194,7 @@ pub fn run_pillar_2() -> PillarExecutionResult {
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
         detail:
-            "Hard cap 66M AUR, Quantum u128 arithmetic, and 20% deflationary fee burn verified."
+            "Hard cap 66M AUR, Quantum u128 arithmetic, and 100% validator fee routing verified."
                 .to_string(),
     }
 }
@@ -315,7 +315,7 @@ pub fn run_pillar_5() -> PillarExecutionResult {
 
     let sender = Address::from_bytes([10u8; 32]);
     let recipient = Address::from_bytes([20u8; 32]);
-    let miner = Address::from_bytes([30u8; 32]);
+    let proposer = Address::from_bytes([30u8; 32]);
 
     let mut accounts = HashMap::new();
     accounts.insert(sender, Account::new(Quantum::new(500_000_000), 5));
@@ -337,7 +337,7 @@ pub fn run_pillar_5() -> PillarExecutionResult {
         signature: Signature::from_bytes([0u8; 64]),
     };
 
-    let res = apply_transaction(&mut accounts, &mut monetary, &miner, &tx);
+    let res = apply_transaction(&mut accounts, &mut monetary, &proposer, &tx);
     if let Err(e) = res {
         return PillarExecutionResult {
             pillar_id: 5,
@@ -359,13 +359,24 @@ pub fn run_pillar_5() -> PillarExecutionResult {
         };
     }
 
+    let proposer_after = accounts.get(&proposer).unwrap();
+    if proposer_after.balance.as_u128() != 10_000_000 {
+        return PillarExecutionResult {
+            pillar_id: 5,
+            name,
+            status: TestStatus::Failed("Proposer did not receive 100% fee".to_string()),
+            duration_micros: start.elapsed().as_micros(),
+            detail: "Proposer must receive exactly 100% of transaction fee".to_string(),
+        };
+    }
+
     PillarExecutionResult {
         pillar_id: 5,
         name,
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
         detail:
-            "Deterministic atomic state transition, strict nonce increment, and fee burn verified."
+            "Deterministic atomic state transition, strict nonce increment, and 100% validator fee routing verified."
                 .to_string(),
     }
 }
@@ -556,7 +567,7 @@ pub fn run_pillar_8() -> PillarExecutionResult {
     let start = Instant::now();
     let name = "Genesis State σ0 & Initial Supply Commitment (35% Hard Cap)";
 
-    let creator = Address::from_bytes([0x11; 32]);
+    let treasury = Address::from_bytes([0x11; 32]);
     let developer = Address::from_bytes([0x22; 32]);
     let val_entry = ValidatorEntry {
         validator_id: Address::from_bytes([1u8; 32]),
@@ -564,7 +575,7 @@ pub fn run_pillar_8() -> PillarExecutionResult {
         voting_weight: 100,
     };
 
-    let genesis = build_genesis(creator, developer, vec![val_entry]);
+    let genesis = build_genesis(treasury, developer, vec![val_entry]);
 
     if genesis.header.height != 0 {
         return PillarExecutionResult {
@@ -576,30 +587,18 @@ pub fn run_pillar_8() -> PillarExecutionResult {
         };
     }
 
-    let creator_balance = genesis.accounts.get(&creator).unwrap().balance.as_u128();
-    if creator_balance != CREATOR_ALLOCATION_QUANTA {
+    let treasury_balance = genesis.accounts.get(&treasury).unwrap().balance.as_u128();
+    if treasury_balance != MASTER_TREASURY_ALLOCATION_QUANTA {
         return PillarExecutionResult {
             pillar_id: 8,
             name,
-            status: TestStatus::Failed("Creator allocation is not 30%".to_string()),
+            status: TestStatus::Failed("Master Treasury allocation is not 100%".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: "Creator allocation must be exactly 19,800,000 AUR".to_string(),
+            detail: "Master Treasury allocation must be exactly 66,000,000 AUR".to_string(),
         };
     }
 
-    let dev_balance = genesis.accounts.get(&developer).unwrap().balance.as_u128();
-    if dev_balance != DEVELOPER_ALLOCATION_QUANTA {
-        return PillarExecutionResult {
-            pillar_id: 8,
-            name,
-            status: TestStatus::Failed("Developer allocation is not 5%".to_string()),
-            duration_micros: start.elapsed().as_micros(),
-            detail: "Developer allocation must be exactly 3,300,000 AUR".to_string(),
-        };
-    }
-
-    let total = CREATOR_ALLOCATION_QUANTA + DEVELOPER_ALLOCATION_QUANTA;
-    if genesis.monetary.total_issued.as_u128() != total
+    if genesis.monetary.total_issued.as_u128() != MASTER_TREASURY_ALLOCATION_QUANTA
         || genesis.monetary.total_burned.as_u128() != 0
     {
         return PillarExecutionResult {
@@ -607,7 +606,7 @@ pub fn run_pillar_8() -> PillarExecutionResult {
             name,
             status: TestStatus::Failed("Monetary state initialization mismatch".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: "Total issued must equal 23,100,000 AUR (35%) and burned must be 0".to_string(),
+            detail: "Total issued must equal 66,000,000 AUR (100%) and burned must be 0".to_string(),
         };
     }
 
@@ -617,7 +616,7 @@ pub fn run_pillar_8() -> PillarExecutionResult {
         status: TestStatus::Passed,
         duration_micros: start.elapsed().as_micros(),
         detail:
-            "Genesis Block 0, 35% hard cap allocation (30% Creator, 5% Dev), and σ0 state verified."
+            "Genesis Block 0, 100% Master Treasury allocation (66,000,000 AUR), and σ0 state verified."
                 .to_string(),
     }
 }

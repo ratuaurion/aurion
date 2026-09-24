@@ -47,6 +47,7 @@ pub fn derive_contract_address(sender: &Address, nonce: u64) -> Address {
 pub struct TransactionExecutionReceipt {
     pub burned_fee: Quantum,
     pub miner_fee: Quantum,
+    pub validator_fee: Quantum,
     pub deployed_contract: Option<Address>,
     pub return_data: Vec<u8>,
     pub storage_changes: HashMap<Hash256, Hash256>,
@@ -56,7 +57,7 @@ pub struct TransactionExecutionReceipt {
 pub fn apply_transaction(
     accounts: &mut HashMap<Address, Account>,
     monetary: &mut MonetaryState,
-    miner: &Address,
+    proposer: &Address,
     tx: &Transaction,
 ) -> Result<TransactionExecutionReceipt, StateTransitionError> {
     let sender_acct = accounts
@@ -99,20 +100,22 @@ pub fn apply_transaction(
         },
     );
 
-    // 2. Alokasikan fee transaksi (20% burn, 80% miner)
-    let (burn_amt, miner_amt) = MonetaryState::split_fee(tx.fee)
+    // 2. Alokasikan fee transaksi: 100% dialokasikan ke validator/proposer pembuat blok (0% burn)
+    let (burn_amt, validator_fee) = MonetaryState::split_fee(tx.fee)
         .map_err(|e| StateTransitionError::Monetary(e.to_string()))?;
 
-    monetary
-        .apply_burn(burn_amt)
-        .map_err(|e| StateTransitionError::Monetary(e.to_string()))?;
+    if !burn_amt.is_zero() {
+        monetary
+            .apply_burn(burn_amt)
+            .map_err(|e| StateTransitionError::Monetary(e.to_string()))?;
+    }
 
-    let miner_acct = accounts.entry(*miner).or_default();
-    let new_miner_balance = miner_acct
+    let proposer_acct = accounts.entry(*proposer).or_default();
+    let new_proposer_balance = proposer_acct
         .balance
-        .checked_add(miner_amt)
+        .checked_add(validator_fee)
         .map_err(|e| StateTransitionError::Monetary(e.to_string()))?;
-    miner_acct.balance = new_miner_balance;
+    proposer_acct.balance = new_proposer_balance;
 
     // 3. Eksekusi spesifik tipe transaksi
     match tx.tx_type {
@@ -126,7 +129,8 @@ pub fn apply_transaction(
 
             Ok(TransactionExecutionReceipt {
                 burned_fee: burn_amt,
-                miner_fee: miner_amt,
+                miner_fee: validator_fee,
+                validator_fee,
                 deployed_contract: None,
                 return_data: Vec::new(),
                 storage_changes: HashMap::new(),
@@ -168,7 +172,8 @@ pub fn apply_transaction(
 
                     Ok(TransactionExecutionReceipt {
                         burned_fee: burn_amt,
-                        miner_fee: miner_amt,
+                        miner_fee: validator_fee,
+                        validator_fee,
                         deployed_contract: Some(contract_addr),
                         return_data,
                         storage_changes,
@@ -226,7 +231,8 @@ pub fn apply_transaction(
                     ..
                 } => Ok(TransactionExecutionReceipt {
                     burned_fee: burn_amt,
-                    miner_fee: miner_amt,
+                    miner_fee: validator_fee,
+                    validator_fee,
                     deployed_contract: None,
                     return_data,
                     storage_changes,

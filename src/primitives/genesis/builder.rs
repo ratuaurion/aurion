@@ -2,9 +2,7 @@
 
 use crate::consensus::certificate::{ValidatorEntry, ValidatorSet};
 use crate::consensus::header::BlockHeader;
-use crate::core::{
-    Address, Hash256, Quantum, CREATOR_ALLOCATION_QUANTA, DEVELOPER_ALLOCATION_QUANTA,
-};
+use crate::core::{Address, Hash256, Quantum, MASTER_TREASURY_ALLOCATION_QUANTA};
 use crate::state::account::Account;
 use crate::state::monetary::MonetaryState;
 use std::collections::HashMap;
@@ -22,27 +20,28 @@ pub struct GenesisInitialization {
 }
 
 /// Bangun state awal σ0 dan blok genesis kanonikal.
+/// Mengalokasikan 100% pasokan (66.000.000 AUR = 66.000.000.000.000.000 Q) ke Master Treasury Account.
 pub fn build_genesis(
-    creator_addr: Address,
+    treasury_addr: Address,
     developer_addr: Address,
     validators: Vec<ValidatorEntry>,
 ) -> GenesisInitialization {
     let mut accounts = HashMap::new();
 
-    // 1. Alokasi Creator: 30% Hard Cap (19.800.000 AUR)
+    // 1. Alokasi Eksklusif Master Treasury: 100% Pasokan Genesis (66.000.000 AUR)
     accounts.insert(
-        creator_addr,
-        Account::new(Quantum::new(CREATOR_ALLOCATION_QUANTA), 0),
+        treasury_addr,
+        Account::new(Quantum::new(MASTER_TREASURY_ALLOCATION_QUANTA), 0),
     );
 
-    // 2. Alokasi Developer: 5% Hard Cap (3.300.000 AUR)
-    accounts.insert(
-        developer_addr,
-        Account::new(Quantum::new(DEVELOPER_ALLOCATION_QUANTA), 0),
-    );
+    if developer_addr != treasury_addr {
+        accounts.insert(developer_addr, Account::new(Quantum::ZERO, 0));
+    }
 
-    let total_genesis_allocated = CREATOR_ALLOCATION_QUANTA + DEVELOPER_ALLOCATION_QUANTA;
-    let monetary = MonetaryState::new(Quantum::new(total_genesis_allocated), Quantum::ZERO);
+    let monetary = MonetaryState::new(
+        Quantum::new(MASTER_TREASURY_ALLOCATION_QUANTA),
+        Quantum::ZERO,
+    );
 
     let validator_set = ValidatorSet::new(validators);
 

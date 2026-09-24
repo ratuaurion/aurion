@@ -21,11 +21,11 @@ use std::sync::Arc;
 use tempfile::tempdir;
 
 const EXPECTED_GENESIS_BLOCK_HASH: &str =
-    "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9";
+    "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4";
 const EXPECTED_STATE_ROOT: &str =
-    "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850";
+    "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4";
 const EXPECTED_CEREMONY_HASH: &str =
-    "f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380";
+    "8edb15019ca0f0b83396804cb8d6fdd20c1a72a71d0844e17e7413a2adbe37ba";
 
 #[test]
 fn test_mainnet_genesis_initialization_from_sealed_ceremony() {
@@ -58,19 +58,19 @@ fn test_mainnet_genesis_initialization_from_sealed_ceremony() {
         CEREMONY_TOTAL_VOTING_POWER
     );
 
-    // Creator: 19.8M AUR = 1,980,000,000,000,000 Quanta
+    // Master Treasury (Creator Key): 66M AUR = 66,000,000,000,000,000 Quanta (100% pasokan genesis)
     let creator_addr = keys.creator.derive_address();
     let creator_acc = genesis.accounts.get(&creator_addr).expect("Creator account exists");
-    assert_eq!(creator_acc.balance.as_u128(), 1_980_000_000_000_000);
+    assert_eq!(creator_acc.balance.as_u128(), 66_000_000_000_000_000);
 
-    // Developer: 3.3M AUR = 330,000,000,000,000 Quanta
+    // Developer: 0 Quanta
     let dev_addr = keys.developer.derive_address();
     let dev_acc = genesis.accounts.get(&dev_addr).expect("Developer account exists");
-    assert_eq!(dev_acc.balance.as_u128(), 330_000_000_000_000);
+    assert_eq!(dev_acc.balance.as_u128(), 0);
 
-    // Total initial supply: exactly 23.1M AUR
+    // Total initial supply: exactly 66M AUR (66,000,000,000,000,000 Quanta)
     let total_initial = creator_acc.balance.checked_add(dev_acc.balance).unwrap();
-    assert_eq!(total_initial.as_u128(), 2_310_000_000_000_000);
+    assert_eq!(total_initial.as_u128(), 66_000_000_000_000_000);
 }
 
 #[test]
@@ -204,8 +204,8 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
 
     // Penerima transaksi perdana di mainnet
     let recipient_addr = Address::from_bytes([0x77; 32]);
-    let transfer_amount = Quantum::new(1_000 * 100_000_000); // 1,000 AUR
-    let fee = Quantum::new(100_000_000); // 1 AUR
+    let transfer_amount = Quantum::from_aur(1_000).unwrap(); // 1,000 AUR
+    let fee = Quantum::from_aur(1).unwrap(); // 1 AUR
 
     // Buat transaksi transfer perdana
     let mut tx = Transaction {
@@ -312,9 +312,9 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
         .unwrap();
     assert_eq!(final_creator_balance, expected_creator);
 
-    // Verifikasi fee split: 20% burn, 80% miner share
+    // Verifikasi fee: 100% dialokasikan ke proposer/validator, 0% burn
     let burned_amount = node.ledger.lock().unwrap().monetary.total_burned;
-    let expected_burned = Quantum::new(20_000_000); // 0.2 AUR = 20,000,000 Quanta
+    let expected_burned = Quantum::ZERO;
     assert_eq!(burned_amount, expected_burned);
 
     // Verifikasi SMT State Root berubah secara deterministik

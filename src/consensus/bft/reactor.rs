@@ -267,7 +267,7 @@ impl<T: BftTransport> BftReactor<T> {
         }
 
         let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
-        let miner = self
+        let proposer = self
             .validator_set
             .get_validator(envelope.proposer_index)
             .ok_or_else(|| ReactorError::InvalidProposal("unknown proposer".into()))?
@@ -275,7 +275,7 @@ impl<T: BftTransport> BftReactor<T> {
         ledger
             .lock()
             .map_err(|_| ReactorError::InvalidProposal("ledger lock poisoned".into()))?
-            .validate_block_proposal(block, &miner)
+            .validate_block_proposal(block, &proposer)
             .map_err(|error| ReactorError::InvalidProposal(error.to_string()))?;
 
         if self.pending_proposal.is_some() {
@@ -345,18 +345,18 @@ impl<T: BftTransport> BftReactor<T> {
             .ok_or_else(|| ReactorError::InvalidProposal("certificate has no proposal".into()))?;
         block.commit_certificate = Some(certificate.clone());
         let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
-        let miner_index = self
+        let proposer_index = self
             .pending_proposer_index
             .ok_or_else(|| ReactorError::InvalidProposal("proposal proposer is missing".into()))?;
-        let miner = self
+        let proposer = self
             .validator_set
-            .get_validator(miner_index)
+            .get_validator(proposer_index)
             .ok_or_else(|| ReactorError::InvalidVote("unknown local validator".into()))?
             .validator_id;
         ledger
             .lock()
             .map_err(|_| ReactorError::InvalidProposal("ledger lock poisoned".into()))?
-            .apply_block(block, &miner)?;
+            .apply_block(block, &proposer)?;
         Ok(Some(certificate))
     }
 

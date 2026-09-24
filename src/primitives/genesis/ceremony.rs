@@ -19,9 +19,9 @@ pub const CEREMONY_TOTAL_VOTING_POWER: u64 = 1_000_000;
 /// Kuorum voting BFT awal: >2/3 = 666.667 (AUR-GENESIS-007).
 pub const CEREMONY_QUORUM_THRESHOLD: u64 = 666_667;
 pub const CANONICAL_GENESIS_HASH: &str =
-    "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9";
+    "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4";
 pub const CANONICAL_GENESIS_STATE_ROOT: &str =
-    "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850";
+    "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4";
 
 /// Peran entitas dalam upacara pembentukan Genesis.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -123,9 +123,10 @@ fn test_transaction_receipt_canonical_split() {
 
     assert_eq!(receipt.tx_id, tx.compute_tx_id());
     assert_eq!(receipt.fee_quanta, Quantum::new(10_000));
-    // 20% burn = 2000 Quanta
-    assert_eq!(receipt.fee_burned_quanta, Quantum::new(2_000));
-    // 80% miner = 8000 Quanta
-    assert_eq!(receipt.fee_miner_quanta, Quantum::new(8_000));
+    // 0% burn = 0 Quanta
+    assert_eq!(receipt.fee_burned_quanta, Quantum::ZERO);
+    // 100% validator = 10,000 Quanta
+    assert_eq!(receipt.fee_validator_quanta, Quantum::new(10_000));
+    assert_eq!(receipt.fee_miner_quanta, Quantum::new(10_000));
     assert_eq!(receipt.status, TransactionState::Finalized);
 }

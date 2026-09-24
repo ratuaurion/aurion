@@ -1,12 +1,12 @@
 #![forbid(unsafe_code)]
 
-//! Test Integrasi Emisi Subsidi Blok Mining Aurion-BFT
+//! Test Integrasi Emisi Hadiah Blok BFT Aurion (Insentif Validator)
 //! Memverifikasi transisi state moneter:
-//! - Penerbitan subsidi 10 AUR di Era 0 ke produser blok (miner)
+//! - Penerbitan hadiah blok R = 1 AUR di setiap blok BFT (H >= 1) ke Proposer
 //! - Konservasi pasokan moneter total_issued dan circulating_supply
-//! - Pembagian fee 20% burn dan 80% miner
+//! - Alokasi fee transaksi 100% ke validator produser blok (0% burn)
 //! - Deterministik StateRoot SMT
-//! - Formula halving multi-era
+//! - Emisi tetap kanonikal Aurion-BFT
 
 use aurion::consensus::bft::engine::BftEngine;
 use aurion::consensus::block::Block;
@@ -17,7 +17,7 @@ use aurion::crypto::{derive_address_from_pubkey, Keypair};
 use aurion::genesis::builder::build_genesis;
 use aurion::mempool::MempoolEngine;
 use aurion::state::chain::ChainLedger;
-use aurion::state::monetary::calculate_block_subsidy;
+use aurion::state::monetary::calculate_block_reward;
 use aurion::transaction::types::{Transaction, TxType};
 
 #[test]
@@ -36,35 +36,35 @@ fn test_block_mining_subsidy_and_fee_distribution() {
         })
         .collect();
 
-    let creator_key = Keypair::generate();
-    let creator_addr = derive_address_from_pubkey(&creator_key.public_key_bytes());
+    let treasury_key = Keypair::generate();
+    let treasury_addr = derive_address_from_pubkey(&treasury_key.public_key_bytes());
 
     let dev_key = Keypair::generate();
     let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(treasury_addr, dev_addr, val_entries.clone());
     let validator_set = ValidatorSet::new(val_entries);
     let mut ledger = ChainLedger::from_genesis(genesis);
 
     let initial_issued = ledger.monetary.total_issued;
-    assert_eq!(initial_issued, Quantum::from_aur(23_100_000).unwrap());
+    assert_eq!(initial_issued, Quantum::from_aur(66_000_000).unwrap());
     assert_eq!(ledger.monetary.total_burned, Quantum::ZERO);
 
-    let miner_key = Keypair::generate();
-    let miner_addr = derive_address_from_pubkey(&miner_key.public_key_bytes());
-    assert_eq!(ledger.get_balance(&miner_addr), Quantum::ZERO);
+    let proposer_key = Keypair::generate();
+    let proposer_addr = derive_address_from_pubkey(&proposer_key.public_key_bytes());
+    assert_eq!(ledger.get_balance(&proposer_addr), Quantum::ZERO);
 
     let mempool = MempoolEngine::new(1024 * 1024, 3600);
     let bft = BftEngine::new(Some(val_keys[0].clone()), Some(0));
 
-    // --- BLOK 1: EMPTY BLOCK (Murni Subsidi Emisi Mining 10 AUR) ---
+    // --- BLOK 1: EMPTY BLOCK (Murni Hadiah Blok BFT 1 AUR) ---
     {
         let candidate_block = bft.assemble_block_proposal(
             &ledger,
             &mempool,
             0,
             1773532860,
-            &miner_addr,
+            &proposer_addr,
             1024 * 1024,
         );
 
@@ -87,32 +87,32 @@ fn test_block_mining_subsidy_and_fee_distribution() {
 
         let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
 
-        ledger.apply_block(block, &miner_addr).expect("Block 1 apply failed");
+        ledger.apply_block(block, &proposer_addr).expect("Block 1 apply failed");
 
-        // Verifikasi saldo miner bertambah tepat 10 AUR
+        // Verifikasi saldo proposer bertambah tepat 1 AUR
         assert_eq!(
-            ledger.get_balance(&miner_addr),
-            Quantum::from_aur(10).unwrap()
+            ledger.get_balance(&proposer_addr),
+            Quantum::from_aur(1).unwrap()
         );
 
-        // Verifikasi total penerbitan bertambah 10 AUR
+        // Verifikasi total penerbitan bertambah 1 AUR
         assert_eq!(
             ledger.monetary.total_issued,
-            Quantum::from_aur(23_100_010).unwrap()
+            Quantum::from_aur(66_000_001).unwrap()
         );
         assert_eq!(ledger.monetary.total_burned, Quantum::ZERO);
         assert_eq!(
             ledger.monetary.circulating_supply().unwrap(),
-            Quantum::from_aur(23_100_010).unwrap()
+            Quantum::from_aur(66_000_001).unwrap()
         );
     }
 
-    // --- BLOK 2: BLOCK DENGAN TRANSAKSI TRANSFER (Subsidi 10 AUR + Fee Miner 80%) ---
+    // --- BLOK 2: BLOCK DENGAN TRANSAKSI TRANSFER (Hadiah 1 AUR + 100% Fee Validator) ---
     {
         let recipient_key = Keypair::generate();
         let recipient_addr = derive_address_from_pubkey(&recipient_key.public_key_bytes());
 
-        // Transfer 100 AUR dengan fee 10 AUR (Fee split: 2 AUR Burn, 8 AUR Miner)
+        // Transfer 100 AUR dengan fee 10 AUR (100% Fee ke Proposer, 0% Burn)
         let amount = Quantum::from_aur(100).unwrap();
         let fee = Quantum::from_aur(10).unwrap();
 
@@ -121,7 +121,7 @@ fn test_block_mining_subsidy_and_fee_distribution() {
             chain_id: 1001,
             tx_type: TxType::Transfer,
             flags: 0,
-            sender: creator_addr,
+            sender: treasury_addr,
             recipient: recipient_addr,
             nonce: 0,
             amount,
@@ -130,15 +130,15 @@ fn test_block_mining_subsidy_and_fee_distribution() {
             payload: Vec::new(),
             signature: Signature::from_bytes([0u8; 64]),
         };
-        tx.signature = creator_key.sign(&tx.signing_preimage());
+        tx.signature = treasury_key.sign(&tx.signing_preimage());
 
         let mut block2_mempool = MempoolEngine::new(1024 * 1024, 3600);
         block2_mempool
             .submit_transaction(
                 tx,
-                &creator_key.public_key_bytes(),
+                &treasury_key.public_key_bytes(),
                 1773532900,
-                ledger.get_account(&creator_addr).unwrap(),
+                ledger.get_account(&treasury_addr).unwrap(),
             )
             .expect("Submit tx failed");
 
@@ -147,7 +147,7 @@ fn test_block_mining_subsidy_and_fee_distribution() {
             &block2_mempool,
             0,
             1773532920,
-            &miner_addr,
+            &proposer_addr,
             1024 * 1024,
         );
 
@@ -170,15 +170,15 @@ fn test_block_mining_subsidy_and_fee_distribution() {
 
         let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
 
-        ledger.apply_block(block, &miner_addr).expect("Block 2 apply failed");
+        ledger.apply_block(block, &proposer_addr).expect("Block 2 apply failed");
 
-        // Saldo Miner:
-        // Awal: 10 AUR (dari Blok 1)
-        // Blok 2: + 10 AUR (subsidi) + 8 AUR (80% dari fee 10 AUR) = 18 AUR
-        // Total akumulasi: 10 + 18 = 28 AUR!
+        // Saldo Proposer:
+        // Awal: 1 AUR (dari Blok 1)
+        // Blok 2: + 1 AUR (reward) + 10 AUR (100% dari fee 10 AUR) = 11 AUR
+        // Total akumulasi: 1 + 11 = 12 AUR!
         assert_eq!(
-            ledger.get_balance(&miner_addr),
-            Quantum::from_aur(28).unwrap()
+            ledger.get_balance(&proposer_addr),
+            Quantum::from_aur(12).unwrap()
         );
 
         // Saldo Recipient: 100 AUR
@@ -187,45 +187,40 @@ fn test_block_mining_subsidy_and_fee_distribution() {
             Quantum::from_aur(100).unwrap()
         );
 
-        // Saldo Creator berkurang 110 AUR (100 amount + 10 fee)
+        // Saldo Treasury berkurang 110 AUR (100 amount + 10 fee)
         assert_eq!(
-            ledger.get_balance(&creator_addr),
-            Quantum::from_aur(19_800_000 - 110).unwrap()
+            ledger.get_balance(&treasury_addr),
+            Quantum::from_aur(66_000_000 - 110).unwrap()
         );
 
-        // Total Burned: 2 AUR (20% dari fee 10 AUR)
+        // Total Burned: 0 AUR (0% Burn)
         assert_eq!(
             ledger.monetary.total_burned,
-            Quantum::from_aur(2).unwrap()
+            Quantum::ZERO
         );
 
-        // Total Issued: Genesis (23.100.000) + Blok 1 (10) + Blok 2 (10) = 23.100.020 AUR
+        // Total Issued: Genesis (66.000.000) + Blok 1 (1) + Blok 2 (1) = 66.000.002 AUR
         assert_eq!(
             ledger.monetary.total_issued,
-            Quantum::from_aur(23_100_020).unwrap()
+            Quantum::from_aur(66_000_002).unwrap()
         );
 
-        // Circulating Supply: Total Issued (23.100.020) - Burned (2) = 23.100.018 AUR
+        // Circulating Supply: Total Issued (66.000.002) - Burned (0) = 66.000.002 AUR
         assert_eq!(
             ledger.monetary.circulating_supply().unwrap(),
-            Quantum::from_aur(23_100_018).unwrap()
+            Quantum::from_aur(66_000_002).unwrap()
         );
     }
 }
 
 #[test]
-fn test_subsidy_halving_invariants() {
-    // Era 0: 10 AUR
-    assert_eq!(calculate_block_subsidy(1), Quantum::from_aur(10).unwrap());
-    assert_eq!(calculate_block_subsidy(2_145_000), Quantum::from_aur(10).unwrap());
+fn test_bft_block_reward_invariants() {
+    // Blok 0 (Genesis): 0 AUR
+    assert_eq!(calculate_block_reward(0), Quantum::ZERO);
 
-    // Era 1 (Halving ke-1): 5 AUR
-    assert_eq!(calculate_block_subsidy(2_145_001), Quantum::from_aur(5).unwrap());
-    assert_eq!(calculate_block_subsidy(4_290_000), Quantum::from_aur(5).unwrap());
-
-    // Era 2 (Halving ke-2): 2.5 AUR
-    assert_eq!(calculate_block_subsidy(4_290_001), Quantum::new(250_000_000));
-
-    // Era 30 (Subsidi tuntas/habis): 0 AUR
-    assert_eq!(calculate_block_subsidy(64_350_001), Quantum::ZERO);
+    // Blok >= 1: Hadiah tetap R = 1 AUR (1.000.000.000 Quantum)
+    assert_eq!(calculate_block_reward(1), Quantum::from_aur(1).unwrap());
+    assert_eq!(calculate_block_reward(100), Quantum::from_aur(1).unwrap());
+    assert_eq!(calculate_block_reward(2_145_000), Quantum::from_aur(1).unwrap());
+    assert_eq!(calculate_block_reward(10_000_000), Quantum::from_aur(1).unwrap());
 }

@@ -2,8 +2,8 @@
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::{
-    MonetaryError, Quantum, FEE_BURN_PERCENTAGE, FEE_MINER_PERCENTAGE, HALVING_INTERVAL_BLOCKS,
-    INITIAL_BLOCK_SUBSIDY_QUANTA, MAX_HALVING_ERAS, MAX_SUPPLY_QUANTA,
+    MonetaryError, Quantum, BLOCK_REWARD_PROPOSER_PERCENT, BLOCK_REWARD_QUANTA,
+    BLOCK_REWARD_VOTERS_PERCENT, FEE_BURN_PERCENTAGE, FEE_VALIDATOR_PERCENTAGE,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,23 +39,49 @@ impl CanonicalDecode for MonetaryState {
     }
 }
 
-/// Menghitung subsidi blok deterministik pada tinggi blok `height` sesuai jadwal emisi resmi.
+/// Menghitung hadiah blok kanonikal Aurion-BFT pada tinggi blok `height`.
 ///
-/// Formula emisi (AURION-MONETARY-POLICY-SPECIFICATION.md Bab 3):
+/// Formula emisi BFT (CONSTITUTION.md Bab I Pasal 1 Ayat 4):
 /// - Blok 0 (Genesis): 0 Quantum
-/// - Era e = (height - 1) / HALVING_INTERVAL_BLOCKS
-/// - Jika e >= MAX_HALVING_ERAS: 0 Quantum
-/// - Jika e < MAX_HALVING_ERAS: INITIAL_BLOCK_SUBSIDY_QUANTA >> e
-pub fn calculate_block_subsidy(height: u64) -> Quantum {
+/// - Blok >= 1: 1 AUR = 1.000.000.000 Quantum (BLOCK_REWARD_QUANTA)
+pub fn calculate_block_reward(height: u64) -> Quantum {
     if height == 0 {
-        return Quantum::ZERO;
+        Quantum::ZERO
+    } else {
+        Quantum::new(BLOCK_REWARD_QUANTA)
     }
-    let era = (height - 1) / HALVING_INTERVAL_BLOCKS;
-    if era >= MAX_HALVING_ERAS {
-        return Quantum::ZERO;
+}
+
+/// Alias kompatibilitas untuk menghitung subsidi/hadiah blok kanonikal.
+pub fn calculate_block_subsidy(height: u64) -> Quantum {
+    calculate_block_reward(height)
+}
+
+/// Pembagian hadiah blok kanonikal BFT antara Proposer dan Validator penandatangan QC.
+/// - 20% dialokasikan ke Proposer pembuat blok.
+/// - 80% dibagi rata ke seluruh validator penandatangan Precommit QC.
+/// - Sisa pembulatan integer (remainder dust) diberikan secara deterministik ke Proposer.
+pub fn split_block_reward(
+    reward: Quantum,
+    voter_count: usize,
+) -> Result<(Quantum, Quantum), MonetaryError> {
+    if voter_count == 0 {
+        return Ok((reward, Quantum::ZERO));
     }
-    let subsidy = INITIAL_BLOCK_SUBSIDY_QUANTA >> (era as u32);
-    Quantum::new(subsidy)
+
+    let proposer_base = reward
+        .checked_mul(BLOCK_REWARD_PROPOSER_PERCENT)?
+        .checked_div(100)?;
+    let voters_total = reward
+        .checked_mul(BLOCK_REWARD_VOTERS_PERCENT)?
+        .checked_div(100)?;
+
+    let per_voter = voters_total.checked_div(voter_count as u128)?;
+    let voters_distributed = per_voter.checked_mul(voter_count as u128)?;
+    let dust = voters_total.checked_sub(voters_distributed)?;
+    let proposer_reward = proposer_base.checked_add(dust)?;
+
+    Ok((proposer_reward, per_voter))
 }
 
 impl MonetaryState {
@@ -71,17 +97,17 @@ impl MonetaryState {
         self.total_issued.checked_sub(self.total_burned)
     }
 
-    /// Proses pembagian fee transaksi: 20% dibakar permanen, 80% dialokasikan ke produser blok.
+    /// Proses pembagian fee transaksi: 100% dialokasikan ke validator pembuat blok (0% burn).
+    /// Mengembalikan tuple (fee_burned = 0, fee_validator = fee).
     pub fn split_fee(fee: Quantum) -> Result<(Quantum, Quantum), MonetaryError> {
         let burn_amt = fee.checked_mul(FEE_BURN_PERCENTAGE)?.checked_div(100)?;
-        let miner_amt = fee.checked_mul(FEE_MINER_PERCENTAGE)?.checked_div(100)?;
+        let validator_amt = fee.checked_mul(FEE_VALIDATOR_PERCENTAGE)?.checked_div(100)?;
 
-        // Pastikan sisa pembagian bulat tidak hilang
-        let distributed = burn_amt.checked_add(miner_amt)?;
+        let distributed = burn_amt.checked_add(validator_amt)?;
         let remainder = fee.checked_sub(distributed)?;
-        let miner_total = miner_amt.checked_add(remainder)?;
+        let validator_total = validator_amt.checked_add(remainder)?;
 
-        Ok((burn_amt, miner_total))
+        Ok((burn_amt, validator_total))
     }
 
     /// Catat pembakaran fee ke dalam state moneter global.
@@ -90,12 +116,9 @@ impl MonetaryState {
         Ok(())
     }
 
-    /// Catat penerbitan koin baru (misalnya dari coinbase subsidy).
+    /// Catat penerbitan koin baru (misalnya dari emisi blok BFT sesuai INV-MON-03).
     pub fn apply_issuance(&mut self, issuance: Quantum) -> Result<(), MonetaryError> {
         let next = self.total_issued.checked_add(issuance)?;
-        if next.as_u128() > MAX_SUPPLY_QUANTA {
-            return Err(MonetaryError::SupplyCapExceeded(next.as_u128()));
-        }
         self.total_issued = next;
         Ok(())
     }
@@ -106,47 +129,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_calculate_block_subsidy_schedule() {
-        // Blok 0 (Genesis) tidak menerbitkan subsidi reguler
-        assert_eq!(calculate_block_subsidy(0), Quantum::ZERO);
-
-        // Era 0 (1 .. 2_145_000): 10 AUR = 1_000_000_000 Q
-        let era0_subsidy = Quantum::new(1_000_000_000);
-        assert_eq!(calculate_block_subsidy(1), era0_subsidy);
-        assert_eq!(calculate_block_subsidy(100), era0_subsidy);
-        assert_eq!(calculate_block_subsidy(2_145_000), era0_subsidy);
-
-        // Era 1 (2_145_001 .. 4_290_000): 5 AUR = 500_000_000 Q
-        let era1_subsidy = Quantum::new(500_000_000);
-        assert_eq!(calculate_block_subsidy(2_145_001), era1_subsidy);
-        assert_eq!(calculate_block_subsidy(4_290_000), era1_subsidy);
-
-        // Era 2: 2.5 AUR = 250_000_000 Q
-        assert_eq!(calculate_block_subsidy(4_290_001), Quantum::new(250_000_000));
-
-        // Era 29: 1 Quantum
-        let era29_start = 29 * HALVING_INTERVAL_BLOCKS + 1;
-        assert_eq!(calculate_block_subsidy(era29_start), Quantum::new(1));
-
-        // Era >= 30: 0 Quantum
-        let era30_start = 30 * HALVING_INTERVAL_BLOCKS + 1;
-        assert_eq!(calculate_block_subsidy(era30_start), Quantum::ZERO);
-        assert_eq!(calculate_block_subsidy(100_000_000), Quantum::ZERO);
+    fn test_calculate_block_reward_schedule() {
+        assert_eq!(calculate_block_reward(0), Quantum::ZERO);
+        assert_eq!(calculate_block_reward(1), Quantum::new(1_000_000_000));
+        assert_eq!(calculate_block_reward(100), Quantum::new(1_000_000_000));
+        assert_eq!(calculate_block_reward(10_000_000), Quantum::new(1_000_000_000));
     }
 
     #[test]
-    fn test_finite_convergence_under_cap() {
-        // Total akumulasi subsidi untuk 30 era wajib <= 4_290_000_000_000_000 Q
-        let mut total_mined: u128 = 0;
-        for era in 0..30 {
-            let subsidy = INITIAL_BLOCK_SUBSIDY_QUANTA >> era;
-            let era_total = subsidy * (HALVING_INTERVAL_BLOCKS as u128);
-            total_mined += era_total;
-        }
+    fn test_split_block_reward_exactness() {
+        let reward = Quantum::new(1_000_000_000); // 1 AUR = 10^9 Q
 
-        // Nilai terpotong bilangan bulat eksak: 4.289.999.972.115.000 Q
-        // Sisa unmintable dust yang tidak pernah dicetak = 27.885.000 Q (0,27885 AUR)
-        assert_eq!(total_mined, 4_289_999_972_115_000);
-        assert!(total_mined < 4_290_000_000_000_000);
+        // 4 Validator QC
+        let (proposer, per_voter) = split_block_reward(reward, 4).unwrap();
+        assert_eq!(proposer.as_u128(), 200_000_000);
+        assert_eq!(per_voter.as_u128(), 200_000_000);
+        let total = proposer.as_u128() + per_voter.as_u128() * 4;
+        assert_eq!(total, reward.as_u128());
+
+        // 3 Validator QC (800_000_000 / 3 = 266_666_666, sisa 2 Q ke Proposer)
+        let (proposer3, per_voter3) = split_block_reward(reward, 3).unwrap();
+        assert_eq!(per_voter3.as_u128(), 266_666_666);
+        assert_eq!(proposer3.as_u128(), 200_000_002);
+        let total3 = proposer3.as_u128() + per_voter3.as_u128() * 3;
+        assert_eq!(total3, reward.as_u128());
+    }
+
+    #[test]
+    fn test_split_fee_100_percent_to_validator() {
+        let fee = Quantum::new(50_000_000);
+        let (burned, validator) = MonetaryState::split_fee(fee).unwrap();
+        assert_eq!(burned, Quantum::ZERO);
+        assert_eq!(validator, fee);
     }
 }

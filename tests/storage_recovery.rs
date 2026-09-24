@@ -77,7 +77,7 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
 
         assert_eq!(ledger.latest_height(), 0);
         let genesis_creator_bal = ledger.get_balance(&creator_addr);
-        assert_eq!(genesis_creator_bal, Quantum::from_aur(19_800_000).unwrap());
+        assert_eq!(genesis_creator_bal, Quantum::from_aur(66_000_000).unwrap());
 
         // Buat transaksi transfer 500 AUR dari Creator ke Recipient
         let amount = Quantum::from_aur(500).unwrap();

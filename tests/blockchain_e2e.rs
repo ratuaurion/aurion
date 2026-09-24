@@ -54,7 +54,7 @@ fn test_end_to_end_blockchain_lifecycle() {
     assert_eq!(node.ledger.lock().unwrap().latest_height(), 0);
     assert_eq!(
         node.ledger.lock().unwrap().get_balance(&creator_addr),
-        Quantum::from_aur(19_800_000).unwrap()
+        Quantum::from_aur(66_000_000).unwrap()
     );
 
     // 2. PEMBUATAN TRANSAKSI DARI CREATOR KE ALICE
@@ -177,26 +177,26 @@ fn test_end_to_end_blockchain_lifecycle() {
     // Saldo Creator berkurang 1.010 AUR
     assert_eq!(
         ledger_guard.get_balance(&creator_addr),
-        Quantum::from_aur(19_800_000 - 1_010).unwrap()
+        Quantum::from_aur(66_000_000 - 1_010).unwrap()
     );
     assert_eq!(ledger_guard.get_nonce(&creator_addr), 1);
 
-    // Penerbitan Subsidi Blok Mining (10 AUR di Era 0) + Alokasi Fee 80% Miner (8 AUR) = 18 AUR
+    // Penerbitan Hadiah Blok Kanonikal (1 AUR) + Alokasi Fee 100% Proposer (10 AUR) = 11 AUR
     assert_eq!(
         ledger_guard.get_balance(&miner_addr),
-        Quantum::from_aur(18).unwrap()
+        Quantum::from_aur(11).unwrap()
     );
 
-    // Alokasi Fee 20% Burn (2 AUR)
+    // Alokasi Fee 0% Burn
     assert_eq!(
         ledger_guard.monetary.total_burned,
-        Quantum::from_aur(2).unwrap()
+        Quantum::ZERO
     );
 
-    // Total pasokan diterbitkan: Genesis (23.100.000 AUR) + Blok 1 Subsidy (10 AUR)
+    // Total pasokan diterbitkan: Genesis (66.000.000 AUR) + Blok 1 Reward (1 AUR)
     assert_eq!(
         ledger_guard.monetary.total_issued,
-        Quantum::from_aur(23_100_010).unwrap()
+        Quantum::from_aur(66_000_001).unwrap()
     );
 
     // Mempool wajib kosong karena transaksi telah difinalisasi

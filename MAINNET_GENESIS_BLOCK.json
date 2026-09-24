@@ -7,8 +7,8 @@
       "timestamp": 1773532800,
       "prev_block_hash": "0000000000000000000000000000000000000000000000000000000000000000",
       "tx_merkle_root": "0000000000000000000000000000000000000000000000000000000000000000",
-      "state_root": "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850",
-      "block_hash": "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9"
+      "state_root": "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4",
+      "block_hash": "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4"
     },
     "transactions": [],
     "commit_certificate": null
@@ -16,7 +16,7 @@
   "metadata": {
     "network": "aurion-mainnet",
     "protocol_version": 1,
-    "ceremony_transcript_hash": "f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380",
+    "ceremony_transcript_hash": "8edb15019ca0f0b83396804cb8d6fdd20c1a72a71d0844e17e7413a2adbe37ba",
     "hard_cap_aur": 66000000,
     "initial_supply_aur": 23100000,
     "initial_supply_quanta": 2310000000000000,

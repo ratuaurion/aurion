@@ -232,7 +232,7 @@ impl ChainLedger {
     pub fn validate_block_proposal(
         &self,
         block: &Block,
-        miner: &Address,
+        proposer: &Address,
     ) -> Result<(), ChainError> {
         let prev_block = self.latest_block();
         let expected_height = prev_block.height() + 1;
@@ -265,14 +265,14 @@ impl ChainLedger {
             monetary
                 .apply_issuance(subsidy)
                 .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
-            let miner_account = accounts.entry(*miner).or_default();
-            miner_account.balance = miner_account
+            let proposer_account = accounts.entry(*proposer).or_default();
+            proposer_account.balance = proposer_account
                 .balance
                 .checked_add(subsidy)
                 .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
         }
         for tx in &block.transactions {
-            apply_transaction(&mut accounts, &mut monetary, miner, tx)
+            apply_transaction(&mut accounts, &mut monetary, proposer, tx)
                 .map_err(ChainError::StateTransition)?;
         }
         let expected_state_root = compute_accounts_state_root(&accounts);
@@ -286,7 +286,7 @@ impl ChainLedger {
     }
 
     /// Eksekusi dan komit blok baru ke dalam ledger secara atomik.
-    pub fn apply_block(&mut self, block: Block, miner: &Address) -> Result<(), ChainError> {
+    pub fn apply_block(&mut self, block: Block, proposer: &Address) -> Result<(), ChainError> {
         let prev_block = self.latest_block();
         let expected_height = prev_block.height() + 1;
 
@@ -337,7 +337,7 @@ impl ChainLedger {
         let mut accounts_clone = self.accounts.clone();
         let mut monetary_clone = self.monetary.clone();
 
-        // 6a. Penerbitan subsidi blok mining S(H) ke produser blok / miner
+        // 6a. Penerbitan hadiah blok kanonikal ke produser blok / proposer
         let height = block.height();
         let subsidy = calculate_block_subsidy(height);
         if !subsidy.is_zero() {
@@ -345,16 +345,16 @@ impl ChainLedger {
                 .apply_issuance(subsidy)
                 .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
 
-            let miner_acct = accounts_clone.entry(*miner).or_default();
-            miner_acct.balance = miner_acct
+            let proposer_acct = accounts_clone.entry(*proposer).or_default();
+            proposer_acct.balance = proposer_acct
                 .balance
                 .checked_add(subsidy)
                 .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
         }
 
-        // 6b. Eksekusi transaksi di dalam blok
+        // 6b. Eksekusi transaksi di dalam blok (100% fee ke proposer)
         for tx in &block.transactions {
-            apply_transaction(&mut accounts_clone, &mut monetary_clone, miner, tx)
+            apply_transaction(&mut accounts_clone, &mut monetary_clone, proposer, tx)
                 .map_err(ChainError::StateTransition)?;
         }
 

@@ -9,10 +9,7 @@ use aurion::consensus::bft::engine::BftEngine;
 use aurion::consensus::block::Block;
 use aurion::consensus::certificate::{ValidatorEntry, ValidatorSet};
 use aurion::consensus::vote::{Vote, PHASE_PRECOMMIT, PHASE_PREVOTE};
-use aurion::core::{
-    Address, Quantum, Signature, FEE_BURN_PERCENTAGE, FEE_MINER_PERCENTAGE,
-    HALVING_INTERVAL_BLOCKS, INITIAL_BLOCK_SUBSIDY_QUANTA, MAX_HALVING_ERAS,
-};
+use aurion::core::{Address, Quantum, Signature, BLOCK_REWARD_QUANTA};
 use aurion::crypto::{blake3_hash, derive_address_from_pubkey, Keypair};
 use aurion::genesis::builder::build_genesis;
 use aurion::mempool::MempoolEngine;
@@ -82,9 +79,9 @@ struct ReferenceSTF {
 impl ReferenceSTF {
     fn new_genesis(creator: Address, dev: Address) -> Self {
         let mut accounts = BTreeMap::new();
-        // Alokasi Genesis: Creator 19.8M AUR, Developer 3.3M AUR
-        let creator_quanta: u128 = 19_800_000 * 100_000_000;
-        let dev_quanta: u128 = 3_300_000 * 100_000_000;
+        // Alokasi Genesis Kanonikal: 100% Pasokan (66M AUR pada skala 10^9) ke Master Treasury
+        let creator_quanta: u128 = 66_000_000 * 1_000_000_000;
+        let dev_quanta: u128 = 0;
 
         accounts.insert(
             creator,
@@ -93,17 +90,19 @@ impl ReferenceSTF {
                 nonce: 0,
             },
         );
-        accounts.insert(
-            dev,
-            ReferenceAccount {
-                balance: dev_quanta,
-                nonce: 0,
-            },
-        );
+        if dev != creator {
+            accounts.insert(
+                dev,
+                ReferenceAccount {
+                    balance: dev_quanta,
+                    nonce: 0,
+                },
+            );
+        }
 
         Self {
             accounts,
-            total_issued: creator_quanta + dev_quanta,
+            total_issued: creator_quanta,
             total_burned: 0,
         }
     }
@@ -112,11 +111,7 @@ impl ReferenceSTF {
         if height == 0 {
             return;
         }
-        let era = (height - 1) / HALVING_INTERVAL_BLOCKS;
-        if era >= MAX_HALVING_ERAS {
-            return;
-        }
-        let subsidy = INITIAL_BLOCK_SUBSIDY_QUANTA >> (era as u32);
+        let subsidy = BLOCK_REWARD_QUANTA;
         self.total_issued += subsidy;
 
         let miner_acct = self.accounts.entry(*miner).or_insert(ReferenceAccount {
@@ -154,13 +149,8 @@ impl ReferenceSTF {
         sender_acct.balance -= total_cost;
         sender_acct.nonce += 1;
 
-        // Pembagian fee transaksi: 20% burn, 80% miner
-        let burn_amt = (fee_u128 * FEE_BURN_PERCENTAGE) / 100;
-        let miner_amt_raw = (fee_u128 * FEE_MINER_PERCENTAGE) / 100;
-        let remainder = fee_u128 - (burn_amt + miner_amt_raw);
-        let miner_fee = miner_amt_raw + remainder;
-
-        self.total_burned += burn_amt;
+        // Alokasi fee transaksi: 100% dialokasikan ke validator pembuat blok (0% burn)
+        let miner_fee = fee_u128;
 
         // Kredit miner
         let miner_acct = self.accounts.entry(*miner).or_insert(ReferenceAccount {
