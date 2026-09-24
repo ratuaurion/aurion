@@ -101,10 +101,10 @@ Ketika sebuah transaksi mencapai status `FINALIZED`, simpul RPC **MUST** mampu m
   "transaction_index": 0,
   "sender": "aur10t9h48nhaunuj2uqf8kfd6jqjq07h0ecv85h49lsreaq9uqhqffshf0p6h",
   "recipient": "aur1qpz6j2e8vvg9x5z4yqw7sc6v0c8y37v5a2p004fswh2z3xql6k8sq66evcf",
-  "amount_quanta": "100000000",
+  "amount_quanta": "1000000000",
   "fee_quanta": "10000",
-  "fee_burned_quanta": "2000",
-  "fee_miner_quanta": "8000",
+  "fee_burned_quanta": "0",
+  "fee_validator_quanta": "10000",
   "nonce": 42,
   "status": "FINALIZED",
   "finality_proof": {
@@ -115,4 +115,4 @@ Ketika sebuah transaksi mencapai status `FINALIZED`, simpul RPC **MUST** mampu m
 }
 ```
 
-Aplikasi akuntansi dan explorer **MUST** menggunakan rincian `fee_burned_quanta` dan `fee_miner_quanta` dari receipt resmi untuk memastikan rekonsiliasi pembukuan yang akurat 100%.
+Aplikasi akuntansi dan explorer **MUST** menggunakan rincian `fee_validator_quanta` dari receipt resmi untuk memastikan rekonsiliasi pembukuan yang akurat 100%, di mana seluruh fee (100%) dialirkan kepada validator perakit blok sesuai Konstitusi Protokol Aurion.

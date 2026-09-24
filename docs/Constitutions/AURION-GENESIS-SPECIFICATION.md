@@ -1,49 +1,21 @@
 # 07 — AURION GENESIS SPECIFICATION
-## Spesifikasi Formal Genesis State, Parameter Inisial, dan Hash Blok Nol Protokol Aurion
+## Spesifikasi Formal Blok Nol (Genesis State), Alokasi Master Treasury, dan Jangkar Konsensus BFT
 
 > **Hierarki Dokumen:**  
 > `00 — AURION CONSTITUTION` $\longrightarrow$ `01 — MONETARY` $\longrightarrow$ `02 — CONSENSUS` $\longrightarrow$ `03 — STATE TRANSITION` $\longrightarrow$ `04 — TRANSACTION` $\longrightarrow$ `05 — CRYPTOGRAPHY` $\longrightarrow$ `06 — SERIALIZATION & WIRE` $\longrightarrow$ **`07 — GENESIS SPECIFICATION`**  
 >
 > **Status:** AUDITED & LOCKED SPECIFICATION  
-> **Klasifikasi:** Inisialisasi Kedaulatan Protokol Layer 0 (Genesis Core)  
-> **Versi:** 1.0.0-PROD  
-> **Sifat Ketetapan:** Imutabel, Kriptografis, Titik Awal Deterministik Tunggal (*Unique Root of Trust*)
+> **Klasifikasi:** Spesifikasi Bootstrapping State Protokol Layer 1 (Genesis Core)  
+> **Versi Protokol:** 1.0.0-BFT  
+> **Sifat Ketetapan:** Kriptografis, Deterministik Mutlak, Titik Awal Kekal Rantai Blok
 
 ---
 
-## 1. Hakikat dan Filosofi Genesis Aurion
+## 1. Prinsip dan Hakikat Blok Nol (Genesis Block)
 
-Genesis dalam Aurion bukanlah sekadar file konfigurasi format JSON yang fleksibel atau dapat diubah-ubah menurut selera operator simpul.
-
-Genesis adalah **akar kebenaran kriptografis pertama (*primordial root of cryptographic truth*)** yang mengunci:
-1. Batas-batas konstitusi dan kebijakan moneter yang telah diratifikasi;
-2. Penyerahan hak awal atas 35% suplai genesis (Creator 30% dan Developer 5%);
-3. Penguncian 65% suplai komunitas untuk ditambang secara murni;
-4. Parameter konsensus dan himpunan validator pemula (*genesis validator set*);
-5. Komitmen hash tunggal yang tidak dapat dipalsukan.
-
-```text
-┌────────────────────────────────────────────────────────────────────────┐
-│                        PIPA DETERMINISTIK GENESIS                      │
-│                                                                        │
-│   Genesis Specification Object (GSO)                                   │
-│                 │                                                      │
-│                 ▼ Canonical Binary Serialization                       │
-│   Genesis State (σ_0)                                                  │
-│                 │                                                      │
-│                 ▼ Blake3 Sparse Merkle Tree Construction               │
-│   StateRoot_0 (Hash256)                                                │
-│                 │                                                      │
-│                 ▼ Assembly Header Blok Nol                             │
-│   Block 0 (Genesis Block)                                              │
-│                 │                                                      │
-│                 ▼ Blake3 Canonical Hashing ("AURION-BLOCK-ID-V1")      │
-│   GENESIS HASH (Root of Trust Jaringan Aurion)                         │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-> **Invarian Konsensus Genesis:**  
-> Seluruh simpul yang mengklaim menjalankan rantai Aurion yang sah **WAJIB (MUST)** menghasilkan `GenesisHash` yang identik hingga ke tingkat bit terakhir. Simpul dengan `GenesisHash` yang berbeda dianggap berada pada alam semesta konsensus yang berbeda dan ditolak seketika pada jabat tangan P2P wire (*Handshake Termination*).
+1. **Jangkar Kedaulatan Tunggal:** Blok Nol ($H=0$) adalah akar absolut dari seluruh rantai blok Aurion. Seluruh pohon state akun, saldo moneter awal, dan himpunan validator genesis ($\mathcal{V}_0$) didefinisikan secara deterministik pada titik ini.
+2. **Ketiadaan Transaksi Eksternal:** Blok Nol tidak memuat transaksi transfer atau coinbase buatan pengguna. Seluruh saldo awal tercipta secara murni melalui inisialisasi state tree ($\sigma_0$).
+3. **Imutabilitas Permanen:** Setelah diratifikasi, konfigurasi Blok Nol tidak dapat diubah oleh proposal tata kelola on-chain maupun *soft fork*. Segala perubahan terhadap parameter genesis menghasilkan jaringan rantai independen yang terpisah.
 
 ---
 
@@ -57,17 +29,14 @@ GenesisSpecification
 ├── chain_id               : u32        (Mainnet = 1001)
 ├── genesis_time           : u64        (Unix epoch timestamp resmi dalam detik)
 ├── initial_supply         : InitialSupplyConfig
-│   ├── creator_vault      : AccountAllocation (30% = 19.800.000 AUR)
-│   ├── developer_vault    : AccountAllocation ( 5% =  3.300.000 AUR)
-│   └── unminted_reserve   : Quantum           (65% = 42.900.000 AUR)
-├── consensus_parameters   : ConsensusParams
+│   └── master_treasury    : AccountAllocation (100% = 66.000.000 AUR)
+├── consensus_parameters   : BftConsensusParams
 │   ├── target_block_time  : u64        (60 detik)
 │   ├── epoch_length       : u64        (10.000 blok)
-│   ├── halving_interval   : u64        (2.145.000 blok)
-│   ├── initial_subsidy    : Quantum    (1.000.000.000 Q = 10 AUR)
-│   ├── coinbase_maturity  : u64        (100 blok)
-│   ├── fee_burn_pct       : u128       (20%)
-│   ├── fee_miner_pct      : u128       (80%)
+│   ├── block_reward       : Quantum    (1.000.000.000 Q = 1 AUR)
+│   ├── proposer_share_pct : u128       (20%)
+│   ├── voter_share_pct    : u128       (80%)
+│   ├── gas_to_validator   : u128       (100%)
 │   └── max_payload_bytes  : u32        (4.194.304 B = 4 MB)
 └── initial_validators     : Vector<GenesisValidator>
     └── [validator_id, consensus_pubkey, voting_weight]
@@ -77,56 +46,40 @@ GenesisSpecification
 
 ## 3. Alokasi Moneter Awal dan Akun Genesis
 
-Mengukuhkan mandat **Bab 2 [AURION CONSTITUTION.md](file:///c:/Projects/aurion/AURION%20CONSTITUTION.md)** dan **[AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/AURION-MONETARY-POLICY-SPECIFICATION.md)**:
+Mengukuhkan mandat **[CONSTITUTION.md](file:///c:/Projects/aurion/CONSTITUTION.md)** dan **[AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION-MONETARY-POLICY-SPECIFICATION.md)**:
 
-### 3.1 Rincian Alokasi Suplai Genesis
+### 3.1 Rincian Alokasi Pasokan Genesis
 
-$$\mathbf{S_{\max} = 66.000.000\ AUR = 6.600.000.000.000.000\ Quantum\ (10^8\ \text{Scale})}$$
+$$\mathbf{S_{\text{genesis}} = 66.000.000\ AUR = 66.000.000.000.000.000\ Quantum\ (10^9\ \text{Scale})}$$
 
 | Entitas Akun Genesis | Alamat Kanonikal (Bech32m Mainnet) | Saldo dalam AUR | Saldo dalam Quantum ($Q$) | Status Hak |
 | :--- | :--- | ---:| ---:| :--- |
-| **Creator Vault** | `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql` | $19.800.000\ \text{AUR}$ | $1.980.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
-| **Developer Vault** | `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y` | $3.300.000\ \text{AUR}$ | $330.000.000.000.000\ Q$ | Terbit pada State $\sigma_0$ |
-| **Cadangan Penambangan** | *Virtual Reserve (Belum Terbit)* | $42.900.000\ \text{AUR}$ | $4.290.000.000.000.000\ Q$ | Terbit via PoW / BFT Block Rewards ($H \ge 1$) |
-| **TOTAL INITIAL STATE** | — | $\mathbf{23.100.000\ \text{AUR}}$ | $\mathbf{2.310.000.000.000.000\ Q}$ | **Total Suplai Beredar Awal (35%)** |
+| **Master Treasury Account** | `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql` | $66.000.000\ \text{AUR}$ | $66.000.000.000.000.000\ Q$ | Terbit penuh pada State $\sigma_0$ |
+| **TOTAL INITIAL STATE** | — | $\mathbf{66.000.000\ \text{AUR}}$ | $\mathbf{66.000.000.000.000.000\ Q}$ | **100% Pasokan Dasar Blok 0** |
 
-### 3.1.1 Kunci Kanonikal, Public Key, dan Derivasi Akun Genesis
+### 3.2 Kunci Kanonikal dan Derivasi Akun Master Treasury
 
-Nilai berikut **terkunci** pada artefak yang diratifikasi (`GENESIS_CEREMONY.json`
-dan `MAINNET_GENESIS_BLOCK.json`). Kedua artefak Mainnet di-embed ke binary
-aktif; `canonical_mainnet_genesis()` merekonstruksi state dari transkrip embedded
-dan memverifikasi hash blok serta state root terhadap konstanta kanonikal.
-File genesis pada disk tidak pernah menjadi sumber kebenaran Mainnet. Nilai
-direproduksi oleh `CanonicalCeremonyKeypairs::new_deterministic()` dan
-diverifikasi oleh `tests/mainnet_launch.rs`. HRP alamat Mainnet adalah `aur`
-(Bech32m, 62 karakter).
+- **Address (Bech32m Mainnet):** `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
+- **Address (Hex, 32 Bytes):** `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad`
+- **Public Key (Ed25519, Hex):** `8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c`
+- **Derivation Path BIP-44:** `m/44'/9999'/0'/0'/0'`
 
-| Peran | Address (Bech32m Mainnet) | Address (Hex, 32 B) | Public Key (Ed25519, Hex) | Derivation Path |
-| :--- | :--- | :--- | :--- | :--- |
-| **Creator** | `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql` | `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad` | `8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c` | `m/44'/9999'/0'/0'/0'` |
-| **Developer** | `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y` | `708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc` | `8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394` | `m/44'/9999'/0'/0'/0'` |
+Akun Master Treasury mengisi state genesis awal $\sigma_0$ sebagai saldo perbendaharaan berdaulat untuk menopang seluruh kebutuhan operasional, likuiditas, infrastruktur bootnode, dan cadangan jaringan.
 
-Kedua akun inilah yang mengisi state genesis; SMT root dari keduanya terkunci
-sebagai `StateRoot_0 = 61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850`
-(field `state_root` pada header blok nol), sedangkan `GenesisHash` blok nol adalah
-`d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9`.
-
-### 3.2 Invarian Suplai Awal Blok Nol
+### 3.3 Invarian Suplai Awal Blok Nol
 Pada pembentukan state genesis $\sigma_0$:
-1. **Total Suplai Pernah Diterbitkan:**
-   $$S_{\text{emitted}}(0) = 1.980.000.000.000.000 + 330.000.000.000.000 = 2.310.000.000.000.000\ Q\ (35\%)$$
+1. **Total Suplai Diterbitkan:**
+   $$S_{\text{emitted}}(0) = 66.000.000.000.000.000\ Q\ (100\%)$$
 2. **Total Suplai Aktif Beredar:**
-   $$S_{\text{circulating}}(0) = S_{\text{emitted}}(0) = 2.310.000.000.000.000\ Q$$
+   $$S_{\text{circulating}}(0) = 66.000.000.000.000.000\ Q$$
 3. **Total Suplai Terbakar:**
    $$S_{\text{burned}}(0) = 0\ Q$$
-4. **Cadangan Tertunda Komunitas:**
-   $$S_{\text{mining\_reserve}} = 4.290.000.000.000.000\ Q\ (65\%)$$
 
 ---
 
 ## 4. Himpunan Validator Genesis (Initial Validator Set $\mathcal{V}_0$)
 
-Untuk memastikan konsensus Aurion-BFT dapat langsung memproses blok pertama ($H=1$) tanpa ketergantungan eksternal:
+Untuk memastikan konsensus Aurion-BFT dapat langsung memproses proposal blok pertama ($H=1$) tanpa penundaan:
 
 ### 4.1 Definisi Himpunan $\mathcal{V}_0$
 Himpunan validator genesis $\mathcal{V}_0$ terdiri dari sekurang-kurangnya empat simpul genesis independen untuk memenuhi toleransi kegagalan Byzantine minimum ($N \ge 3f + 1$ dengan $f=1 \implies N=4$):
@@ -135,22 +88,20 @@ $$\mathcal{V}_0 = \big\{ \text{Val}_1,\; \text{Val}_2,\; \text{Val}_3,\; \text{V
 
 | Simpul Validator | Bobot Voting ($w_i$) | Persentase Hak Suara | Peran Operasional Genesis |
 | :--- | ---:| ---:| :--- |
-| **Genesis Validator 1** | $250.000$ | $25,00\%$ | Primary Bootnode Alpha |
-| **Genesis Validator 2** | $250.000$ | $25,00\%$ | Primary Bootnode Beta |
-| **Genesis Validator 3** | $250.000$ | $25,00\%$ | Primary Bootnode Gamma |
-| **Genesis Validator 4** | $250.000$ | $25,00\%$ | Primary Bootnode Delta |
+| **Genesis Validator 1** | $250.000$ | $25,00\%$ | Primary BFT Engine Alpha |
+| **Genesis Validator 2** | $250.000$ | $25,00\%$ | Primary BFT Engine Beta |
+| **Genesis Validator 3** | $250.000$ | $25,00\%$ | Primary BFT Engine Gamma |
+| **Genesis Validator 4** | $250.000$ | $25,00\%$ | Primary BFT Engine Delta |
 | **TOTAL BOBOT ($W_0$)** | $\mathbf{1.000.000}$ | $\mathbf{100,00\%}$ | **Kuorum $\mathcal{Q}_0 = 666.667$ Suara** |
 
 ### 4.2 Ambang Batas Kuorum Genesis
-$$\mathcal{Q}_0 = \left\lfloor \frac{2 \times 1.000.000}{3} \right\rfloor + 1 = 666.666 + 1 = 666.667\ \text{Suara}\ (> 66,6667\%)$$
+$$\mathcal{Q}_0 = \left\lfloor \frac{2 \times 1.000.000}{3} \right\rfloor + 1 = 666.666 + 1 = 666.667\ \text{Suara}\ (> \frac{2}{3} W_0)$$
 
-Setiap proposal blok pada Epoch 0 ($H \in [1, 10.000]$) wajib mengumpulkan tanda tangan Pre-commit dengan total bobot $\ge 666.667$ untuk mencapai status finalitas.
+Setiap proposal blok pada Epoch 0 ($H \in [1, 10.000]$) wajib mengumpulkan tanda tangan Precommit dengan total bobot $\ge 666.667$ untuk mencapai finalitas Quorum Certificate (QC).
 
 ---
 
 ## 5. Komitmen Kriptografis dan Struktur Blok Nol (Block 0)
-
-Blok Nol (Genesis Block) adalah satu-satunya blok dalam sejarah Aurion yang tidak diproduksi oleh Proposer reguler, melainkan dibentuk secara deterministik murni dari komitmen state awal.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -176,43 +127,29 @@ Blok Nol (Genesis Block) adalah satu-satunya blok dalam sejarah Aurion yang tida
 
 ### 5.1 Karakteristik Unik Blok Nol
 1. **Ketiadaan Blok Induk:** `prev_block_hash` diisi dengan array 32-byte bernilai nol (`[0u8; 32]`).
-2. **Ketiadaan Transaksi:** Blok Nol tidak memuat transaksi reguler maupun transaksi coinbase (`transactions_count = 0`). Saldo genesis tidak diciptakan via transaksi, melainkan didefinisikan langsung pada state tree $\sigma_0$.
-3. **Ketiadaan Sertifikat Komitmen Induk:** Blok Nol tidak membutuhkan Commit Certificate karena keabsahannya diverifikasi langsung terhadap konfigurasi spesifikasi genesis yang dikompilasi ke dalam kode simpul.
+2. **Ketiadaan Transaksi:** Blok Nol tidak memuat transaksi reguler maupun transaksi luar (`transactions_count = 0`). Saldo genesis didefinisikan langsung pada pohon Sparse Merkle Tree (SMT) $\sigma_0$.
+3. **Ketiadaan Sertifikat Kuorum Induk:** Blok Nol tidak memerlukan QC induk karena keabsahannya diverifikasi langsung terhadap konfigurasi biner `genesis.json` kanonikal.
 
 ---
 
 ## 6. Prosedur Perhitungan Genesis Hash Kanonikal
 
-Setiap implementasi simpul Aurion wajib mengeksekusi urutan perhitungan hash berikut saat inisialisasi database awal:
-
-### Langkah 1: Konstruksi State Awal ($\sigma_0$)
-1. Bentuk Sparse Merkle Tree (SMT) 256-bit berbasis Blake3.
-2. Masukkan akun Creator Vault pada kunci `DeriveKey(CreatorAddress)` dengan saldo $1.980.000.000.000.000\ Q$ dan nonce $0$.
-3. Masukkan akun Developer Vault pada kunci `DeriveKey(DeveloperAddress)` dengan saldo $330.000.000.000.000\ Q$ dan nonce $0$.
-4. Masukkan entri keempat validator $\mathcal{V}_0$ ke dalam sub-pohon validator.
-5. Masukkan state moneter awal $\mathcal{M}$ ($S_{\text{emitted}} = 2.310.000.000.000.000\ Q$).
-6. Dapatkan root hash pohon:
-   $$\text{StateRoot}_0 = \text{SMT\_Root}(\sigma_0)$$
-
-### Langkah 2: Perakitan Biner Header Blok Nol
-Serialisasikan ke-7 field header Blok Nol menjadi array tepat 124 bytes mengikuti aturan **[06 — SERIALIZATION & WIRE PROTOCOL](file:///c:/Projects/aurion/AURION-SERIALIZATION-AND-WIRE-PROTOCOL.md)**:
-
-$$\text{HeaderBytes}_0 = \text{version} \parallel \text{height} \parallel \text{round} \parallel \text{timestamp} \parallel \mathbf{0}_{32} \parallel \mathbf{0}_{32} \parallel \text{StateRoot}_0$$
-
-### Langkah 3: Komputasi Genesis Hash
-Terapkan fungsi hash Blake3 dengan Domain Separation Tag resmi:
-
-$$\mathbf{GenesisHash} = \text{Blake3}\Big( \text{"AURION-BLOCK-ID-V1"} \mathbin{\Vert} \text{HeaderBytes}_0 \Big)$$
+1. **Konstruksi SMT State Awal ($\sigma_0$):**
+   - Masukkan akun Master Treasury pada kunci `DeriveKey(TreasuryAddress)` dengan saldo $66.000.000.000.000.000\ Q$ dan nonce $0$.
+   - Masukkan entri keempat validator genesis $\mathcal{V}_0$.
+   - Dapatkan `StateRoot_0 = SMT_Root(\sigma_0)`.
+2. **Perakitan Header 124 Bytes:**
+   $$\text{HeaderBytes}_0 = \text{version} \parallel \text{height} \parallel \text{round} \parallel \text{timestamp} \parallel \mathbf{0}_{32} \parallel \mathbf{0}_{32} \parallel \text{StateRoot}_0$$
+3. **Komputasi Genesis Hash:**
+   $$\mathbf{GenesisHash} = \text{Blake3}\Big( \text{"AURION-BLOCK-ID-V1"} \mathbin{\Vert} \text{HeaderBytes}_0 \Big)$$
 
 ---
 
 ## 7. Rangkuman Konstanta Resmi Genesis Mainnet
 
-Untuk menjamin ketiadaan divergensi, konstanta resmi Genesis Mainnet Aurion dikunci sebagai berikut:
-
 ```rust
 // ==============================================================================
-// AURION MAINNET GENESIS CONSTANTS
+// AURION MAINNET GENESIS CONSTANTS (1.0.0-BFT)
 // ==============================================================================
 
 /// Protocol Version
@@ -221,17 +158,17 @@ pub const GENESIS_PROTOCOL_VERSION: u32 = 1;
 /// Network Chain ID (Mainnet = 1001)
 pub const GENESIS_CHAIN_ID: u32 = 1001;
 
-/// Genesis Unix Timestamp Resmi Peluncuran Mainnet (15 Maret 2026 00:00:00 UTC)
+/// Genesis Unix Timestamp Resmi Peluncuran Mainnet
 pub const GENESIS_TIMESTAMP_MAINNET: u64 = 1773532800;
 
-/// Total Suplai Terbit pada Blok 0 (35% = 2.310.000.000.000.000 Q)
-pub const GENESIS_INITIAL_EMITTED_QUANTA: u128 = 2_310_000_000_000_000;
+/// Total Suplai Terbit pada Blok 0 (100% = 66 Juta AUR = 6,6 x 10^16 Quantum)
+pub const GENESIS_MASTER_TREASURY_QUANTA: u128 = 66_000_000_000_000_000;
 
-/// Cadangan Mining Komunitas Murni (65% = 4.290.000.000.000.000 Q)
-pub const GENESIS_COMMUNITY_RESERVE_QUANTA: u128 = 4_290_000_000_000_000;
+/// Unit atomik per 1 AUR (10^9)
+pub const GENESIS_QUANTA_PER_AUR: u128 = 1_000_000_000;
 
-/// Batas Suplai Tertinggi Permanen (100% = 6.600.000.000.000.000 Q)
-pub const GENESIS_HARD_CAP_QUANTA: u128 = 6_600_000_000_000_000;
+/// Reward blok BFT (1 AUR per blok)
+pub const GENESIS_BLOCK_REWARD_QUANTA: u128 = 1_000_000_000;
 
 /// Jumlah Validator Pemula
 pub const GENESIS_VALIDATOR_COUNT: usize = 4;
@@ -239,12 +176,6 @@ pub const GENESIS_VALIDATOR_COUNT: usize = 4;
 /// Total Voting Power Awal
 pub const GENESIS_TOTAL_VOTING_POWER: u64 = 1_000_000;
 
-/// Kuorum Konsensus Awal (2/3 + 1)
+/// Kuorum Konsensus Awal (> 2/3)
 pub const GENESIS_QUORUM_THRESHOLD: u64 = 666_667;
 ```
-
----
-
-## 8. Surat Ratifikasi Konstitusional Genesis
-
-Spesifikasi Genesis ini mengikat seluruh node dan developer Aurion. Blok 0 adalah jangkar identitas permanen ekosistem. Tidak ada entitas, voting tata kelola, maupun *hard fork* yang diizinkan mengubah peristiwa masa lalu yang terkunci di dalam Genesis State dan Genesis Hash.

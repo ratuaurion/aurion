@@ -1,5 +1,5 @@
 # 06 — AURION FEE & PAYMENT APPLICATION RULES
-## Standar Estimasi Biaya Transaksi, Transparansi Pembakaran 20%, dan Kebijakan Pembayaran Pedagang (Merchant)
+## Standar Estimasi Biaya Transaksi, Alokasi 100% Fee ke Validator, dan Kebijakan Pembayaran Pedagang (Merchant)
 
 > **Hierarki Dokumen:**  
 > `AURION CONSTITUTIONS` $\longrightarrow$ `PROTOCOL SPECIFICATIONS` $\longrightarrow$ `00-APPLICATION-RULES` $\longrightarrow$ **`06-FEE-PAYMENT-RULES`**  
@@ -32,22 +32,22 @@ Untuk mencegah kebingungan pengguna dan kesalahan estimasi perangkat lunak, ekos
 └──────────────────┴─────────────────────────────────────────────────────┘
 ```
 
-1. **Batas Minimum Protokol:** `Actual Fee` **MUST** $\ge 10.000\ \text{Quantum}$ ($0,0001\ \text{AUR}$). Wallet **MUST NOT** mengizinkan pembuatan transaksi dengan fee di bawah ambang ini.
+1. **Batas Minimum Protokol:** `Actual Fee` **MUST** $\ge 10.000\ \text{Quantum}$ ($0,00001\ \text{AUR}$ pada skala $10^9$ Quantum). Dompet (wallet) **MUST NOT** mengizinkan pembuatan transaksi dengan fee di bawah ambang ini.
 2. **Ketiadaan Konsep Gas Tersembunyi:** Aurion beroperasi dengan model biaya langsung (*Deterministic Byte/Execution Fee*) tanpa ketidakpastian gas limit ala EVM. Seluruh nilai `fee` didebet secara pasti dari akun pengirim.
 
 ---
 
-## 2. Kewajiban Transparansi Pembakaran Biaya (20% Burn Disclosure)
+## 2. Kewajiban Transparansi Alokasi Biaya Transaksi (100% Validator Routing)
 
-Mengukuhkan mandat **Bab 3 [AURION CONSTITUTION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION%20CONSTITUTION.md)** dan **[AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION-MONETARY-POLICY-SPECIFICATION.md)**:
+Mengukuhkan mandat **Bab I Pasal 2 Ayat 4 dan Bab II Pasal 3 Ayat 4 [AURION CONSTITUTION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION%20CONSTITUTION.md)** serta **[AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION-MONETARY-POLICY-SPECIFICATION.md)**:
 
 1. **Pengungkapan pada Antarmuka Dompet:**  
-   Setiap perangkat lunak dompet (wallet) **MUST** menyajikan rincian pembagian biaya transaksi sebelum pengguna menekan tombol persetujuan kirim:
+   Setiap perangkat lunak dompet (wallet) **MUST** menyajikan rincian alokasi biaya transaksi sebelum pengguna menekan tombol persetujuan kirim:
    - Total Biaya Jaringan: $\mathcal{F}_{\text{total}}$
-   - Bagian Dimusnahkan Permanen (Burn): $\mathcal{F}_{\text{burned}} = \lfloor (\mathcal{F}_{\text{total}} \times 20) / 100 \rfloor$
-   - Bagian Hadiah Produser Blok (Miner): $\mathcal{F}_{\text{miner}} = \mathcal{F}_{\text{total}} - \mathcal{F}_{\text{burned}}$
-2. **Rasional Pendidikan Moneter:**  
-   Wallet **SHOULD** menyertakan keterangan edukasi singkat: *"20% dari biaya ini dimusnahkan secara permanen untuk menjaga kelangkaan absolut 66 Juta AUR."*
+   - Alokasi Validator Pembuat Blok: $\mathcal{F}_{\text{validator}} = \mathcal{F}_{\text{total}}$ (100% dialirkan kepada validator perakit blok)
+   - Pembakaran Protokol: $\mathcal{F}_{\text{burned}} = 0$ (Skema usang pembakaran 20% telah dihapus total; suplai genesis dikunci tetap 66 Juta AUR ke Master Treasury)
+2. **Rasional Insentif Validator:**  
+   Dompet (wallet) **SHOULD** menyertakan keterangan edukasi singkat: *"100% dari biaya transaksi ini dialokasikan langsung kepada validator pembuat blok sebagai insentif pengamanan jaringan konsensus BFT deterministik."*
 
 ---
 
@@ -57,9 +57,9 @@ Simpul RPC dan pustaka SDK **SHOULD** menyediakan tiga tingkatan estimasi biaya 
 
 | Tingkat Kecepatan | Formula Estimasi Biaya | Target Waktu Masuk Blok | Skenario Penggunaan |
 | :--- | :--- | :--- | :--- |
-| **Ekonomis (Low)** | $\text{BaseFee} = 10.000\ Q$ | $\le 3\ \text{Blok}$ ($\approx 3\ \text{menit}$) | Transfer terjadwal, rebalancing internal. |
-| **Standar (Normal)**| $\text{BaseFee} \times 1,25 = 12.500\ Q$| Blok Berikutnya ($H+1$) | Pembayaran harian, transfer personal. |
-| **Prioritas (High)**| $\text{BaseFee} \times 2,00 = 20.000\ Q$| Prioritas Puncak $H+1$ | Arbitrase bursa, transaksi mendesak. |
+| **Ekonomis (Low)** | $\text{BaseFee} = 10.000\ Q$ | $\le 3\ \text{Slot}$ ($\approx 3\ \text{detik}$) | Transfer terjadwal, rebalancing internal. |
+| **Standar (Normal)**| $\text{BaseFee} \times 1,25 = 12.500\ Q$| Slot Berikutnya ($H+1$, $\approx 1\ \text{detik}$) | Pembayaran harian, transfer personal. |
+| **Prioritas (High)**| $\text{BaseFee} \times 2,00 = 20.000\ Q$| Prioritas Puncak $H+1$ ($< 1\ \text{detik}$) | Arbitrase, transaksi berkecepatan tinggi. |
 
 ---
 

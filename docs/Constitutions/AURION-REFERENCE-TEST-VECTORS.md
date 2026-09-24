@@ -236,24 +236,24 @@ vote.signature  : 22 repeated 64 times
 
 ### 9.1 Skenario Input Transisi
 - **State Awal ($\sigma$):**
-  - Akun A: $\text{Balance} = 1.000.000.000\ Q$ ($10\ \text{AUR}$), $\text{Nonce} = 0$.
+  - Akun A: $\text{Balance} = 1.000.000.000\ Q$ ($1\ \text{AUR}$ pada skala $10^9$ Quantum), $\text{Nonce} = 0$.
   - Akun B: $\text{Balance} = 0\ Q$, $\text{Nonce} = 0$.
 - **Transaksi $T_x$:**
   - Pengirim: Akun A
   - Penerima: Akun B
-  - Nilai Transfer: $250.000.000\ Q$ ($2,5\ \text{AUR}$)
-  - Biaya Transaksi: $10.000\ Q$ ($0,0001\ \text{AUR}$)
+  - Nilai Transfer: $250.000.000\ Q$ ($0,25\ \text{AUR}$)
+  - Biaya Transaksi: $10.000\ Q$ ($0,00001\ \text{AUR}$)
 
 ### 9.2 Perhitungan Deterministik Output ($\sigma'$)
 1. **Total Debet Akun A:** $250.000.000 + 10.000 = 250.010.000\ Q$.
-2. **Saldo Akhir Akun A:** $1.000.000.000 - 250.010.000 = \mathbf{749.990.000\ Q}\ (7,49990000\ \text{AUR})$.
+2. **Saldo Akhir Akun A:** $1.000.000.000 - 250.010.000 = \mathbf{749.990.000\ Q}\ (0,749990000\ \text{AUR})$.
 3. **Nonce Baru Akun A:** $0 + 1 = \mathbf{1}$.
-4. **Saldo Akhir Akun B:** $0 + 250.000.000 = \mathbf{250.000.000\ Q}\ (2,50000000\ \text{AUR})$.
-5. **Pembagian Biaya Transaksi (20% Burn, 80% Miner):**
-   - $\mathcal{F}_{\text{burned}} = \lfloor (10.000 \times 20) / 100 \rfloor = \mathbf{2.000\ Q}$.
-   - $\mathcal{F}_{\text{miner}} = 10.000 - 2.000 = \mathbf{8.000\ Q}$.
+4. **Saldo Akhir Akun B:** $0 + 250.000.000 = \mathbf{250.000.000\ Q}\ (0,250000000\ \text{AUR})$.
+5. **Alokasi Biaya Transaksi (100% Validator, 0% Burn):**
+   - $\mathcal{F}_{\text{validator}} = \mathbf{10.000\ Q}$ (100% dialokasikan langsung kepada validator pembuat blok).
+   - $\mathcal{F}_{\text{burned}} = \mathbf{0\ Q}$ (Skema usang pembakaran fee telah dihapuskan).
 6. **Verifikasi Konservasi Nilai:**
-   $$749.990.000 + 250.000.000 + 2.000 + 8.000 = 1.000.000.000\ Q\ (\text{Presisi Sempurna 100\%})$$
+   $$749.990.000 + 250.000.000 + 10.000 = 1.000.000.000\ Q\ (\text{Presisi Sempurna 100\%})$$
 
 ---
 

@@ -1,6 +1,7 @@
 # AURION — Operational Runbooks & Operations Manuals
 > **Klasifikasi:** Panduan Operasional Jaringan, Validator, Operator Sentry, & Tim Keamanan  
-> **Status:** Produksi Resmi (Production-Ready)
+> **Status:** Produksi Resmi (Production-Ready)  
+> **Acuan Tertinggi:** [Konstitusi Protokol Aurion (`CONSTITUTION.md`)](file:///c:/Projects/aurion/CONSTITUTION.md) | [Dokumen 12: Aturan Operasional](file:///c:/Projects/aurion/docs/Application-Rules-Layer/application/12-OPERATIONAL-RULES.md)
 
 ---
 

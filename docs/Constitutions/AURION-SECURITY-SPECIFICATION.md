@@ -47,8 +47,8 @@ $$\mathbf{Threat} \longrightarrow \mathbf{Assumption} \longrightarrow \mathbf{De
 ### 3.2 Vektor 2: Serangan Sybil (Sybil Attacks)
 - **Threat:** Penyerang menciptakan jutaan identitas simpul palsu untuk mendominasi voting konsensus atau menguasai topologi P2P.
 - **Assumption:** Penyerang memiliki sumber daya komputasi dan alamat IP tak terbatas, namun modal koin AUR miliknya terbatas.
-- **Defense:** Hak voting konsensus tidak didasarkan pada jumlah IP/node, melainkan pada **Agunan Mandiri Minimum (*Self-Bond*) sebesar $10.000\ \text{AUR}$ ($10^{12}\ Q$)** per validator.
-- **Invariant:** $\forall v \in \mathcal{V}_E, \quad \text{SelfBond}(v) \ge 1.000.000.000.000\ \text{Quantum}$.
+- **Defense:** Hak voting konsensus tidak didasarkan pada jumlah IP/node, melainkan pada **Agunan Mandiri Minimum (*Self-Bond*) sebesar $10.000\ \text{AUR}$ ($10^{13}\ Q$)** per validator.
+- **Invariant:** $\forall v \in \mathcal{V}_E, \quad \text{SelfBond}(v) \ge 10.000.000.000.000\ \text{Quantum}$.
 - **Detection:** Mesin STF menolak pendaftaran validator tanpa transfer agunan $10.000\ \text{AUR}$ yang sah.
 - **Recovery:** Node palsu tanpa agunan hanya menjadi peer relai pasif tanpa hak suara konsensus.
 
@@ -184,13 +184,25 @@ $$\mathbf{Threat} \longrightarrow \mathbf{Assumption} \longrightarrow \mathbf{De
 
 ---
 
+### 3.14 Vektor 14: Pencemaran Simulasi & Mode Tiruan (Zero-Mock Policy Violation)
+- **Threat:** Penggunaan flag mode tiruan (`--dev`), mesin *mock consensus*, kluster proses simulasi multi-node dalam satu server fisik publik, atau kunci privat hardcoded pada rilis biner produksi.
+- **Assumption:** Biner resmi Aurion wajib steril 100% dari kode tiruan (*architectural contamination*).
+- **Defense:**
+  1. *Pemberlakuan Doktrin Zero-Mock:* Biner resmi rilis menolak flag `--dev`, simulasi konsensus palsu, dan kunci privat bawaan (*hardcoded keys*).
+  2. *Topologi P2P Nyata:* Lingkungan publik VPS (`116.212.72.89`) hanya boleh mengeksekusi biner dengan soket TCP nyata (Port 7447) dan `genesis.json` resmi.
+- **Invariant:** $\text{IsProductionBinary} \implies \text{MockEngineForbidden} \land \text{HardcodedKeysForbidden}$.
+- **Detection:** Pemeriksaan runtime validator menolak konfigurasi tiruan saat inisialisasi node.
+- **Recovery:** Simpul seketika menghentikan eksekusi (*panic halt*) jika mendeteksi parameter mock di jaringan produksi.
+
+---
+
 ## 4. Arsitektur Penghentian Kegagalan Integritas (Fail-Stop Architecture)
 
 Prinsip tertinggi keamanan Aurion adalah:
 
 > **"Sebuah simpul yang mati (*fail-stop*) jauh lebih berharga dan aman bagi kedaulatan jaringan daripada sebuah simpul yang diam-diam menjalankan state yang salah."**
 
-Jika terjadi pelanggaran terhadap salah satu dari Invarian Moneter [INV-01] hingga [INV-06], pelanggaran konservasi nilai, atau manipulasi state root yang lolos verifikasi lokal:
-1. Simpul wajib mengunci database `ledger` ke mode *Read-Only*;
+Jika terjadi pelanggaran terhadap salah satu dari Invarian Moneter `[INV-MON-01]` hingga `[INV-MON-06]`, pelanggaran konservasi nilai, atau manipulasi state root yang lolos verifikasi lokal:
+1. Simpul wajib mengunci database `ledger` (`redb`) ke mode *Read-Only*;
 2. Memancarkan log audit darurat berkategori `CRITICAL_SECURITY_PANIC`;
 3. Menghentikan proses eksekusi seketika (*abort runtime*) tanpa melakukan rollback otomatis yang berisiko.

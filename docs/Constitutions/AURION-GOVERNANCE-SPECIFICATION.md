@@ -38,10 +38,10 @@ Tata kelola (*governance*) di dalam Aurion bukanlah kekuasaan mutlak tanpa batas
 
 ### 1.1 Batasan Kekuasaan Tata Kelola (Negative Governance Powers)
 Tata kelola on-chain **DILARANG KERAS DAN TIDAK MEMILIKI KEMAMPUAN IMPLISIT** untuk:
-1. Menambah batas suplai maksimum melampaui $66.000.000\ \text{AUR}$;
-2. Mengubah rasio alokasi genesis (Creator 30%, Developer 5%, Community 65%);
+1. Mengubah alokasi pasokan dasar Genesis 66.000.000 AUR pada Blok 0 ke Master Treasury Account;
+2. Mengubah mekanisme konsensus BFT deterministik menjadi Proof-of-Work atau mengaktifkan mode tiruan (`--dev`);
 3. Mengizinkan aritmetika floating-point pada lapisan konsensus;
-4. Mencetak koin baru dari ketiadaan di luar aturan subsidi blok;
+4. Mencetak koin baru dari ketiadaan di luar aturan block reward protokol $R$;
 5. Membatalkan keabsahan koin yang memiliki *Reward Provenance Identifier* (RPI) sah;
 6. Menyita saldo akun pengguna yang jujur tanpa bukti kriptografis ekuivokasi.
 

@@ -1,45 +1,44 @@
 # 12 — AURION PRODUCTION OPERATIONAL & SENTRY ARCHITECTURE RULES
-## Standar Operasional Infrastruktur Produksi, Topologi Sentry, Pemantauan, dan Pemulihan Bencana
+## Standar Operasional Infrastruktur Produksi, Topologi Bootnode/Sentry, Pemantauan, dan Doktrin Zero-Mock
 
 > **Hierarki Dokumen:**  
-> `AURION CONSTITUTIONS` $\longrightarrow$ `PROTOCOL SPECIFICATIONS` $\longrightarrow$ `00-APPLICATION-RULES` $\longrightarrow$ **`12-OPERATIONAL-RULES`**  
+> `AURION CONSTITUTION` $\longrightarrow$ `PROTOCOL SPECIFICATIONS` $\longrightarrow$ `00-APPLICATION-RULES` $\longrightarrow$ **`12-OPERATIONAL-RULES`**  
 >
 > **Status:** RATIFIED & LOCKED APPLICATION SPECIFICATION  
 > **Klasifikasi:** Standar Infrastruktur & Operasi Sistem (Production Infrastructure Standard)  
-> **Versi:** 1.0.0-PROD  
-> **Sifat Ketetapan:** Normatif Wajib (RFC 2119 / RFC 8174), High-Availability, Anti-DDoS
+> **Versi Protokol:** 1.0.0-BFT  
+> **Sifat Ketetapan:** Normatif Wajib (RFC 2119 / RFC 8174), High-Availability, Anti-DDoS, Zero-Mock
 
 ---
 
-## 1. Topologi Infrastruktur Produksi dan Isolasi Validator (Sentry Architecture)
+## 1. Topologi Infrastruktur Produksi dan Pemisahan Peran Node
 
-Validator konsensus Aurion-BFT memegang kunci penandatanganan konsensus yang berbobot tinggi dan rentan terhadap serangan penolakan layanan (DDoS) jika alamat IP publiknya terungkap.
-
-Oleh karena itu, seluruh infrastruktur produksi **MUST** menerapkan **Topologi Arsitektur Sentry Node**:
+Mengukuhkan amanat **Bab III dan Bab V [CONSTITUTION.md](file:///c:/Projects/aurion/CONSTITUTION.md)**, infrastruktur produksi Aurion beroperasi di atas pemisahan peran tiga lapis yang ketat:
 
 ```text
-[INTERNET / JARINGAN P2P PUBLIK]
-               │
-               ▼
-┌──────────────────────────────────────────────┐
-│         LAPISAN SENTRY NODES PUBLIK          │
-│  ├── Simpul Sentry 1 (IP Publik A)           │
-│  ├── Simpul Sentry 2 (IP Publik B)           │
-│  └── Simpul Sentry 3 (IP Publik C)           │
-│  (Menyaring DDoS, Rate Limiting, P2P Scrub)  │
-└──────────────────────┬───────────────────────┘
-                       │ Jaringan Privat Terenkripsi (WireGuard / VPN)
-                       ▼
-┌──────────────────────────────────────────────┐
-│       SIMPUL VALIDATOR INTI (PRIVATE CORE)   │
-│  ├── Port P2P Hanya Mendengarkan Sentry      │
-│  ├── Port RPC Publik DITUTUP TOTAL           │
-│  └── Menandatangani Proposal & Suara BFT     │
-└──────────────────────────────────────────────┘
+┌──────────────────┐               ┌────────────────────────┐               ┌────────────────────┐
+│ Validator Nodes  │ <---(P2P)---> │  P2P Anchor / Bootnode │ <---(P2P)---> │ Gateway / Explorer │
+│  (Ed25519 BFT)   │               │   (TCP Port 7447)      │               │ (HTTP/WS Port 8080)│
+└──────────────────┘               └────────────────────────┘               └────────────────────┘
+                                               │                                       │
+                                    Alamat: 116.212.72.89                   Nginx SSL Reverse Proxy
+                                    (Isolasi Signing Key)                  bootnode.ratuaurion.store
 ```
 
-> **MANDAT ISOLASI VALIDATOR (THE VALIDATOR ISOLATION MANDATE):**  
-> Simpul Validator konsensus **MUST NOT** membuka antarmuka RPC publik atau menghubungkan alamat IP-nya secara langsung ke internet terbuka. Validator **HANYA BOLEH** terhubung ke simpul Sentry privat miliknya sendiri.
+### 1.1 Node Jangkar / P2P Bootnode (`116.212.72.89`)
+1. **Soket Pendengar Persisten:** Wajib membuka soket pendengar TCP (`TCP Listener`) pada **Port 7447** secara persisten untuk melayani jabat tangan masuk (*inbound handshake*) dari validator luar.
+2. **Isolasi Kunci Konsensus:** Bootnode **DILARANG KERAS** menyimpan atau mengakses kunci privat penandatangan konsensus (*consensus signing key*). Jika bootnode diserang atau dikompromikan, kuorum voting BFT tetap aman.
+3. **Fungsi Utama:** Melayani penemuan simpul (*peer discovery*), pertukaran peer (*PEX*), dan relai pesan konsensus/transaksi.
+
+### 1.2 Node Validator Inti (Private Core)
+1. **Fungsi Konsensus:** Menjalankan mesin status konsensus BFT (*Proposal*, *Prevote*, *Precommit*, *Commit*).
+2. **Kunci Rahasia:** Menyimpan pasangan kunci privat Ed25519 untuk menandatangani proposal dan suara blok.
+3. **MANDAT ISOLASI PORT VALIDATOR:**  
+   Port RPC/Gateway validator **MUST NOT** diekspos ke internet publik. Seluruh komunikasi validator **HANYA BOLEH** berjalan melalui saluran P2P terenkripsi ke Bootnode atau sesama peer terverifikasi.
+
+### 1.3 Gateway API & Telemetri
+1. **Layanan Aplikasi:** Melayani kueri status ledger, data blok, histori transaksi, dan stream WebSocket telemetri ke penjelajah blok (`aurion-explorer`).
+2. **Integrasi Nginx SSL:** Gateway lokal mengikat port internal **`127.0.0.1:8080`**, yang diteruskan oleh Nginx dengan sertifikat SSL resmi ke domain publik **`bootnode.ratuaurion.store`**.
 
 ---
 
@@ -56,7 +55,7 @@ Simpul gateway dan penyedia layanan RPC **MUST** mengekspos dua endpoint pemanta
 - **Kriteria Lulus (HTTP 200):**
   1. Jumlah peer aktif $\ge 3$ koneksi P2P.
   2. Selisih tinggi blok lokal terhadap ujung rantai jaringan $\le 1$ blok (`is_syncing == false`).
-  3. Latensi pembacaan state database $\le 50\ \text{ms}$.
+  3. Latensi pembacaan state database ACID `redb` $\le 50\ \text{ms}$.
 - Jika salah satu kriteria gagal, load balancer **MUST** mencabut simpul tersebut dari pool aktif secara instan (*Drain Traffic*).
 
 ---
@@ -64,7 +63,7 @@ Simpul gateway dan penyedia layanan RPC **MUST** mengekspos dua endpoint pemanta
 ## 3. Kebijakan Caching Deterministik (Caching Semantics)
 
 1. **Data Final Imutabel (Finalized Blocks & Receipts):**  
-   Blok, transaksi, dan tanda terima yang telah mengantongi Commit Certificate **MUST** dicache secara permanen pada level CDN, Reverse Proxy (Nginx/Envoy), atau Redis:
+   Blok, transaksi, dan tanda terima yang telah mengantongi Quorum Certificate (QC) **MUST** dicache secara permanen pada level CDN, Reverse Proxy (Nginx), atau Redis:
    ```http
    Cache-Control: public, max-age=31536000, immutable
    ```
@@ -90,7 +89,20 @@ Setiap simpul operasional produksi **MUST** mengekspos metrik standar pada port 
 
 ## 5. Prosedur Pencadangan dan Pemulihan Bencana (Backup & Disaster Recovery)
 
-1. **Snapshot Database Atomik (Atomic State Snapshots):**  
-   Pencadangan database state simpul (RocksDB / MDBX) **MUST** menggunakan mekanisme snapshot atomik tanpa mematikan simpul atau merusak integritas Sparse Merkle Tree.
+1. **Snapshot Database Atomik ACID (`redb`):**  
+   Pencadangan database state simpul menggunakan mesin basis data bertipe ACID murni Rust **`redb`** (`Rule 14`) melalui mekanisme snapshot atomik tanpa mematikan simpul atau merusak integritas Sparse Merkle Tree (SMT).
 2. **Uji Pemulihan Rutin (Recovery Drills):**  
-   Operator infrastruktur enterprise **SHOULD** menguji prosedur pemulihan simpul dari snapshot sekurang-kurangnya sekali per kuartal dengan target **RTO (Recovery Time Objective) $\le 15\ \text{menit}$** dan **RPO (Recovery Point Objective) $\le 1\ \text{Blok}$**.
+   Operator infrastruktur enterprise **SHOULD** menguji prosedur pemulihan simpul dari snapshot `.auss` sekurang-kurangnya sekali per kuartal dengan target **RTO $\le 15\ \text{menit}$** dan **RPO $\le 1\ \text{Blok}$**.
+
+---
+
+## 6. Doktrin Integritas Kode & Kebijakan Anti-Tiruan (Zero-Mock Policy)
+
+Sesuai **Pasal 8 dan Pasal 10 Konstitusi Protokol Aurion**:
+
+1. **Larangan Mutlak Mode Tiruan:**  
+   Segala bentuk flag mode tiruan (`--dev`), *mock consensus*, kluster proses simulasi dalam satu server fisik publik, dan kunci privat hardcoded **diharamkan secara mutlak** dari lingkungan produksi.
+2. **Verifikasi Lingkungan Publik:**  
+   Lingkungan publik VPS (`116.212.72.89`) hanya boleh mengeksekusi biner dengan arsitektur jaringan P2P nyata dan konfigurasi `genesis.json` resmi.
+3. **Integritas Produk:**  
+   Setiap upaya memasukkan kode tiruan atau bypass konsensus ke jaringan publik dianggap sebagai cacat integritas produk (*architectural contamination*) yang membatalkan akreditasi simpul.

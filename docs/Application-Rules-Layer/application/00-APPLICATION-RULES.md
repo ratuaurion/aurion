@@ -66,7 +66,7 @@ Application Rules Layer terbagi ke dalam 14 spesifikasi resmi:
 | **`03-TRANSACTION-LIFECYCLE`** | Siklus Hidup Transaksi Aplikasi | State machine transaksi dari `CREATED` hingga `FINALIZED`, RBF, dan penanganan kegagalan. |
 | **`04-FINALITY-CONFIRMATION-RULES`**| Aturan Finalitas & Konfirmasi | Ambang batas kredit exchange, rilis barang merchant, dan penanganan partisi jaringan. |
 | **`05-ADDRESS-ACCOUNT-RULES`** | Standar Alamat & Skema URI | Normalisasi display Bech32m, QR code, dan skema URI universal `aurion:...`. |
-| **`06-FEE-PAYMENT-RULES`** | Estimasi Biaya & Pembayaran | Transparansi 20% burn, toleransi under/overpayment, dan batas kedaluwarsa invoice. |
+| **`06-FEE-PAYMENT-RULES`** | Estimasi Biaya & Pembayaran | Alokasi 100% fee ke validator, toleransi under/overpayment, dan batas kedaluwarsa invoice. |
 | **`07-PAYMENT-REFERENCE-RULES`** | Standar Memo & Referensi Tag | Payload memo biner/teks, identifikasi invoice exchange, dan perlindungan privasi. |
 | **`08-EXPLORER-INDEXER-RULES`** | Aturan Explorer & Indexer | Integritas pengindeksan rantai kanonikal, rekonsiliasi reorg, dan larangan fabrikasi fakta. |
 | **`09-SDK-RULES`** | Spesifikasi Pustaka Klien (SDK) | Arsitektur seragam pustaka multi-bahasa (Rust, Go, Python, TypeScript). |

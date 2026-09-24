@@ -73,23 +73,19 @@ Sebuah simpul Aurion yang sah **WAJIB**:
 
 ### Pilar 3: Kepatuhan Genesis (Genesis Conformance)
 Sebuah simpul Aurion yang sah **WAJIB**:
-1. Menginisialisasi state awal $\sigma_0$ dengan alokasi tepat $30\%$ Creator ($1.980.000.000.000.000\ Q$), $5\%$ Developer ($330.000.000.000.000\ Q$), dan $65\%$ Cadangan Penambangan ($4.290.000.000.000.000\ Q$);
-2. Memverifikasi bahwa hash header Blok 0 tepat identik dengan **GenesisHash** resmi:
-   ```text
-   e972418a0928b12e6945a0b3687311d402947b5921855e34789012a43b174092
-   ```
+1. Menginisialisasi state awal $\sigma_0$ dengan alokasi tepat $100\%$ pasokan Genesis ($66.000.000\ \text{AUR} = 66.000.000.000.000.000\ Q$) ke Master Treasury Account (`aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`);
+2. Memverifikasi bahwa hash header Blok 0 tepat identik dengan **GenesisHash** resmi dari artefak kanonikal `genesis.json`;
 3. Memutus koneksi P2P seketika dari peer yang memancarkan `GenesisHash` yang berbeda saat fase Handshake.
 
 ---
 
 ### Pilar 4: Kepatuhan Moneter Konstitusional (Monetary Conformance)
 Sebuah simpul Aurion yang sah **WAJIB**:
-1. Mengoperasikan seluruh logika moneter dan saldo secara eksklusif menggunakan integer Quantum ($u128$);
+1. Mengoperasikan seluruh logika moneter dan saldo secara eksklusif menggunakan integer Quantum 9 desimal ($u128$, $1\text{ AUR} = 10^9\ Q$);
 2. **DILARANG KERAS** menggunakan tipe floating-point (`f32`, `f64`) pada lapisan konsensus dan transisi state;
-3. Menegakkan batas total suplai absolut $S_{\max} = 66.000.000\ \text{AUR}$ ($6,6 \times 10^{15}\ Q$);
-4. Menegakkan pembakaran $20\%$ biaya transaksi ($\mathcal{F}_{\text{burned}}$) dan pembagian $80\%$ ke produser blok;
-5. Menegakkan masa kematangan hadiah coinbase $100\ \text{blok}$ (*Coinbase Maturity*);
-6. Memvalidasi keenam invarian suplai **[INV-01] hingga [INV-06]** pada setiap blok.
+3. Menegakkan pasokan dasar Genesis $66.000.000\ \text{AUR}$ ($6,6 \times 10^{16}\ Q$) dan emisi reward blok tingkat protokol $R = 1\text{ AUR} = 10^9\ Q$ (20% Proposer, 80% Precommit Voters QC);
+4. Mengalirkan $100\%$ biaya gas transaksi ke validator pembuat proposal blok;
+5. Memvalidasi seluruh invarian moneter tertinggi `[INV-MON-01]` hingga `[INV-MON-06]` pada setiap blok.
 
 ---
 
@@ -128,6 +124,14 @@ Sebuah simpul Aurion yang sah **WAJIB**:
 2. Memvalidasi Blake3 checksum payload sebelum memproses isi pesan;
 3. Membatasi alokasi memori sebelum dekode (*Pre-allocation Check*) guna mencegah serangan kehabisan memori (Anti-OOM);
 4. Menerapkan sistem skor reputasi peer dan memblokir IP peer yang skornya $\le 0$ selama minimal 24 jam.
+
+---
+
+### Pilar 9: Kepatuhan Doktrin Zero-Mock (Zero-Mock Conformance)
+Sebuah simpul Aurion yang sah **WAJIB**:
+1. **DILARANG KERAS** memuat atau mengeksekusi mode tiruan (`--dev`), *mock consensus*, atau kluster simulasi multi-proses dalam satu server fisik publik;
+2. Menjalankan biner produksi murni dengan konfigurasi jaringan P2P nyata menuju Bootnode `116.212.72.89:7447`;
+3. Mengisolasi kunci privat validator dari port akses internet publik.
 
 ---
 

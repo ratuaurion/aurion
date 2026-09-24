@@ -13,10 +13,10 @@ Gunakan parameter berikut untuk mengonfigurasi dompet (Web Wallet, ekstensi pera
 | **Nama Jaringan** | `Aurion Public Testnet` | Nama tampilan di dompet & explorer |
 | **Chain ID** | `9999` (atau `1001` untuk genesis staging) | ID rantai deterministik pencegah replay lintas-jaringan |
 | **Simbol Aset** | `AUR` | Mata uang kripto native berdaulat |
-| **Unit Terkecil (Atomic Unit)** | `Quantum` (1 AUR = $10^8$ Quanta) | Presisi fixed integer tanpa floating-point |
+| **Unit Terkecil (Atomic Unit)** | `Quantum` (1 AUR = $10^9$ Quanta) | Presisi fixed integer 9 desimal tanpa floating-point |
 | **Mekanisme Konsensus** | Single-Slot BFT Finality | Waktu blok deterministik, kuorum $>2/3$, SLA $<1.000$ ms |
-| **Mekanisme Fee** | 80% Miner / 20% Permanently Burned | Deflationary fee burning otomatis di STF |
-| **Public JSON-RPC URL** | `http://127.0.0.1:8545` (atau domain gateway publik) | Mendukung JSON-RPC 2.0 & CORS |
+| **Mekanisme Fee** | 100% ke Validator Proposer | Melengkapi insentif emisi blok BFT |
+| **Public JSON-RPC URL** | `http://127.0.0.1:8545` (atau `bootnode.ratuaurion.store:8080`) | Mendukung JSON-RPC 2.0 & CORS |
 | **Public WebSocket URL** | `ws://127.0.0.1:8545` | Streaming blok & tx via RFC 6455 |
 | **Sandbox & Explorer Web UI**| `http://127.0.0.1:8545/sandbox` | Dashboard visual interaktif bawaan |
 
@@ -38,12 +38,12 @@ Hal ini memungkinkan aplikasi frontend dApp, penjelajah blok pihak ketiga, dan a
 
 ## 3. Keran Dana Uji Coba (Testnet Faucet)
 
-Untuk memulai pengujian transaksi dan smart contract di testnet publik, pengembang dapat mengklaim dana testnet gratis sebesar **10 AUR (1.000.000.000 Quanta)** per klaim.
+Untuk memulai pengujian transaksi dan smart contract di testnet publik, pengembang dapat mengklaim dana testnet gratis sebesar **10 AUR (10.000.000.000 Quanta)** per klaim.
 
 ### Aturan & Batas Frekuensi (Rate Limiting)
-- **Kuota per Klaim:** 10 AUR (1.000.000.000 Quanta).
+- **Kuota per Klaim:** 10 AUR (10.000.000.000 Quanta).
 - **Periode Cooldown:** 60 detik per alamat penerima.
-- **Biaya Transaksi Faucet:** Ditanggung oleh otoritas faucet (2.000 Quanta).
+- **Biaya Transaksi Faucet:** Ditanggung oleh otoritas faucet (20.000 Quanta).
 
 ### Cara Mengklaim Token Faucet
 

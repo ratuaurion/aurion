@@ -33,7 +33,7 @@ aurion-sdk/
 ├── rpc         (Wrapper type-safe pemanggilan metode namespace aur_)
 ├── address     (Konektor Bech32m, konversi pubkey ke alamat, validasi HRP)
 ├── amount      (Objek Quantum zero-float, aritmetika aman integer u128)
-├── fee         (Helper kalkulasi estimasi fee & pemisahan 20% burn)
+├── fee         (Helper kalkulasi estimasi fee & alokasi validator 100%)
 └── codec       (Serialisasi & deserialisasi biner Big-Endian murni)
 ```
 
@@ -43,13 +43,13 @@ aurion-sdk/
 
 ### 3.1 Modul `amount` (Monetary Engine)
 1. Modul `amount` **MUST NOT** menggunakan tipe data pecahan floating-point IEEE 754 (`f32`, `f64`, `float`, `double`) untuk kalkulasi moneter.
-2. Seluruh representasi moneter **MUST** disimpan dalam unit atomik integer Quantum (u128 / BigInt).
+2. Seluruh representasi moneter **MUST** disimpan dalam unit atomik integer Quantum (u128 / BigInt), dengan skala kanonikal $1\text{ AUR} = 10^9\text{ Quantum}$ ($1.000.000.000\text{ Quanta}$).
 3. SDK **MUST** menyediakan fungsi parsing string desimal aman:
    ```typescript
    // Contoh TypeScript
-   const amount = Quantum.fromAurString("1.50000000"); // Menghasilkan 150_000_000n Quanta
+   const amount = Quantum.fromAurString("1.500000000"); // Menghasilkan 1_500_000_000n Quanta
    ```
-   Jika string input memuat lebih dari 8 digit desimal di belakang koma, SDK **MUST** melempar pengecualian `InvalidPrecisionError`.
+   Jika string input memuat lebih dari 9 digit desimal di belakang koma, SDK **MUST** melempar pengecualian `InvalidPrecisionError`.
 
 ### 3.2 Modul `address` (Kriptografi Alamat)
 1. Menghasilkan alamat kanonikal raw (32 bytes) dari kunci publik Ed25519 menggunakan:

@@ -101,7 +101,7 @@ Anda juga dapat memeriksa dan mengendalikan devnet langsung dari binary Aurion:
 ```powershell
 aurion devnet init
 aurion devnet status --output json
-aurion devnet start --node-id val-1 --role validator --rpc-bind 127.0.0.1:8545 --p2p-bind 127.0.0.1:7447 --dev
+aurion devnet start --node-id val-1 --role validator --rpc-bind 127.0.0.1:8545 --p2p-bind 127.0.0.1:7447
 ```
 
 ### Langkah 3.5: Menghentikan Kluster
@@ -187,3 +187,6 @@ cargo test --test devnet_continuous
 | **Development & Test Harian** | **PC Lokal (Native)** | `python tools/devnet_orchestrator.py start` |
 | **Integrasi Otomatis CI/CD** | **Local Test Runner** | `cargo test --test devnet_continuous` |
 | **Staging Jangka Panjang / Disk D** | **Docker Compose** | `$env:AURION_DATA_DIR="D:/..."; docker compose up -d` |
+
+> **PERINGATAN DOKTRIN ZERO-MOCK (PASAL 8 KONSTITUSI):**  
+> Seluruh flag mode tiruan (`--dev`), simulasi proses kluster dalam 1 server publik, dan kunci privat hardcoded **diharamkan secara mutlak** pada biner produksi di server VPS publik (`116.212.72.89`). Biner produksi hanya boleh beroperasi menggunakan topologi P2P nyata dan `genesis.json` resmi.

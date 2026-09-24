@@ -39,7 +39,7 @@ Lima temuan wallet dan mempool telah diremediasi melalui `AUR-WALLET-001` sampai
 ### FINDING-WAL-04 (Medium - P2): Blind-Signing Hazard & Non-TTY Stdin Hang
 
 - **Akar masalah:** Perintah `sign-tx` sebelumnya dapat menandatangani tanpa menampilkan rincian transaksi secara manusiawi dan dapat menunggu input tanpa batas pada eksekusi CI non-interaktif.
-- **Remediasi:** Clear-signing menampilkan alamat pengirim dan penerima, nominal Quantum/AUR, biaya jaringan, estimasi burn fee 20%, nonce, dan memo sebelum konfirmasi. Konfirmasi non-interaktif hanya diizinkan dengan `--yes` atau `-y`; stdin non-TTY tanpa bypass ditolak (`AUR-WALLET-003`).
+- **Remediasi:** Clear-signing menampilkan alamat pengirim dan penerima, nominal Quantum/AUR ($10^9\ \text{Q}$), biaya jaringan, rincian alokasi fee 100% ke validator, nonce, dan memo sebelum konfirmasi. Konfirmasi non-interaktif hanya diizinkan dengan `--yes` atau `-y`; stdin non-TTY tanpa bypass ditolak (`AUR-WALLET-003`).
 - **Status:** **SELESAI / PASS**.
 
 ### FINDING-MEM-01 (High - P1): Mempool Chain-ID Blindness & Expiry Bypass

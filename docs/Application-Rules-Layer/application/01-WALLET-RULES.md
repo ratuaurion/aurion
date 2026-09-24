@@ -79,9 +79,9 @@ Sebelum menandatangani transaksi, wallet **MUST** memvalidasi seluruh syarat ber
 ### 3.2 Transparansi Penandatanganan (Clear Signing Mandate)
 1. Wallet **MUST NOT** menandatangani hash biner abstrak (*blind signing*) tanpa menyajikan kepada pengguna rincian manusiawi:
    - Alamat pengirim dan penerima lengkap;
-   - Nilai transfer dalam satuan AUR ($Q / 10^8$);
+   - Nilai transfer dalam satuan AUR ($Q / 10^9$);
    - Biaya transaksi (Network Fee);
-   - Rincian pembakaran biaya: Wallet **SHOULD** menginformasikan bahwa 20% dari fee akan dimusnahkan secara permanen oleh protokol;
+   - Rincian alokasi biaya: Wallet **SHOULD** menginformasikan bahwa 100% dari fee dialokasikan kepada validator pembuat blok protokol;
    - Data memo/payload teks yang dapat dibaca.
 2. Hardware wallet **MUST** mem-parsing seluruh field kanonikal pada layar independen perangkat sebelum meminta konfirmasi fisik dari pengguna.
 

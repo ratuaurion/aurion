@@ -82,7 +82,7 @@ Kesalahan pada logika dompet dan input pengguna:
 | :---: | :--- | :--- | :---: |
 | `6001` | `APP_WALLET_LOCKED` | Kunci privat terkunci oleh kata sandi pengguna. | **TRUE** (Buka Kunci)|
 | `6002` | `APP_INVALID_BECH32M` | String alamat gagal validasi format atau checksum Bech32m.| **FALSE** |
-| `6003` | `APP_INVALID_PRECISION`| Input nominal memuat lebih dari 8 digit desimal. | **FALSE** (Koreksi Input)|
+| `6003` | `APP_INVALID_PRECISION`| Input nominal memuat lebih dari 9 digit desimal ($10^9\ \text{Quantum}$). | **FALSE** (Koreksi Input)|
 | `6004` | `APP_INVOICE_EXPIRED` | Batas waktu tagihan merchant telah kedaluwarsa. | **FALSE** (Minta Tagihan Baru)|
 | `6005` | `APP_HW_REJECTED` | Pengguna menolak penandatanganan pada layar hardware wallet. | **FALSE** |
 

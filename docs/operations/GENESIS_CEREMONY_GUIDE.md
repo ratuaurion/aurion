@@ -12,11 +12,9 @@ Upacara Genesis Aurion (*Aurion Deterministic Genesis Ceremony*) adalah upacara 
 
 Upacara ini mengunci secara kriptografis:
 1. **Konstitusi Moneter:**
-   - Batas Suplai Tertinggi Permanen: **66.000.000 AUR** ($6.600.000.000.000.000\ \text{Quanta}$).
-   - Alokasi Terbit pada Blok 0 (35%): **23.100.000 AUR** ($2.310.000.000.000.000\ \text{Quanta}$).
-     - **Creator Vault:** 30% ($19.800.000\ \text{AUR}$).
-     - **Developer Vault:** 5% ($3.300.000\ \text{AUR}$).
-   - Cadangan Penambangan Komunitas (65%): $42.900.000\ \text{AUR}$ ditambang via BFT block rewards.
+   - Pasokan Dasar Genesis Blok 0: **66.000.000 AUR** ($66.000.000.000.000.000\ \text{Quantum}$ pada skala 9 desimal).
+   - Alokasi Terbit pada Blok 0 (100%): **66.000.000 AUR** dialokasikan penuh ke **Master Treasury Account** (`aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`).
+   - Emisi Blok Berkelanjutan ($H > 0$): **$1\ \text{AUR}$ per blok** ($10^9\ \text{Quantum}$) didistribusikan kepada validator kuorum BFT (20% Proposer, 80% Precommit Voters QC).
    - Zero-Float Arithmetic: Seluruh perhitungan menggunakan tipe data bilangan bulat pasti `Quantum(u128)`.
 2. **Konsensus BFT Pemula ($\mathcal{V}_0$):**
    - 4 Genesis Validators masing-masing mengendalikan bobot voting $250.000$ (total $1.000.000$).

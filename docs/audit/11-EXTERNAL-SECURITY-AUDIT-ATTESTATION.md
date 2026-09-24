@@ -18,7 +18,7 @@ Evaluasi audit dilakukan secara ketat untuk memverifikasi bahwa implementasi ref
 2. **Lapisan Konsensus & BFT Engine (Consensus Layer):**  
    Protokol konsensus Aurion BFT 2-fase (Prevote & Precommit), deteksi ekuivokasi (*double-voting detection*), mitigasi split-brain partitioning, transisi epoch dan rotasi validator dinamis, serta finalitas single-slot bergaransi (<1000 ms).
 3. **Lapisan Mesin Status & Akuntansi (State Machine & Ledger):**  
-   Fungsi transisi state deterministik $\sigma' = \Upsilon(\sigma, B)$, akuntansi presisi integer murni `Quantum(u128)`, hukum konservasi suplai moneter (20% burn / 80% miner fee split), proteksi *balance underflow*, dan antrean mempool dengan mandat *Replace-By-Fee* (RBF $\ge 10\%$).
+   Fungsi transisi state deterministik $\sigma' = \Upsilon(\sigma, B)$, akuntansi presisi integer murni `Quantum(u128)` 9 desimal, hukum konservasi suplai moneter Genesis 66M AUR ke Master Treasury dan alokasi 100% fee transaksi ke validator perakit blok, proteksi *balance underflow*, dan antrean mempool dengan mandat *Replace-By-Fee* (RBF $\ge 10\%$).
 4. **Lapisan Mesin Virtual Kontrak Pintar (Aurion VM / AVM):**  
    Interpreter bytecode deterministik terisolasi (*sandboxed execution*), verifikasi bytecode statis pra-deployment (*BytecodeVerifier*), penegakan batas kedalaman stack (1024), penghitungan gas integer tanpa pembulatan mengambang, serta semantik rollback atomik (*all-or-nothing revert*).
 5. **Lapisan Jaringan P2P & Gateway Host (Networking & RPC Gateway):**  
@@ -72,7 +72,7 @@ Audit memverifikasi kepatuhan penuh terhadap 12 Invariant Arsitektur Utama Aurio
 * **AUR-ARCH-005 (Total Determinism):**  
   Seluruh hash blok, state root Merkle, transisi status, dan eksekusi AVM bersifat 100% deterministik dan bebas dari perilaku bergantung platform (endianness, clock skew, non-deterministic map iteration). (**PATUH**)
 * **AUR-ARCH-006 (Immutability of Monetary Policy):**  
-  Batas suplai absolut 21.000.000 AUR (2.100.000.000.000.000 Quanta), interval halving 2.100.000 blok, dan skema deflasi 20% fee burn terkunci secara permanen di tingkat konstanta kode. (**PATUH**)
+  Suplai Genesis 66.000.000 AUR ($6,6 \times 10^{16}\ \text{Quanta}$ pada skala $10^9$) dialokasikan 100% ke Master Treasury, emisi subsidi blok tetap $R = 1\ \text{AUR}$ per blok (20% Proposer, 80% Precommit Voters QC), dan 100% fee transaksi dialirkan ke validator pembuat blok terkunci secara permanen di tingkat konstitusi dan kode. (**PATUH**)
 * **AUR-ARCH-009 (Process Lifecycle & Graceful Shutdown):**  
   Sinyal terminasi OS (`SIGINT`/`SIGTERM`) ditangkap supervisor runtime; transaksi dan blok yang sedang diproses di-commit secara atomik ke database redb sebelum keluar. (**PATUH**)
 * **AUR-ARCH-011 (Absolute Zero Unsafe Code):**  

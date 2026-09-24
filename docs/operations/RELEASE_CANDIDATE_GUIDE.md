@@ -18,15 +18,14 @@ Tahap pembekuan ini menandai bahwa seluruh logika konsensus, mesin virtual kontr
 
 | Parameter Protokol | Nilai Terkunci | Keterangan & Invariant |
 | :--- | :--- | :--- |
-| **Batas Suplai Maksimum (Hard Cap)** | `21.000.000 AUR` (2.100.000.000.000.000 Quanta) | `AUR-ARCH-006`, `AUR-MON-001` |
-| **Alokasi Genesis Awal** | `7.350.000 AUR` (35% dari Hard Cap) | 25% Developer Fund, 10% Creator/Treasury |
-| **Sisa Emisi Penambangan** | `13.650.000 AUR` (65% dari Hard Cap) | Didistribusikan melalui subsidi blok BFT |
-| **Subsidi Blok Awal** | `3,25 AUR` (325.000.000 Quanta per blok) | `AUR-MON-002` |
-| **Interval Halving** | `2.100.000 blok` (~4 tahun pada target slot 60 detik) | `AUR-MON-002` |
-| **Skema Deflasi Fee** | `20% Burn / 80% Miner Reward` | `AUR-MON-003` |
-| **Skala Presisi Moneter** | `1 AUR = 100.000.000 Quanta (10^8)` | Zero floating point `Quantum(u128)` |
+| **Pasokan Dasar Genesis (Blok 0)** | `66.000.000 AUR` ($6.6 \times 10^{16}$ Quantum) | 100% dialokasikan ke Master Treasury Account |
+| **Presisi Moneter** | `1 AUR = 1.000.000.000 Quantum (10^9)` | Zero floating point `Quantum(u128)` |
+| **Emisi Blok Berkelanjutan (H > 0)**| `1 AUR` ($10^9$ Quantum per blok) | 20% Proposer, 80% Precommit Voters QC |
+| **Alokasi Fee Transaksi** | `100% ke Validator Proposer` | Melengkapi insentif perakitan blok |
+| **Topologi Bootnode Resmi** | `116.212.72.89` (TCP Port 7447) | Nginx SSL Gateway `bootnode.ratuaurion.store:8080` |
 | **Waktu Slot Target BFT** | `60.000 ms` (60 detik) | `AUR-APP-05` |
 | **Ambang Kuorum Finalitas** | `> 2/3 Total Bobot Voting Validator` | Single-slot BFT guarantee |
+| **Doktrin Integritas Kode** | Zero-Mock Policy | Larangan mutlak `--dev` & mock consensus |
 
 ---
 
@@ -92,7 +91,7 @@ Output yang diharapkan:
   "version": "1.0.0-rc1",
   "architecture": "Single Sovereign Primary Binary (/bin/aurion)",
   "hard_cap_aur": 66000000,
-  "quantum_scale": "10^8 (1 AUR = 100,000,000 Quanta)",
+  "quantum_scale": "10^9 (1 AUR = 1,000,000,000 Quanta)",
   "consensus": "Single-Slot BFT Finality (>2/3 Quorum)",
   "hashing": "Blake3 256-bit",
   "signatures": "Ed25519 (Strict Anti-Malleability)"

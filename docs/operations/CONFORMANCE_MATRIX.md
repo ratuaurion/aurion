@@ -21,13 +21,13 @@
 | Requirement ID | Layer | Status | Waktu (µs) | Invariant Terkait | Judul Pilar & Rincian |
 | :--- | :---: | :---: | :---: | :--- | :--- |
 | **REQ-L1-01** | L1 | ✅ PASS | 7406 | `AUR-CRYPTO-001, AUR-ARCH-005` | **Cryptographic Primitives (Blake3, Ed25519, Bech32m)**: Blake3 digests, Ed25519 strict anti-malleability, and Bech32m roundtrip verified 100%. |
-| **REQ-L1-02** | L1 | ✅ PASS | 11 | `AUR-MON-001..004, AUR-ARCH-012` | **Monetary Policy & Quantum Scale Invariant (66M AUR Hard Cap)**: Hard cap 66M AUR, Quantum u128 arithmetic, and 20% deflationary fee burn verified. |
+| **REQ-L1-02** | L1 | ✅ PASS | 11 | `AUR-MON-001..004, AUR-ARCH-012` | **Monetary Policy & Quantum Scale Invariant (66M AUR Genesis)**: Genesis 66M AUR to Master Treasury, 9-decimal Quantum u128 arithmetic, and 100% fee routing to block validator verified. |
 | **REQ-L1-03** | L1 | ✅ PASS | 24 | `AUR-ARCH-005, AUR-SERIAL-001` | **Canonical Codec & Strict Zero-Trailing Rejection**: Deterministic big-endian encoding and strict trailing bytes rejection verified. |
 | **REQ-L1-04** | L1 | ✅ PASS | 7580 | `AUR-TX-001..005, AUR-APP-03` | **Transaction Pipeline & Stateless Verification (184B Base)**: 184-byte base transaction, preimage domain separation, and TxID verified. |
-| **REQ-L1-05** | L1 | ✅ PASS | 57 | `AUR-STATE-001, AUR-MON-003` | **Atomic State Transition Function (STF σ' = Υ(σ, B))**: Deterministic atomic state transition, strict nonce increment, and fee burn verified. |
+| **REQ-L1-05** | L1 | ✅ PASS | 57 | `AUR-STATE-001, AUR-MON-003` | **Atomic State Transition Function (STF σ' = Υ(σ, B))**: Deterministic atomic state transition, strict nonce increment, block reward R emission, and 100% fee routing to block validator verified. |
 | **REQ-L1-06** | L1 | ✅ PASS | 21535 | `AUR-CONSENSUS-001..004, AUR-ARCH-010` | **BFT Single-Slot Finality Consensus & Quorum Verification (>2/3)**: 124-byte BlockHeader, 117-byte Vote, 72-byte ValidatorEntry, and >2/3 quorum verified. |
 | **REQ-L1-07** | L1 | ✅ PASS | 15 | `AUR-WIRE-001..003, AUR-APP-12` | **P2P Wire Framing Protocol & Frame Checksum Integrity (52B Header)**: 52-byte wire header, AUR0 magic, and Blake3 tamper-proofing verified. |
-| **REQ-L1-08** | L1 | ✅ PASS | 9 | `AUR-GENESIS-001..005, AUR-STATE-001` | **Genesis State σ0 & Initial Supply Commitment (35% Hard Cap)**: Genesis Block 0, 35% hard cap allocation (30% Creator, 5% Dev), and σ0 state verified. |
+| **REQ-L1-08** | L1 | ✅ PASS | 9 | `AUR-GENESIS-001..005, AUR-STATE-001` | **Genesis State σ0 & Initial Supply Commitment (66M AUR Treasury)**: Genesis Block 0, 100% initial supply (66M AUR) to Master Treasury, and σ0 state verified. |
 | **REQ-L2-01** | L2 | ✅ PASS | 4 | `L2-SETTLE-001` | **L1 Bridge Contract Interface & ABI Selectors**: 4-byte Blake3 function selectors and canonical ABI packing for L1 bridge |
 | **REQ-L2-02** | L2 | ✅ PASS | 15 | `L2-DA-001` | **Batch Calldata Frame Codec ('AUL2') & DA Commitment**: 102-byte AUL2 binary frame and compact Blake3 DA commitment hash packing |
 | **REQ-L2-03** | L2 | ✅ PASS | 43 | `L2-SETTLE-002` | **Blake3 Sparse Merkle Tree (SMT) State Roots**: 256-bit SMT state roots with cryptographic account membership witness |

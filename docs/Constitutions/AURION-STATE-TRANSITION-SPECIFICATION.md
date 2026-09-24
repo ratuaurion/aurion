@@ -35,8 +35,8 @@ Perubahan buku besar dari keadaan lama ke keadaan baru dikendalikan secara ekskl
        │                                                         │
        │  1. Validasi Pra-Eksekusi Header & Konsensus            │
        │  2. Eksekusi Sekuensial Transaksi & Konservasi Nilai    │
-       │  3. Pemotongan & Pembakaran Biaya (Fee Burning 20%)     │
-       │  4. Penerbitan Subsidi Blok & Kematangan Coinbase       │
+       │  3. Pemotongan & Alokasi Biaya (100% Validator Fee)     │
+       │  4. Penerbitan Subsidi Blok R & Pembagian QC            │
        │  5. Pembaruan State Validator & Transisi Epoch          │
        │  6. Komputasi Root Pohon State Baru (StateRoot_{n+1})   │
        └────────────────────────────┬────────────────────────────┘
@@ -132,9 +132,9 @@ Ketika sebuah blok $B$ pada tinggi $H$ dievaluasi terhadap state $\sigma_{H-1}$,
     ↓
 [TAHAP 3] Eksekusi Sekuensial Seluruh Transaksi Tx_1 ... Tx_m
     ↓
-[TAHAP 4] Pembagian Biaya Transaksi (20% Burned, 80% Miner)
+[TAHAP 4] Alokasi Biaya Transaksi 100% ke Validator Proposer
     ↓
-[TAHAP 5] Penerbitan Subsidi Blok S(H) & Antrean Kematangan Coinbase
+[TAHAP 5] Penerbitan Subsidi Blok R (20% Proposer, 80% Precommit Voters QC)
     ↓
 [TAHAP 6] Pemrosesan Batas Epoch (Jika H mod L_epoch == 0)
     ↓
@@ -182,32 +182,27 @@ Sub-algoritma $\text{ApplyTx}(\sigma', T_x, H)$ mengeksekusi operasi berikut:
 6. **Akumulasi Pool Biaya Blok:**
    $$\mathcal{F}_{\text{total}} \leftarrow \mathcal{F}_{\text{total}}.\text{checked\_add}(T_x.\text{fee})$$
 
-### Tahap 4: Pembagian Biaya Transaksi (Fee Burning)
-Mengikuti aturan [AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/AURION-MONETARY-POLICY-SPECIFICATION.md):
-1. **Alokasi Pembakaran (20%):**
-   $$\mathcal{F}_{\text{burned}} = \left\lfloor \frac{\mathcal{F}_{\text{total}} \times 20}{100} \right\rfloor$$
-2. **Alokasi Produser Blok (80%):**
-   $$\mathcal{F}_{\text{miner}} = \mathcal{F}_{\text{total}} - \mathcal{F}_{\text{burned}}$$
-3. **Pembaruan State Pasokan:**
-   $$\mathcal{M}.S_{\text{burned}} \leftarrow \mathcal{M}.S_{\text{burned}}.\text{checked\_add}(\mathcal{F}_{\text{burned}})$$
-   $$\mathcal{M}.S_{\text{circulating}} \leftarrow \mathcal{M}.S_{\text{circulating}}.\text{checked\_sub}(\mathcal{F}_{\text{burned}})$$
+### Tahap 4: Pengaliran Biaya Transaksi (100% ke Validator Proposer)
+Mengikuti mandat [CONSTITUTION.md](file:///c:/Projects/aurion/CONSTITUTION.md) dan [AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/docs/Constitutions/AURION-MONETARY-POLICY-SPECIFICATION.md):
+1. **Pengaliran Penuh ke Proposer (100%):**
+   Seluruh biaya transaksi yang terkumpul dalam blok dialirkan langsung ke akun validator pembuat proposal blok:
+   $$\mathcal{A}[B.\text{proposer}].\text{balance} \leftarrow \mathcal{A}[B.\text{proposer}].\text{balance}.\text{checked\_add}(\mathcal{F}_{\text{total}})$$
+2. **Ketiadaan Pembakaran Rutin:** Seluruh gas fee dialokasikan untuk memberi kompensasi perakitan komputasi validator.
 
-### Tahap 5: Penerbitan Subsidi Blok & Kematangan Hadiah
-1. **Kalkulasi Subsidi Resmi:**
-   $$\mathcal{S}(H) = 1.000.000.000 \gg \left\lfloor \frac{H - 1}{2.145.000} \right\rfloor\ \text{Quantum}$$
-2. **Total Hadiah Produser Blok:**
-   $$\mathcal{R}_{\text{proposer}} = \mathcal{S}(H).\text{checked\_add}(\mathcal{F}_{\text{miner}})$$
-3. **Pendaftaran Kematangan Hadiah (Coinbase Maturity):**
-   Hadiah $\mathcal{R}_{\text{proposer}}$ **TIDAK LANGSUNG** dicairkan ke saldo aktif proposer, melainkan dimasukkan ke dalam antrean kematangan:
-   $$\mathcal{M}.\mathcal{Q}_{\text{maturity}}.\text{Enqueue}\Big( \text{Height}: H + 100,\; \text{Beneficiary}: B.\text{proposer},\; \text{Amount}: \mathcal{R}_{\text{proposer}} \Big)$$
-4. **Pencairan Hadiah Matang:**
-   Jika terdapat entri pada $\mathcal{M}.\mathcal{Q}_{\text{maturity}}$ untuk $\text{Height} == H$, cairkan ke saldo akun penerima:
-   $$\mathcal{A}[\text{Beneficiary}].\text{balance} \leftarrow \mathcal{A}[\text{Beneficiary}].\text{balance}.\text{checked\_add}(\text{Amount})$$
-5. **Pembaruan Suplai Diterbitkan Kumulatif:**
-   $$\mathcal{M}.S_{\text{emitted}} \leftarrow \mathcal{M}.S_{\text{emitted}}.\text{checked\_add}(\mathcal{S}(H))$$
-   $$\mathcal{M}.S_{\text{circulating}} \leftarrow \mathcal{M}.S_{\text{circulating}}.\text{checked\_add}(\mathcal{S}(H))$$
-6. **Pencatatan RPI Modul Asal-Usul Aset:**
-   $$\text{RPI} = \text{Blake3}\Big( \text{"AURION-PROVENANCE-RPI-V1"} \parallel B.\text{hash} \parallel H \parallel \mathcal{S}(H) \Big)$$
+### Tahap 5: Penerbitan Reward Blok Protokol & Distribusi QC
+Pencetakan reward blok tetap $R = 1\text{ AUR} = 1.000.000.000\text{ Quantum}\ (10^9\ Q)$ dieksekusi langsung oleh mesin protokol (`aurion-execution`) tanpa memerlukan transaksi eksternal (*zero external transaction*):
+1. **Alokasi Porsi Proposer (20%):**
+   $$\mathcal{R}_{\text{proposer}} = 200.000.000\ \text{Quantum}\ (0,2\ \text{AUR})$$
+   $$\mathcal{A}[B.\text{proposer}].\text{balance} \leftarrow \mathcal{A}[B.\text{proposer}].\text{balance}.\text{checked\_add}(\mathcal{R}_{\text{proposer}})$$
+2. **Alokasi Porsi Voter Precommit QC (80%):**
+   $$\mathcal{R}_{\text{voters}} = 800.000.000\ \text{Quantum}\ (0,8\ \text{AUR})$$
+   Didistribusikan secara proporsional kepada seluruh validator penandatangan Precommit pada sertifikat kuorum (QC):
+   $$\forall v \in \text{QC}, \quad \mathcal{A}[v].\text{balance} \leftarrow \mathcal{A}[v].\text{balance}.\text{checked\_add}\left( \left\lfloor \frac{\mathcal{R}_{\text{voters}} \times w_v}{\sum_{u \in \text{QC}} w_u} \right\rfloor \right)$$
+3. **Pembaruan Suplai Moneter Kumulatif:**
+   $$\mathcal{M}.S_{\text{emitted}} \leftarrow \mathcal{M}.S_{\text{emitted}}.\text{checked\_add}(R)$$
+   $$\mathcal{M}.S_{\text{circulating}} \leftarrow \mathcal{M}.S_{\text{circulating}}.\text{checked\_add}(R)$$
+4. **Pencatatan RPI Modul Asal-Usul Aset:**
+   $$\text{RPI} = \text{Blake3}\Big( \text{"AURION-PROVENANCE-RPI-V1"} \parallel B.\text{hash} \parallel H \parallel R \Big)$$
    $$\mathcal{P}.\text{Insert}(H, \text{RPI})$$
 
 ### Tahap 6: Transisi Batas Epoch (Epoch Boundary Transition)
@@ -223,10 +218,9 @@ Jika $H \pmod{10.000} == 0$:
    $$\text{ComputedStateRoot} = \text{MerkleRoot}(\sigma')$$
 2. **Pemeriksaan Kecocokan Header:**
    $$\text{Assert}\big( B.\text{state\_root} == \text{ComputedStateRoot} \big)$$
-3. **Verifikasi 6 Invarian Moneter Tertinggi:**
-   Validasi pemenuhan formula [INV-01] hingga [INV-06]:
-   $$\mathcal{M}.S_{\text{emitted}} \le 6.600.000.000.000.000\ Q$$
-   $$\sum_{\alpha} \mathcal{A}[\alpha].\text{balance} + \sum \mathcal{Q}_{\text{maturity}}.\text{amount} == \mathcal{M}.S_{\text{circulating}}$$
+3. **Verifikasi Invarian Moneter Tertinggi:**
+   Validasi pemenuhan formula `[INV-MON-01]` hingga `[INV-MON-06]`:
+   $$\sum_{\alpha} \mathcal{A}[\alpha].\text{balance} == \mathcal{M}.S_{\text{circulating}}$$
 
 Jika seluruh asersi terpenuhi, kembalikan state baru $\sigma_{H} = \sigma'$.
 
@@ -247,6 +241,6 @@ Jika terjadi pelanggaran selama eksekusi $\text{STF}$ (misalnya saldo tidak menc
 > ### Teorema Konservasi Moneter STF
 > Di bawah evaluasi fungsi $\text{STF}(\sigma_{H-1}, B_H)$, jumlah total seluruh aset Quantum di seluruh dunia Aurion selalu memenuhi hukum konservasi tertutup:
 > 
-> $$\Delta S_{\text{circulating}} = \mathcal{S}(H) - \mathcal{F}_{\text{burned}}(H)$$
+> $$\Delta S_{\text{circulating}} = R = 1.000.000.000\ \text{Quantum}\ (1\ \text{AUR})$$
 > 
 > Tidak ada proses komputasi transaksi, transfer saldo, pemanggilan kontrak, atau penyesuaian staking yang dapat menciptakan atau memusnahkan 1 Quantum pun di luar hukum di atas.

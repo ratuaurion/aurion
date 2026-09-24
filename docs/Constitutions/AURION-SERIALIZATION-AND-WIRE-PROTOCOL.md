@@ -192,6 +192,19 @@ Jaringan Aurion beroperasi sebagai jaringan peer-to-peer terdistribusi tanpa per
  └─────┬─────┘      3. Relay / Gossip ke Peer Tetangga yang Memenuhi Syarat
 ```
 
+### 4.1 Topologi Jaringan Resmi & Pemisahan Peran Simpul (Node Topology)
+Sesuai amanat **Bab III [CONSTITUTION.md](file:///c:/Projects/aurion/CONSTITUTION.md)**, topologi operasional Aurion membagi peran simpul secara tegas:
+
+1. **Node Jangkar / P2P Bootnode (`116.212.72.89`):**
+   - **Port P2P Wire:** Membuka pendengar TCP (`TCP Listener`) pada **Port 7447** secara persisten untuk menerima *inbound handshake* dari validator luar.
+   - **Isolasi Kunci:** Dilarang keras menyimpan kunci privat penandatangan konsensus (*consensus signing key*).
+   - **Fungsi:** Menjadi jangkar penemuan peer (*discovery anchor*) dan relai pesan konsensus/transaksi.
+2. **Node Validator:**
+   - **Fungsi:** Menjalankan mesin status konsensus BFT (*Proposal*, *Prevote*, *Precommit*, *Commit*).
+   - **Port Isolation:** Port RPC/Gateway validator wajib ditutup dari akses internet publik; komunikasi hanya diizinkan melalui saluran P2P wire ke Bootnode atau sesama peer terverifikasi.
+3. **Gateway API & Telemetri:**
+   - **Integrasi Web/Explorer:** Mengikat port internal **`127.0.0.1:8080`**, yang diteruskan oleh Nginx dengan sertifikat SSL ke domain publik **`bootnode.ratuaurion.store`**.
+
 ---
 
 ## 5. Struktur Frame Wire Protokol (52-Byte Wire Frame Header)

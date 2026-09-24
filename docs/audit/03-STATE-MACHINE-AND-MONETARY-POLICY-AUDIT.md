@@ -10,14 +10,13 @@
 Submateri State Machine dan Kebijakan Moneter mencakup:
 1. **Fungsi Transisi Status (State Transition Function / STF):**
    $$\sigma' = \Upsilon(\sigma, B)$$
-2. **Hukum Konservasi Pasokan Keras 66 Juta AUR:**
-   Total pasokan beredar ditambah total kuanta terbakar wajib selalu setara atau lebih kecil dari 66.000.000 AUR ($6.6 \times 10^{15}$ Quanta):
-   $$S_{\text{circulating}} + S_{\text{burned}} \le S_{\text{max}} = 66{,}000{,}000 \times 10^8 \text{ Quanta}$$
-3. **Pembagian Biaya Transaksi (Canonical Fee Split):**
-   Tepat 20% biaya transaksi dibakar (*burned permanently*), dan 80% diberikan kepada validator/proposer blok:
-   $$\text{Fee}_{\text{burn}} = \left\lfloor \frac{\text{Fee} \times 20}{100} \right\rfloor, \quad \text{Fee}_{\text{miner}} = \text{Fee} - \text{Fee}_{\text{burn}}$$
+2. **Hukum Konservasi Pasokan Genesis 66 Juta AUR & Subsidi Blok BFT:**
+   Total pasokan Genesis dikunci tepat pada 66.000.000 AUR ($66 \times 10^{15}\ \text{Quanta} = 6.6 \times 10^{16}\ \text{Quanta}$ pada skala $10^9$) yang 100% dialokasikan ke Master Treasury (`aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`), ditambah emisi terukur subsidi blok $R = 1\ \text{AUR}$ ($10^9\ \text{Q}$) per blok kanonikal.
+3. **Alokasi Biaya Transaksi (100% Validator Fee Routing):**
+   Seluruh 100% biaya transaksi diberikan secara utuh kepada validator proposer perakit blok tanpa pemotongan burn:
+   $$\text{Fee}_{\text{validator}} = \text{Fee}, \quad \text{Fee}_{\text{burn}} = 0$$
 4. **Sparse Merkle Tree (SMT) State Roots:** Determinisme pohon status 256-bit berbasis Blake3 daun dan cabang untuk membuktikan saldo akun.
-5. **Aritmatika Integer Zero-Float:** Seluruh operasi moneter dikunci menggunakan tipe pembungkus `Quantum(u128)` dengan operasi checked/saturating arithmetic.
+5. **Aritmatika Integer Zero-Float:** Seluruh operasi moneter dikunci menggunakan tipe pembungkus `Quantum(u128)` dengan operasi checked/saturating arithmetic pada presisi 9 angka desimal.
 
 ---
 
@@ -30,12 +29,12 @@ Submateri State Machine dan Kebijakan Moneter mencakup:
 - **Verifikasi Pengujian (`tests/security_audit.rs:test_exploit_balance_drain_underflow_protection`):**
   Pengujian mencoba menguras saldo akun nol atau saldo kurang 1 Quanta. Seluruh upaya ditolak tanpa kebocoran dana.
 
-### 2.2. Determinisme Pembagian Fee 20% Burn / 80% Miner
-- Tidak ada pembagian pecahan atau sisa kuanta yang hilang:
-  $$\text{Fee}_{\text{burn}} + \text{Fee}_{\text{miner}} \equiv \text{Fee}$$
-  Operasi pembagian integer menempatkan sisa pembagian ke miner fee (`miner = fee - burn`), menjamin hukum kekekalan kuanta terpenuhi secara absolut.
+### 2.2. Determinisme Alokasi 100% Fee ke Validator Proposer
+- Tidak ada pembagian pecahan yang hilang ataupun kebocoran kuanta:
+  $$\text{Fee}_{\text{validator}} \equiv \text{Fee}$$
+  Seluruh biaya transaksi dialirkan 100% kepada validator perakit blok, menjamin hukum kekekalan kuanta terpenuhi secara absolut.
 - **Verifikasi Pengujian (`tests/conformance.rs:pillar_2_monetary_policy`):**
-  Membuktikan jutaan permutasi transaksi sintetis selalu mematuhi invariant pembagian fee tanpa residu.
+  Membuktikan jutaan permutasi transaksi sintetis selalu mematuhi invariant alokasi fee dan hukum konservasi moneter tanpa residu.
 
 ---
 

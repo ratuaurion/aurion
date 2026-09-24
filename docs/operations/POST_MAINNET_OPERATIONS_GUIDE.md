@@ -49,8 +49,8 @@ Simpan aturan ini di Prometheus Alertmanager (`aurion_alerts.yml`):
 | `AurionConsensusStall` | `increase(aurion_block_height[30s]) == 0` | **CRITICAL** | Periksa konektivitas P2P antar validator; pastikan kuorum $>2/3$ aktif. |
 | `AurionBftHighRound` | `aurion_bft_round > 2` | **WARNING** | Deteksi adanya kegagalan proposer atau latensi jaringan WAN tinggi. |
 | `AurionBftHighLatency` | `aurion_bft_finality_latency_ms > 1000` | **WARNING** | Evaluasi I/O disk database `redb 4.3` dan throughput sentry node. |
-| `AurionLowPeers` | `aurion_connected_peers < 3` | **CRITICAL** | Periksa firewall sentry node; verifikasi IP bootnodes kanonikal. |
-| `AurionMempoolCongestion` | `aurion_mempool_size > 8000` | **WARNING** | Pantau gas market dan dinamika pemisahan fee 20% burn / 80% miner. |
+| `AurionLowPeers` | `aurion_connected_peers < 3` | **CRITICAL** | Periksa firewall sentry node; verifikasi IP bootnode kanonikal `116.212.72.89:7447`. |
+| `AurionMempoolCongestion` | `aurion_mempool_size > 8000` | **WARNING** | Pantau gas market dan pengaliran fee transaksi 100% ke validator proposer. |
 | `AurionStorageDegraded` | `aurion_node_sync_status == 0` | **HIGH** | Node tertinggal dari ujung rantai; lakukan sinkronisasi catchup atau snapshot. |
 
 ---

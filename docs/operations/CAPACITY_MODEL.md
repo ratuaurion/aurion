@@ -1,13 +1,13 @@
 # AURION — Protocol Performance & Capacity Model (VER-008)
 > **Status:** RATIFIKASI FORMAL (VER-008 SELESAI)  
 > **Klasifikasi:** Dokumen Rekayasa Kinerja, Kapasitas, dan Dimensi Sistem  
-> **Prinsip Tertinggi:** Zero Unsafe (`#![forbid(unsafe_code)]`) | Zero Float (`Quantum(u128)` Integer Arithmetic AUR-ARCH-012) | Single-Slot BFT Finality (<1.000 ms SLA)
+> **Prinsip Tertinggi:** Zero Unsafe (`#![forbid(unsafe_code)]`) | Zero Float (`Quantum(u128)` Integer Arithmetic AUR-ARCH-012) | Single-Slot BFT Finality (<1.000 ms SLA) | Zero-Mock Policy
 
 ---
 
 ## 1. Ringkasan Eksekutif & Fondasi Arsitektur
 
-Model Kapasitas dan Kinerja Aurion (*Aurion Capacity & Dimensioning Model*) menetapkan batasan empiris, batas teoritis, alokasi waktu (*timing budgets*), proyeksi pertumbuhan penyimpanan multi-tahun, serta panduan spesifikasi perangkat keras simpul (*hardware sizing*) untuk jaringan Aurion di seluruh lapisan arsitektur (Layer-1 hingga Layer-5).
+Model Kapasitas dan Kinerja Aurion (*Aurion Capacity & Dimensioning Model*) menetapkan batasan empiris, batas teoritis, alokasi waktu (*timing budgets*), proyeksi pertumbuhan penyimpanan multi-tahun, serta panduan spesifikasi perangkat keras simpul (*hardware sizing*) untuk jaringan Aurion di seluruh lapisan arsitektur (Layer-1 hingga Layer-5), selaras penuh dengan [Konstitusi Protokol Aurion](file:///c:/Projects/aurion/CONSTITUTION.md).
 
 Pengukuran didasarkan pada *benchmark harness* standar yang dapat direproduksi secara deterministik melalui:
 ```bash
@@ -18,8 +18,9 @@ cargo test --bench protocol_bench --release
 
 ### Invariant Arsitektur yang Ditegakkan
 1. **AUR-ARCH-011 (Zero Unsafe Code):** Tidak ada satu pun blok `unsafe` pada seluruh jalur eksekusi STF, mempool, konsensus, storage engine, maupun adapter domain.
-2. **AUR-ARCH-012 (Zero Floating-Point Arithmetic):** Seluruh metrik latensi, alokasi memori, perhitungan throughput (TPS/ops/s), dan rasio amplifikasi dihitung menggunakan aljabar integer presisi tinggi (`u128`, nanodetik, mikrodetik, Quanta integer).
+2. **AUR-ARCH-012 (Zero Floating-Point Arithmetic):** Seluruh metrik latensi, alokasi memori, perhitungan throughput (TPS/ops/s), dan rasio amplifikasi dihitung menggunakan aljabar integer presisi tinggi (`u128`, nanodetik, mikrodetik, Quanta integer dengan skala $1\text{ AUR} = 10^9\text{ Quantum}$).
 3. **AUR-ARCH-005 & AUR-APP-05 (Single-Slot BFT Finality):** Konsensus BFT 2-fase (Prevote & Precommit) dengan kuorum $> 2/3$ daya voting wajib menyelesaikan komitmen deterministik dalam jendela waktu $\le 1.000\text{ ms}$ per blok.
+4. **Doktrin Zero-Mock & Isolasi Jaringan Nyata:** Seluruh pengukuran kapasitas dan operasi simpul mengikat proses biner produksi nyata tanpa emulasi proses kluster palsu dalam satu server, flag mock `--dev`, ataupun dummy state machine. Semua simpul P2P terhubung melalui topologi berdaulat (Bootnode `116.212.72.89:7447`, RPC Gateway terisolasi lokal `127.0.0.1:8080` di balik reverse proxy Nginx SSL).
 
 ---
 

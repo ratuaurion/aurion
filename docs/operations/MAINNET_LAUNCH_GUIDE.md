@@ -19,11 +19,13 @@ Seluruh peserta jaringan produksi Aurion terikat pada invariant konstitusional b
 | **Genesis Block Hash ($H=0$)** | `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9` | Blake3 digest atas header blok nol |
 | **Initial State Root ($\sigma_0$)** | `61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850` | SMT Blake3 256-bit state root |
 | **Ceremony Transcript Hash** | `f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380` | Checksum transkrip upacara multi-pihak |
-| **Hard Cap Total Supply** | `66,000,000` AUR | $6.6 \times 10^{15}$ Quantum ($u128$) |
-| **Alokasi Genesis (35%)** | `23,100,000` AUR | 30% Creator (19.8M) + 5% Dev (3.3M) |
+| **Hard Cap Pasokan Genesis** | `66,000,000` AUR | $6.6 \times 10^{16}$ Quantum (9 desimal, $u128$) |
+| **Alokasi Genesis (100%)** | `66,000,000` AUR | 100% dialokasikan ke Master Treasury Account |
+| **Emisi Blok Berkelanjutan (H > 0)** | `1` AUR per blok ($10^9\text{ Q}$) | 20% Proposer, 80% Precommit Voters QC |
 | **Konsensus Finalitas** | Single-Slot BFT Finality | Kuorum $>2/3$ voting power ($\ge 666,667$) |
 | **Mesin Penyimpanan** | `redb 4.3` | Murni Rust ACID, zero C++ runtime |
-| **Protokol P2P Wire** | Magic `AUR0`, 52-byte Header | Blake3 payload checksum, port default 9000 |
+| **Protokol P2P Wire & Bootnode** | Magic `AUR0`, 52-byte Header | TCP Port 7447 (`116.212.72.89`), Nginx SSL 8080 |
+| **Doktrin Integritas Kode** | Zero-Mock Policy | Larangan mutlak `--dev` & mock consensus |
 
 ---
 
@@ -61,18 +63,18 @@ Ekspektasi keluaran:
 Arsitektur produksi menerapkan **Topologi Tiga Lapis Berdaulat** sesuai Dokumen Operasional 12:
 
 ```
-[ Internet / Komunitas / Bursa / RPC Klien ]
+[ Internet / Komunitas / Explorer / Dompet Klien ]
                        │
                        ▼
          ┌───────────────────────────┐
-         │     Public RPC Gateway    │  (Port 8545: HTTP & WebSocket)
+         │     Public RPC Gateway    │  (Port 8080 SSL: bootnode.ratuaurion.store)
          └─────────────┬─────────────┘
                        │
                        ▼
          ┌───────────────────────────┐
-         │     Sentry Node Mesh      │  (Port 9000: DDoS Filtering, Rate Limiting)
+         │  P2P Bootnode Anchor Mesh │  (TCP Port 7447: 116.212.72.89)
          └─────────────┬─────────────┘
-                       │  (Private LAN / WireGuard / Isolated VPC)
+                       │  (P2P Wire / Mutual Handshake)
                        ▼
          ┌───────────────────────────┐
          │  BFT Validator Engine V0  │  (Zero Public Inbound, Isolated Signing)
@@ -121,7 +123,7 @@ Saat 4 simpul validator $\mathcal{V}_0$ saling terhubung melalui protokol Zenoh 
 3. Melakukan 2-phase BFT voting (`prevote` $\to$ `precommit`).
 4. Setelah mengumpulkan $\ge 666,667$ bobot voting suara validator, dibentuk `CommitCertificate`.
 5. Blok 1 dikomit secara atomik ke dalam penyimpanan fisik `redb 4.3`.
-6. Subsidi blok perdana dikreditkan ke alamat proposer, dan 20% fee transaksi dibakar secara deflasioner.
+6. Subsidi blok perdana $R = 1\text{ AUR}$ dikreditkan (20% ke proposer, 80% ke precommit voters QC), dan 100% fee transaksi dialirkan ke validator perakit blok.
 
 ---
 

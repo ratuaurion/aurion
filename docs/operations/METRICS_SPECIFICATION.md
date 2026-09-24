@@ -28,7 +28,7 @@ Sesuai dengan Dokumen 12 (*Operational Rules*) dan Invariant `AUR-ARCH-011`/`AUR
 | `aurion_node_sync_status` | `gauge` | `chain_id` | Status sinkronisasi simpul (`1` = tersinkronisasi penuh, `0` = sedang fast-sync). | `1` pada simpul operasional. |
 | `aurion_transactions_processed_total` | `counter` | `chain_id` | Akumulasi total transaksi yang berhasil dieksekusi dan dikomit ke ledger. | Monoton naik. |
 | `aurion_blocks_finalized_total` | `counter` | `chain_id` | Akumulasi total blok yang memperoleh sertifikat komitmen BFT (`CommitCertificate`). | Monoton naik. |
-| `aurion_burned_quanta_total` | `counter` | `chain_id` | Akumulasi total unit Quantum yang dimusnahkan secara permanen via 20% protocol burn split. | Monoton naik (Deflationary pressure). |
+| `aurion_validator_fees_total` | `counter` | `chain_id` | Akumulasi total unit Quantum fee transaksi yang dialirkan 100% ke validator pembuat blok. | Monoton naik (100% fee routing). |
 | `aurion_bft_finality_latency_ms` | `gauge` | `chain_id` | Latensi waktu (milidetik) dari penerbitan proposal hingga kuorum precommit $>2/3$. | $< 1,000\text{ ms}$ (SLA Single-Slot Finality). |
 | `aurion_active_protocol_version` | `gauge` | `chain_id` | Versi protokol konsensus aktif yang diakui oleh state machine. | Versi mayor saat ini (`1` untuk Mainnet Genesis). |
 
@@ -69,9 +69,9 @@ aurion_transactions_processed_total{chain_id="1001"} 98450
 # TYPE aurion_blocks_finalized_total counter
 aurion_blocks_finalized_total{chain_id="1001"} 12480
 
-# HELP aurion_burned_quanta_total Cumulative quanta permanently burned by the 20% protocol fee split.
-# TYPE aurion_burned_quanta_total counter
-aurion_burned_quanta_total{chain_id="1001"} 1969000000
+# HELP aurion_validator_fees_total Cumulative quanta fees routed 100% to block proposing validators.
+# TYPE aurion_validator_fees_total counter
+aurion_validator_fees_total{chain_id="1001"} 1969000000
 
 # HELP aurion_bft_finality_latency_ms Single-slot BFT finality commit latency in milliseconds.
 # TYPE aurion_bft_finality_latency_ms gauge

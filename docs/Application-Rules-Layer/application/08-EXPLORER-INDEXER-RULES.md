@@ -80,18 +80,18 @@ Explorer publik **MUST** menyajikan rincian data dengan standar transparansi tin
 
 ### 4.1 Rincian Biaya Transaksi (Fee Breakdown)
 Setiap halaman detail transaksi **MUST** memecah nilai fee secara eksplisit:
-- **Total Biaya Transaksi (Total Fee):** Nilai penuh dalam Quantum dan AUR.
-- **Biaya yang Dimusnahkan (Burned 20%):** Ditampilkan dengan warna khusus (misalnya merah/oranye dengan ikon api $\text{🔥}$) untuk memperlihatkan deflasi moneter.
-- **Biaya untuk Produser Blok (Miner 80%):** Ditampilkan sebagai imbalan penambang.
+- **Total Biaya Transaksi (Total Fee):** Nilai penuh dalam Quantum dan AUR ($1\text{ AUR} = 10^9\text{ Quantum}$).
+- **Alokasi Validator Pembuat Blok (Validator 100%):** Ditampilkan sebagai imbalan penuh kepada validator proposer perakit blok.
+- **Biaya yang Dimusnahkan (Burned 0%):** Menampilkan nilai `0` (skema burn fee telah dihapuskan; suplai deterministik diatur di level Genesis 66M dan subsidi blok BFT).
 
-### 4.2 Pelacakan Asal-Usul Penerbitan Uang (Provenance Tracking)
-1. Explorer **MUST** membedakan transaksi transfer biasa dengan pencetakan subsidi blok baru (*Coinbase Issuance*).
-2. Setiap hadiah blok baru **MUST** menampilkan **Reward Provenance Identifier (RPI)** resmi yang mengikat subsidi ke Konstitusi Aurion Bab 5.
+### 4.2 Pelacakan Asal-Usul Penerbitan Moneter (Provenance Tracking)
+1. Explorer **MUST** membedakan transaksi transfer biasa dengan pencetakan subsidi blok BFT baru (*Protocol Block Reward* $R = 1\text{ AUR}$ per blok).
+2. Setiap hadiah blok baru **MUST** menampilkan rincian pembagian protokol resmi (20% Proposer, 80% Precommit Voters QC) yang mengikat subsidi ke [Konstitusi Protokol Aurion](file:///c:/Projects/aurion/CONSTITUTION.md) Bab II Pasal 3.
 3. Explorer **MUST** menyajikan grafik pasokan moneter real-time:
-   - Total Emisi Kumulatif ($S_{\text{emitted}}$)
+   - Total Suplai Genesis ($66.000.000\text{ AUR}$ ke Master Treasury)
+   - Total Emisi Hadiah Blok Kumulatif ($S_{\text{rewards}} = H \times 1\text{ AUR}$)
    - Total Suplai Beredar Aktif ($S_{\text{circulating}}$)
-   - Total Suplai Terbakar Abadi ($S_{\text{burned}}$)
-   - Sisa Cadangan Penambangan Komunitas ($S_{\text{mining\_reserve}}$)
+   - Total Slashed / Slashing Burn ($S_{\text{slashed}}$)
 
 ---
 

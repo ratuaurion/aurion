@@ -44,7 +44,7 @@ Transaction
 | `sender` | `[u8; 32]` | $32\ \text{B}$ | Alamat kanonikal 32-byte akun pembayar. |
 | `recipient` | `[u8; 32]` | $32\ \text{B}$ | Alamat kanonikal 32-byte akun tujuan penerima. |
 | `nonce` | `u64` (BE) | $8\ \text{B}$ | Wajib sama persis dengan `nonce` akun pengirim saat ini. |
-| `amount` | `u128` (BE) | $16\ \text{B}$ | Nilai transfer dalam Quantum ($1\ \text{AUR} = 10^8\ Q$). |
+| `amount` | `u128` (BE) | $16\ \text{B}$ | Nilai transfer dalam Quantum ($1\ \text{AUR} = 10^9\ Q$). |
 | `fee` | `u128` (BE) | $16\ \text{B}$ | Biaya transaksi dalam Quantum. Wajib $\ge \text{MinFee}$. |
 | `valid_until` | `u64` (BE) | $8\ \text{B}$ | Batas waktu kadaluarsa (Unix epoch detik). `0` = tanpa batas. |
 | `payload_len` | `u32` (BE) | $4\ \text{B}$ | Panjang data payload (maksimum $24.576\ \text{bytes}$). |

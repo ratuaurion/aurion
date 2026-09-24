@@ -27,7 +27,7 @@ Protokol Aurion menggunakan agunan koin kedaulatan AUR (dalam satuan integer Qua
 │                        ▼ (=)                                           │
 │   Total Agunan Terikat (Bonded Quanta: B_v)                            │
 │                        │                                               │
-│                        ▼ Integer Division (B_v / 10^8)                 │
+│                        ▼ Integer Division (B_v / 10^9)                 │
 │   Bobot Suara Mentah (Raw Voting Power)                                │
 │                        │                                               │
 │                        ▼ Plafon Batas Maksimum (Cap: Min(W, 10% W_E))  │
@@ -38,14 +38,14 @@ Protokol Aurion menggunakan agunan koin kedaulatan AUR (dalam satuan integer Qua
 ### 1.1 Persyaratan Agunan Mandiri Minimum (Self-Bond Minimum)
 Untuk mencegah serangan *Sybil Attack* dan memastikan operator simpul memiliki kepentingan finansial langsung terhadap kelangsungan jaringan (*skin in the game*):
 
-$$\text{MinSelfBond} = 10.000\ \text{AUR} = 1.000.000.000.000\ \text{Quantum}\ (10^{12}\ Q)$$
+$$\text{MinSelfBond} = 10.000\ \text{AUR} = 10.000.000.000.000\ \text{Quantum}\ (10^{13}\ Q)$$
 
 Validator yang saldo agunan mandirinya turun di bawah $\text{MinSelfBond}$ akan dinonaktifkan secara otomatis dari proses konsensus pada batas epoch berikutnya.
 
 ### 1.2 Formulasi Perhitungan Bobot Suara (Voting Power Formula)
 Bobot voting validator $v$, dinotasikan sebagai $w_v$, dihitung secara deterministik menggunakan pembagian bilangan bulat:
 
-$$W_{\text{raw}}(v) = \left\lfloor \frac{\text{SelfBond}(v) + \sum_{d \in \text{Delegators}} \text{DelegatedBond}(d, v)}{10^8} \right\rfloor$$
+$$W_{\text{raw}}(v) = \left\lfloor \frac{\text{SelfBond}(v) + \sum_{d \in \text{Delegators}} \text{DelegatedBond}(d, v)}{10^9} \right\rfloor$$
 
 ### 1.3 Plafon Batas Anti-Sentralisasi (Voting Power Cap)
 Untuk mencegah dominasi oligarki dan menjaga desentralisasi jaringan:
@@ -112,7 +112,7 @@ Validator berhak memungut komisi dari reward blok yang diperoleh sebelum dibagik
 - Penyesuaian komisi dibatasi maksimum pergeseran $100\ \text{bps}$ ($1\%$) per epoch untuk melindungi stabilitas delegator.
 
 ### 3.3 Formulasi Pembagian Hadiah Blok Bebas Floating-Point
-Setiap blok yang final menghasilkan total hadiah $\mathcal{R}_{\text{total}} = \mathcal{S}(H) + \mathcal{F}_{\text{miner}}(H)$.
+Setiap blok yang final menghasilkan total imbalan validator pengusul $\mathcal{R}_{\text{total}} = \mathcal{R}_{\text{proposer}}(H) + \mathcal{F}_{\text{validator}}(H)$, di mana $\mathcal{R}_{\text{proposer}}(H) = \lfloor (R \times 20) / 100 \rfloor$ dari subsidi blok $R = 1\text{ AUR}$, dan $\mathcal{F}_{\text{validator}}(H) = \mathcal{F}_{\text{total}}$ (100% total biaya transaksi blok dialirkan ke validator pengusul).
 
 Jika blok diusulkan oleh validator $v$ yang memiliki kumpulan agunan $B_v = \text{SelfBond} + \text{DelegatedStake}$:
 

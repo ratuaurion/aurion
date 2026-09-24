@@ -117,10 +117,12 @@ Sebelum memberikan suara, setiap validator independen wajib memverifikasi secara
    $$\text{ParentHash}(B) = \text{Hash}(B_{H-1})$$
 3. **Validitas State Transisi Transaksi:** Setiap transaksi non-coinbase valid secara tanda tangan kriptografis, tidak melakukan *double-spend*, dan mematuhi konservasi nilai:
    $$\sum \text{Inputs} \ge \sum \text{Outputs}$$
-4. **Validitas Moneter Konstitusional:** Transaksi coinbase mematuhi:
-   - Nilai total $\le \mathcal{S}(H) + \mathcal{F}_{\text{miner}}(H)$ sesuai [AURION-MONETARY-POLICY-SPECIFICATION.md](file:///c:/Projects/aurion/AURION-MONETARY-POLICY-SPECIFICATION.md);
-   - Mematuhi batas suplai kumulatif [INV-01] hingga [INV-06];
-   - Menggunakan bilangan bulat Quantum tanpa floating-point.
+4. **Validitas Moneter Konstitusional & Reward Protokol:**
+   - Tidak ada transaksi coinbase eksternal yang diizinkan (*zero external coinbase transaction*).
+   - Pencetakan reward blok tetap $R = 1\text{ AUR} = 1.000.000.000\text{ Quantum}\ (10^9\ Q)$ dieksekusi langsung pada level protokol (`aurion-execution`): 20% ke Proposer ($200.000.000\ Q$) dan 80% ke validator penandatangan Precommit QC ($800.000.000\ Q$).
+   - Seluruh biaya gas transaksi dialirkan 100% ke validator pembuat proposal blok.
+   - Mematuhi invarian moneter `[INV-MON-01]` hingga `[INV-MON-06]`.
+   - Menggunakan kalkulasi integer murni Quantum (`u128`) tanpa floating-point.
 5. **Validitas Header Konsensus:** Timestamp blok memenuhi aturan *Median Time Past* (MTP) dan tidak melompat ke masa depan:
    $$\text{MTP}(B_{H-1}) < \text{Timestamp}(B) \le \text{CurrentClock} + \text{MaxClockDrift}$$
 
@@ -154,9 +156,11 @@ Maka terbentuklah **Sertifikat Komitmen Mutlak (*Commit Certificate* / $\mathcal
 $$\mathcal{CC}(B) = \left\{ H,\; R,\; \text{Hash}(B),\; \left[ (v_k, \sigma_k) \mid k \in \mathcal{K} \right] \right\}$$
 
 ### Tahap 5: Komitmen Ledger dan Transisi State (Commit & Execution)
-1. Simpul menyematkan $\mathcal{CC}(B)$ ke dalam ledger lokal sebagai bukti keabsahan blok $B$.
-2. State UTXO dan state moneter diperbarui secara atomik.
-3. Biaya transaksi dieksekusi: 20% dibakar secara permanen ($\mathcal{F}_{\text{burned}}$), dan 80% dicairkan ke produser blok bersama subsidi $\mathcal{S}(H)$ di bawah aturan kematangan 100 blok (*Coinbase Maturity*).
+1. Simpul menyematkan $\mathcal{CC}(B)$ ke dalam ledger lokal (`redb`) sebagai bukti keabsahan mutlak blok $B$.
+2. State pohon akun (SMT) dan state moneter diperbarui secara atomik.
+3. Eksekusi insentif tingkat protokol:
+   - Pencetakan koin baru reward $R = 1\text{ AUR} = 10^9\text{ Q}$ dialokasikan: 20% ke Proposer dan 80% dibagi proporsional ke validator penandatangan Precommit pada $\mathcal{CC}(B)$.
+   - 100% akumulasi gas fee transaksi dikreditkan langsung ke akun Proposer.
 4. Nomor tinggi blok melangkah maju: $H \to H + 1$, putaran diatur ulang ke $R = 0$.
 
 ### Tahap 6: Finalitas Mutlak (Absolute Finality)

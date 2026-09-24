@@ -72,7 +72,7 @@ aurion-uri      = "aurion:" aurion-address [ "?" query-params ]
 aurion-address  = ( mainnet-addr | testnet-addr )
 query-params    = param [ "&" query-params ]
 param           = ( amount-param | memo-param | label-param | custom-param )
-amount-param    = "amount=" 1*DIGIT [ "." 1*8DIGIT ]
+amount-param    = "amount=" 1*DIGIT [ "." 1*9DIGIT ]
 memo-param      = "memo=" *pchar
 label-param     = "label=" *pchar
 custom-param    = ( [ "req-" ] 1*pchar "=" *pchar )
@@ -80,14 +80,14 @@ custom-param    = ( [ "req-" ] 1*pchar "=" *pchar )
 
 ### 4.2 Parameter URI Standar
 - **`amount`:** Nilai transfer. 
-  - Jika ditulis dalam desimal (misal `amount=2.5`), ditafsirkan sebagai $2,5\ \text{AUR}$ ($250.000.000\ Q$).
-  - Angka di belakang koma **MUST NOT** melebihi 8 digit desimal.
+  - Jika ditulis dalam desimal (misal `amount=2.5`), ditafsirkan sebagai $2,5\ \text{AUR}$ ($2.500.000.000\ Q$).
+  - Angka di belakang koma **MUST NOT** melebihi 9 digit desimal ($10^9\ \text{Quantum} = 1\ \text{AUR}$).
 - **`memo`:** Teks referensi pembayaran atau invoice ID (maksimum 64 bytes UTF-8 ter-URL-encoded).
 - **`label`:** Nama penerima atau entitas yang ramah manusia (misal: `label=Toko%20Kopi%20Aurion`).
 
 ### 4.3 Contoh URI Resmi
 ```text
-aurion:aur10t9h48nhaunuj2uqf8kfd6jqjq07h0ecv85h49lsreaq9uqhqffshf0p6h?amount=1.50000000&memo=INV-2026-9041&label=Warung%20Sovereign
+aurion:aur10t9h48nhaunuj2uqf8kfd6jqjq07h0ecv85h49lsreaq9uqhqffshf0p6h?amount=1.500000000&memo=INV-2026-9041&label=Warung%20Sovereign
 ```
 
 ### 4.4 Aturan Penerimaan Parameter Wajib (`req-`)

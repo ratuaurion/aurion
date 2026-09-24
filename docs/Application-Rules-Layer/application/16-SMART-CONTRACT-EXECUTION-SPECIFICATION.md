@@ -67,7 +67,7 @@ Setiap instruksi AVM wajib menghasilkan mutasi state yang identik pada seluruh n
 AVM tidak memiliki opcode `f32`, `f64`, atau representasi pecahan floating-point. Seluruh pembagian adalah pembagian bulat dengan sisa (division with remainder), dan pembagian dengan nol (`DIV by 0`) menghasilkan nilai nol deterministik atau kegagalan transaksi terkontrol.
 
 ### AUR-VM-003: Strict Integer Gas Metering
-Setiap eksekusi bytecode wajib mengonsumsi gas terukur secara linear dan kuadratik (pada ekspansi memori). Jika gas habis (`OutOfGas`), seluruh mutasi state dibatalkan (reverted) dan seluruh gas limit hangus ke jaringan (burn/miner).
+Setiap eksekusi bytecode wajib mengonsumsi gas terukur secara linear dan kuadratik (pada ekspansi memori). Jika gas habis (`OutOfGas`), seluruh mutasi state dibatalkan (reverted) dan seluruh fee gas limit dialirkan 100% kepada validator pembuat blok sebagai kompensasi komputasi BFT.
 
 ### AUR-VM-004: Atomic State Rollback on Revert
 Jika kontrak memanggil instruksi `REVERT` atau mengalami kesalahan eksekusi (stack overflow, illegal opcode, memory out-of-bounds), seluruh perubahan saldo dan penyimpanan kontrak pada frame tersebut wajib di-rollback secara atomik ke snapshot sebelum pemanggilan.
@@ -123,4 +123,4 @@ Instruksi AVM dikelompokkan ke dalam kategori berikut:
    - Operasi Storage Mutasi (`SSTORE`): 500 gas (fresh key) / 200 gas (update).
    - Syscall Kriptografi (`BLAKE3`): 30 gas + 6 gas per 32-byte input.
    - Syscall Kriptografi (`ED25519_VERIFY`): 500 gas.
-4. **Gas Burn:** 20% dari seluruh biaya eksekusi gas dimusnahkan secara permanen (*burned*), dan 80% diberikan kepada validator/proposer pembuat blok.
+4. **Alokasi Fee Gas:** 100% dari seluruh biaya eksekusi gas dialokasikan secara penuh kepada validator/proposer pembuat blok (skema usang 20% burn telah dihapuskan selaras dengan Konstitusi Protokol Aurion).
