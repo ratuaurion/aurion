@@ -86,6 +86,8 @@ async fn test_devnet_multinode_rpc_fault_recovery_and_teardown() {
     let mut consensus = Vec::new();
     let mut rpc_tasks = Vec::new();
     let mut shutdowns = Vec::new();
+    let mut sessions = Vec::new();
+    let mut rx_channels = Vec::new();
 
     for index in 0..4 {
         let path = NamedTempFile::new().unwrap();
@@ -112,29 +114,35 @@ async fn test_devnet_multinode_rpc_fault_recovery_and_teardown() {
             .map(|(_, port)| format!("tcp/127.0.0.1:{port}"))
             .collect::<Vec<_>>();
         let peer_refs = peers.iter().map(String::as_str).collect::<Vec<_>>();
-        let zenoh = ZenohBftTransport::open(index as u32, GENESIS_CHAIN_ID, &endpoint, &peer_refs)
-            .await
-            .unwrap();
+        let zenoh_session =
+            ZenohBftTransport::open_session(GENESIS_CHAIN_ID, &endpoint, &peer_refs)
+                .await
+                .unwrap();
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
-        let consensus_task = node
-            .clone()
-            .spawn_consensus_engine_with_shutdown(
-                index as u32,
-                keys.validators[index].clone(),
-                zenoh.session(),
-                shutdown_rx,
-            )
-            .await
-            .unwrap();
         let rpc_node = node.clone();
         let rpc_task = tokio::spawn(async move {
             rpc_node.run_rpc_server(None).await.unwrap();
         });
         nodes.push(node);
         paths.push(path);
-        consensus.push(Some(consensus_task));
+        sessions.push(zenoh_session);
+        rx_channels.push(shutdown_rx);
         rpc_tasks.push(rpc_task);
         shutdowns.push(shutdown_tx);
+    }
+
+    for (index, (session, shutdown_rx)) in sessions.into_iter().zip(rx_channels.into_iter()).enumerate() {
+        let consensus_task = nodes[index]
+            .clone()
+            .spawn_consensus_engine_with_shutdown(
+                index as u32,
+                keys.validators[index].clone(),
+                session,
+                shutdown_rx,
+            )
+            .await
+            .unwrap();
+        consensus.push(Some(consensus_task));
     }
 
     wait_height(&nodes, 3).await;
@@ -297,27 +305,38 @@ async fn test_devnet_multinode_rpc_fault_recovery_and_teardown() {
         Some(3),
         rejoin_store,
     ));
-    let caught_up = rejoined.catch_up_from_peer(&nodes[0]).unwrap();
-    assert!(
-        caught_up >= 1,
-        "rejoined validator must replay missed blocks"
-    );
     let endpoint = format!("tcp/127.0.0.1:{}", ports[3]);
     let peers = ports[..3]
         .iter()
         .map(|port| format!("tcp/127.0.0.1:{port}"))
         .collect::<Vec<_>>();
     let peer_refs = peers.iter().map(String::as_str).collect::<Vec<_>>();
-    let rejoin_zenoh = ZenohBftTransport::open(3, GENESIS_CHAIN_ID, &endpoint, &peer_refs)
+    let rejoin_session = ZenohBftTransport::open_session(GENESIS_CHAIN_ID, &endpoint, &peer_refs)
         .await
         .unwrap();
+
+    let mut caught_up = 0;
+    for _ in 0..10 {
+        let applied = rejoined.catch_up_from_peer(&nodes[0]).unwrap();
+        caught_up += applied;
+        let target = nodes[0].ledger.lock().unwrap().latest_height();
+        let current = rejoined.ledger.lock().unwrap().latest_height();
+        if current >= target {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    assert!(
+        caught_up >= 1,
+        "rejoined validator must replay missed blocks"
+    );
     let (rejoin_shutdown, rejoin_rx) = tokio::sync::watch::channel(false);
     let rejoin_consensus = rejoined
         .clone()
         .spawn_consensus_engine_with_shutdown(
             3,
             keys.validators[3].clone(),
-            rejoin_zenoh.session(),
+            rejoin_session,
             rejoin_rx,
         )
         .await

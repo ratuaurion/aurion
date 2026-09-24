@@ -11,13 +11,14 @@ use crate::consensus::bft::vote::{Vote, PHASE_PRECOMMIT, PHASE_PREVOTE};
 use crate::crypto::Keypair;
 use crate::genesis::builder::GENESIS_CHAIN_ID;
 use crate::state::chain::{ChainError, ChainLedger};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use thiserror::Error;
 use tokio::time::{self, Instant};
 
 pub const MAX_ROUND_DRIFT: u64 = 1000;
+pub const CATCH_UP_QUEUE_CAP: usize = 256;
 
 #[derive(Debug, Error)]
 pub enum ReactorError {
@@ -118,8 +119,10 @@ pub struct BftReactor<T: BftTransport> {
     pending_transactions: Vec<(crate::transaction::types::Transaction, [u8; 32])>,
     pub vote_accumulator: VoteAccumulator,
     pub round_timeout: Duration,
+    pub round_deadline: Option<Instant>,
     pub pending_proposal: Option<Block>,
     pub pending_proposer_index: Option<u32>,
+    pending_committed: BTreeMap<u64, Block>,
     engine: BftEngine,
     ledger: Option<Arc<Mutex<ChainLedger>>>,
 }
@@ -185,8 +188,10 @@ impl<T: BftTransport> BftReactor<T> {
             pending_transactions: Vec::new(),
             vote_accumulator: VoteAccumulator::new(),
             round_timeout,
+            round_deadline: None,
             pending_proposal: None,
             pending_proposer_index: None,
+            pending_committed: BTreeMap::new(),
             engine: BftEngine::new(Some(keypair), Some(validator_index)),
             ledger,
         }
@@ -204,7 +209,9 @@ impl<T: BftTransport> BftReactor<T> {
     }
 
     pub async fn step(&mut self) -> Result<Option<CommitCertificate>, ReactorError> {
-        let deadline = Instant::now() + self.round_timeout;
+        let deadline = *self
+            .round_deadline
+            .get_or_insert_with(|| Instant::now() + self.round_timeout);
         let timeout = time::sleep_until(deadline);
         tokio::pin!(timeout);
 
@@ -222,11 +229,20 @@ impl<T: BftTransport> BftReactor<T> {
                         transaction,
                         sender_pubkey,
                     } => self.pending_transactions.push((transaction, sender_pubkey)),
+                    ConsensusMessage::RoundAdvance { height, round } => {
+                        self.handle_round_advance(height, round);
+                    }
+                    ConsensusMessage::CommittedBlock(block) => {
+                        if block.header.height >= self.current_height {
+                            self.pending_committed.insert(block.header.height, block);
+                        }
+                    }
                 }
 
             }
-            _ = &mut timeout => self.handle_round_timeout(),
+            _ = &mut timeout => self.handle_round_timeout().await,
         }
+        self.try_apply_pending_committed()?;
         Ok(None)
     }
 
@@ -261,6 +277,7 @@ impl<T: BftTransport> BftReactor<T> {
 
         if block.header.round > self.current_round {
             self.current_round = block.header.round;
+            self.round_deadline = None;
             self.vote_accumulator.prune_below_height(self.current_height);
             self.pending_proposal = None;
             self.pending_proposer_index = None;
@@ -373,19 +390,102 @@ impl<T: BftTransport> BftReactor<T> {
         voting_power >= self.validator_set.quorum_threshold()
     }
 
-    fn handle_round_timeout(&mut self) {
+    async fn handle_round_timeout(&mut self) {
+        self.round_deadline = None;
         self.current_round = self.current_round.saturating_add(1);
         self.pending_proposal = None;
         self.pending_proposer_index = None;
         self.vote_accumulator
             .prune_below_height(self.current_height);
+        // Relay view-change ke seluruh peer agar round seluruh validator
+        // sinkron ke proposer baru berikutnya (liveness BFT, AUR-ISSUE-011).
+        let advance = self
+            .transport
+            .broadcast_round_advance(self.current_height, self.current_round)
+            .await;
+        if let Err(error) = advance {
+            let _ = error;
+        }
+    }
+
+    fn handle_round_advance(&mut self, height: u64, round: u64) {
+        if height != self.current_height
+            || round <= self.current_round
+            || round.saturating_sub(self.current_round) > MAX_ROUND_DRIFT
+        {
+            return;
+        }
+        self.round_deadline = None;
+        self.current_round = round;
+        self.pending_proposal = None;
+        self.pending_proposer_index = None;
+        self.vote_accumulator.prune_below_height(self.current_height);
     }
 
     fn advance_height(&mut self, new_height: u64) {
         self.current_height = new_height;
         self.current_round = 0;
+        self.round_deadline = None;
         self.pending_proposal = None;
         self.pending_proposer_index = None;
         self.vote_accumulator.prune_below_height(new_height);
+    }
+
+    /// Terapkan blok terkomit (dengan sertifikat kuorum) yang disiarkan peer
+    /// untuk catch-up near-tip, sehingga node yang jatuh ke belakang tidak
+    /// menunggu proposal tanpa akhir (AUR-ISSUE-011).
+    fn try_apply_pending_committed(&mut self) -> Result<(), ReactorError> {
+        while let Some(next) = self.pending_committed.remove(&self.current_height) {
+            if self.ingest_committed_block(&next)? {
+                self.advance_height(self.current_height.saturating_add(1));
+            }
+        }
+        let stale = self
+            .pending_committed
+            .keys()
+            .filter(|height| **height <= self.current_height)
+            .cloned()
+            .collect::<Vec<_>>();
+        for height in stale {
+            self.pending_committed.remove(&height);
+        }
+        while self.pending_committed.len() > CATCH_UP_QUEUE_CAP {
+            if let Some((&height, _)) = self.pending_committed.iter().next() {
+                self.pending_committed.remove(&height);
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    fn ingest_committed_block(&self, block: &Block) -> Result<bool, ReactorError> {
+        let ledger = self.ledger.as_ref().ok_or(ReactorError::MissingLedger)?;
+        let certificate = block.commit_certificate.as_ref().ok_or_else(|| {
+            ReactorError::InvalidVote("committed block missing commit certificate".into())
+        })?;
+        certificate
+            .verify(&self.validator_set)
+            .map_err(|error| ReactorError::InvalidVote(error.to_string()))?;
+        let mut guard = ledger
+            .lock()
+            .map_err(|_| ReactorError::InvalidVote("ledger lock poisoned".into()))?;
+        let next_height = guard.latest_height().saturating_add(1);
+        if block.header.height != next_height {
+            return Ok(false);
+        }
+        let validators = guard.validator_set.validators.clone();
+        for validator in validators {
+            if guard
+                .validate_block_proposal(block, &validator.validator_id)
+                .is_ok()
+                && guard
+                    .apply_block(block.clone(), &validator.validator_id)
+                    .is_ok()
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 }

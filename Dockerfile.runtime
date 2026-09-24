@@ -1,0 +1,13 @@
+FROM debian:bookworm-slim
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    rm -rf /var/lib/apt/lists/*
+RUN groupadd -g 1000 aurion && \
+    useradd -u 1000 -g aurion -m -s /bin/bash aurion
+RUN mkdir -p /data /etc/aurion && \
+    chown -R aurion:aurion /data /etc/aurion
+COPY --chown=aurion:aurion aurion /bin/aurion
+USER aurion
+WORKDIR /home/aurion
+EXPOSE 8545 9000 9100 17447
+ENTRYPOINT ["/bin/aurion"]

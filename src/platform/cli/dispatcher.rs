@@ -1288,8 +1288,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 connect.push(normalize_tcp_endpoint(peer));
             }
             let connect_refs = connect.iter().map(String::as_str).collect::<Vec<_>>();
-            let zenoh = ZenohBftTransport::open(
-                val_idx as u32,
+            let zenoh_session = ZenohBftTransport::open_session(
                 node.config.chain_id,
                 &endpoint,
                 &connect_refs,
@@ -1301,7 +1300,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 .spawn_consensus_engine_with_shutdown(
                     val_idx as u32,
                     val_key.clone(),
-                    zenoh.session(),
+                    zenoh_session,
                     shutdown.1.clone(),
                 )
                 .await
@@ -1317,6 +1316,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     .lock()
                     .map(|l| l.latest_height())
                     .unwrap_or(0);
+                let bootnode_node = Arc::clone(&node);
                 tokio::spawn(async move {
                     let transport_cfg = crate::wire::TransportConfig {
                         chain_id,
@@ -1378,7 +1378,12 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                                             }
                                         }
                                         _ = handshake_refresh.tick() => {
-                                            let fut = transport.perform_handshake(&identity, &genesis_hash, current_h);
+                                            let current_ledger_h = bootnode_node
+                                                .ledger
+                                                .lock()
+                                                .map(|l| l.latest_height())
+                                                .unwrap_or(current_h);
+                                            let fut = transport.perform_handshake(&identity, &genesis_hash, current_ledger_h);
                                             match tokio::time::timeout(std::time::Duration::from_secs(12), fut).await {
                                                 Ok(Ok(())) => {
                                                     println!("[AURION VALIDATOR] Bootnode handshake refreshed");

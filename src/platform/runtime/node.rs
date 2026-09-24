@@ -463,7 +463,15 @@ impl AurionNode {
                     result = reactor.step() => {
                         match result {
                             Ok(Some(_certificate)) => {
-                                node.sync_rpc_context();
+                                // Sinkronkan rpc_context di luar worker thread:
+                                // jalur ini mengambil lock sinkron (ledger,
+                                // accounts, headers, recent_transactions) yang
+                                // dilarang memblokir worker Tokio (AUR-ISSUE-011).
+                                let sync_node = Arc::clone(&node);
+                                let _ = tokio::task::spawn_blocking(move || {
+                                    sync_node.sync_rpc_context();
+                                })
+                                .await;
                                 let committed_block = node
                                     .ledger
                                     .lock()
@@ -514,12 +522,29 @@ impl AurionNode {
                                         .unwrap_or_default(),
                                     &account,
                                 );
-                            }
-                        }
+}
                     }
                 }
             }
-        }))
+            // RPC context perlu mengikuti ruling height bahkan ketika blok
+            // didapat lewat catch-up (ingest blok terkomit) di dalam reactor,
+            // tidak hanya via commit 2-phase (AUR-ISSUE-011).
+            let rpc_height = node
+                .rpc_context
+                .current_height
+                .load(std::sync::atomic::Ordering::SeqCst);
+            let ledger_height = node
+                .ledger
+                .lock()
+                .map(|guard| guard.latest_height())
+                .unwrap_or_default();
+            if rpc_height != ledger_height {
+                let sync_node = Arc::clone(&node);
+                let _ = tokio::task::spawn_blocking(move || sync_node.sync_rpc_context())
+                    .await;
+            }
+        }
+    }))
     }
 
     /// Produksi dan finalisasi blok berikutnya ke dalam ledger (untuk mode validator atau testing).

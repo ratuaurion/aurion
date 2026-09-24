@@ -1,4 +1,4 @@
-﻿//! Server JSON-RPC 2.0 dan WebSocket Simpul Aurion.
+//! Server JSON-RPC 2.0 dan WebSocket Simpul Aurion.
 //! Mematuhi Dokumen 02 (02-RPC-API-RULES.md) dan Invariant AUR-ARCH-011 & AUR-ARCH-012.
 
 use crate::gateway::rpc::explorer_api;
@@ -158,7 +158,18 @@ pub async fn handle_connection(
     pubsub: Arc<SubscriptionManager>,
 ) -> Result<(), io::Error> {
     let mut buffer = [0u8; 8192];
-    let bytes_read = stream.read(&mut buffer).await?;
+    // Timeout 3 detik: cegah CLOSE_WAIT menumpuk dari koneksi idle (AUR-ISSUE-011)
+    let bytes_read = match tokio::time::timeout(
+        std::time::Duration::from_secs(3),
+        stream.read(&mut buffer),
+    )
+    .await
+    {
+        Ok(Ok(n)) => n,
+        Ok(Err(e)) => return Err(e),
+        Err(_elapsed) => return Ok(()), // timeout
+        //  - tutup koneksi idle
+    };
     if bytes_read == 0 {
         return Ok(());
     }
@@ -220,7 +231,12 @@ Connection: close\r\n\r\n";
 
     // Endpoint Prometheus OpenMetrics (PRD-017)
     if method == "GET" && path == "/metrics" {
-        let body = context.metrics.render_openmetrics();
+        // Offload ke blocking pool: render menyentuh lock sinkron (metrics
+        // registry) dan harus tidak memblokir worker Tokio (AUR-ISSUE-011).
+        let ctx = Arc::clone(&context);
+        let body = tokio::task::spawn_blocking(move || ctx.metrics.render_openmetrics())
+            .await
+            .unwrap_or_default();
         let response = format!(
             "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: text/plain; version=0.0.4; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
@@ -244,11 +260,24 @@ Connection: close\r\n\r\n";
 
     // Endpoint Deep Health Readiness Check HTTP (PRD-017)
     if method == "GET" && path == "/healthz/deep" {
-        let h = context.current_height.load(std::sync::atomic::Ordering::SeqCst);
-        let peers = context.metrics.connected_peers.load(std::sync::atomic::Ordering::SeqCst);
-        let report = context.health.deep_check(h, peers, 0, true, true, true);
-        let status_code = if report.status == "READY" { "200 OK" } else { "503 Service Unavailable" };
-        let body = serde_json::to_string(&report).unwrap_or_else(|_| r#"{"status":"READY","service":"aurion-node"}"#.to_string());
+        let ctx = Arc::clone(&context);
+        let body = tokio::task::spawn_blocking(move || {
+            let h = ctx.current_height.load(std::sync::atomic::Ordering::SeqCst);
+            let peers = ctx
+                .metrics
+                .connected_peers
+                .load(std::sync::atomic::Ordering::SeqCst);
+            let report = ctx.health.deep_check(h, peers, 0, true, true, true);
+            serde_json::to_string(&report)
+                .unwrap_or_else(|_| r#"{"status":"READY","service":"aurion-node"}"#.to_string())
+        })
+        .await
+        .unwrap_or_default();
+        let status_code = if body.contains("\"READY\"") {
+            "200 OK"
+        } else {
+            "503 Service Unavailable"
+        };
         let response = format!(
             "HTTP/1.1 {}\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             status_code,
@@ -358,14 +387,19 @@ Connection: close\r\n\r\n";
         return Ok(());
     }
 
-    // Endpoint REST Explorer API v1 (Opsi B â€” Gateway Terpadu)
+    // Endpoint REST Explorer API v1 (Opsi B — Gateway Terpadu)
     if method == "GET" && path == "/api/v1/network/stats" {
-        let body = explorer_api::render_network_stats(&context);
+        let ctx = Arc::clone(&context);
+        let body =
+            tokio::task::spawn_blocking(move || explorer_api::render_network_stats(&ctx)).await
+                .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 
     if method == "GET" && path == "/api/v1/peers" {
-        let body = explorer_api::render_peers(&context);
+        let ctx = Arc::clone(&context);
+        let body = tokio::task::spawn_blocking(move || explorer_api::render_peers(&ctx)).await
+            .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 

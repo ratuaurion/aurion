@@ -21,12 +21,15 @@ const PROPOSAL_TOPIC: &str = "consensus/proposal";
 const VOTE_TOPIC: &str = "consensus/vote";
 const TRANSACTION_TOPIC: &str = "mempool/tx";
 const COMMITTED_TOPIC: &str = "consensus/committed_block";
+const ROUND_ADVANCE_TOPIC: &str = "consensus/skip";
 const MESSAGE_PROPOSAL: u8 = 0x01;
 const MESSAGE_VOTE: u8 = 0x02;
 const MESSAGE_TRANSACTION: u8 = 0x03;
 const MESSAGE_COMMITTED_BLOCK: u8 = 0x04;
+const MESSAGE_ROUND_ADVANCE: u8 = 0x05;
 const FRAME_PREFIX_BYTES: usize = 5;
 const MAX_COMMITTED_BLOCK_WIRE_BYTES: usize = 1024 * 1024;
+const ROUND_ADVANCE_WIRE_BYTES: usize = 16;
 
 pub struct ZenohBftTransport {
     validator_index: u32,
@@ -45,6 +48,8 @@ impl ZenohBftTransport {
         let proposal_key = format!("{prefix}/{PROPOSAL_TOPIC}");
         let vote_key = format!("{prefix}/{VOTE_TOPIC}");
         let transaction_key = format!("{prefix}/{TRANSACTION_TOPIC}");
+        let committed_key = format!("{prefix}/{COMMITTED_TOPIC}");
+        let round_advance_key = format!("{prefix}/{ROUND_ADVANCE_TOPIC}");
         let (sender, receiver) = mpsc::channel(256);
 
         let proposal_subscriber = session
@@ -57,6 +62,14 @@ impl ZenohBftTransport {
             .map_err(|error| TransportError::Zenoh(error.to_string()))?;
         let transaction_subscriber = session
             .declare_subscriber(key_expr(&transaction_key)?)
+            .await
+            .map_err(|error| TransportError::Zenoh(error.to_string()))?;
+        let committed_subscriber = session
+            .declare_subscriber(key_expr(&committed_key)?)
+            .await
+            .map_err(|error| TransportError::Zenoh(error.to_string()))?;
+        let round_advance_subscriber = session
+            .declare_subscriber(key_expr(&round_advance_key)?)
             .await
             .map_err(|error| TransportError::Zenoh(error.to_string()))?;
 
@@ -74,9 +87,21 @@ impl ZenohBftTransport {
         );
         spawn_subscription(
             transaction_subscriber,
-            sender,
+            sender.clone(),
             validator_index,
             MESSAGE_TRANSACTION,
+        );
+        spawn_subscription(
+            committed_subscriber,
+            sender.clone(),
+            validator_index,
+            MESSAGE_COMMITTED_BLOCK,
+        );
+        spawn_subscription(
+            round_advance_subscriber,
+            sender,
+            validator_index,
+            MESSAGE_ROUND_ADVANCE,
         );
 
         Ok(Self {
@@ -87,12 +112,11 @@ impl ZenohBftTransport {
         })
     }
 
-    pub async fn open(
-        validator_index: u32,
+    pub async fn open_session(
         chain_id: u32,
         listen_endpoint: &str,
         connect_endpoints: &[&str],
-    ) -> Result<Self, TransportError> {
+    ) -> Result<Arc<Session>, TransportError> {
         if chain_id != GENESIS_CHAIN_ID {
             return Err(TransportError::InvalidPayload(format!(
                 "non-canonical chain ID {chain_id}"
@@ -121,7 +145,17 @@ impl ZenohBftTransport {
         let session = zenoh::open(config)
             .await
             .map_err(|error| TransportError::Zenoh(error.to_string()))?;
-        Self::from_session(Arc::new(session), validator_index, chain_id).await
+        Ok(Arc::new(session))
+    }
+
+    pub async fn open(
+        validator_index: u32,
+        chain_id: u32,
+        listen_endpoint: &str,
+        connect_endpoints: &[&str],
+    ) -> Result<Self, TransportError> {
+        let session = Self::open_session(chain_id, listen_endpoint, connect_endpoints).await?;
+        Self::from_session(session, validator_index, chain_id).await
     }
 
     pub fn validator_index(&self) -> u32 {
@@ -296,7 +330,10 @@ fn decode_committed_frame(bytes: &[u8]) -> Result<Block, TransportError> {
             "message type/topic mismatch".into(),
         ));
     }
-    let payload = &bytes[FRAME_PREFIX_BYTES..];
+    decode_committed_payload(&bytes[FRAME_PREFIX_BYTES..])
+}
+
+fn decode_committed_payload(payload: &[u8]) -> Result<Block, TransportError> {
     let mut cursor = 0;
     let block = Block::decode_canonical(payload, &mut cursor)
         .map_err(|error| TransportError::InvalidPayload(error.to_string()))?;
@@ -351,6 +388,18 @@ impl BftTransport for ZenohBftTransport {
         framed_payload.extend_from_slice(&sender_pubkey);
         framed_payload.extend_from_slice(&payload);
         self.publish(TRANSACTION_TOPIC, MESSAGE_TRANSACTION, framed_payload)
+            .await
+    }
+
+    async fn broadcast_round_advance(
+        &self,
+        height: u64,
+        round: u64,
+    ) -> Result<(), TransportError> {
+        let mut payload = Vec::with_capacity(ROUND_ADVANCE_WIRE_BYTES);
+        payload.extend_from_slice(&height.to_be_bytes());
+        payload.extend_from_slice(&round.to_be_bytes());
+        self.publish(ROUND_ADVANCE_TOPIC, MESSAGE_ROUND_ADVANCE, payload)
             .await
     }
 
@@ -464,6 +513,24 @@ fn decode_frame(
                 transaction: Transaction::decode_canonical(payload, &mut cursor)
                     .map_err(|error| TransportError::InvalidPayload(error.to_string()))?,
             }
+        }
+        MESSAGE_COMMITTED_BLOCK => {
+            let block = decode_committed_payload(payload)
+                .map_err(|error| TransportError::InvalidPayload(error.to_string()))?;
+            cursor = payload.len();
+            ConsensusMessage::CommittedBlock(block)
+        }
+        MESSAGE_ROUND_ADVANCE => {
+            if payload.len() != ROUND_ADVANCE_WIRE_BYTES {
+                return Err(TransportError::InvalidPayload(format!(
+                    "invalid round advance payload: {} != {ROUND_ADVANCE_WIRE_BYTES} bytes",
+                    payload.len()
+                )));
+            }
+            let height = u64::from_be_bytes(payload[..8].try_into().unwrap());
+            let round = u64::from_be_bytes(payload[8..].try_into().unwrap());
+            cursor = ROUND_ADVANCE_WIRE_BYTES;
+            ConsensusMessage::RoundAdvance { height, round }
         }
         _ => {
             return Err(TransportError::InvalidPayload(
