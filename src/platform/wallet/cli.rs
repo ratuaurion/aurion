@@ -322,11 +322,11 @@ fn handle_send(args: &[String]) {
     let rpc = rpc_url(args);
 
     let (sender_address, signing_key): (String, SigningKey) = if dev_sender {
-        let developer = CanonicalCeremonyKeypairs::new_deterministic().developer;
-        let address = encode_address_bech32m(&developer.derive_address(), "aur")
-            .expect("canonical developer address encoding must succeed");
-        eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis developer key for local testing only.");
-        (address, developer.to_signing_key())
+        let creator = CanonicalCeremonyKeypairs::new_deterministic().creator;
+        let address = encode_address_bech32m(&creator.derive_address(), "aur")
+            .expect("canonical creator address encoding must succeed");
+        eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis creator treasury key for local testing only.");
+        (address, creator.to_signing_key())
     } else {
         let keystore_path = get_flag_value(args, "--keystore")
             .unwrap_or_else(|| "default.keystore.json".to_string());
