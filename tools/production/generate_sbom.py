@@ -8,7 +8,15 @@ import json
 import os
 import sys
 
-WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+def _find_workspace_root() -> str:
+    current = os.path.abspath(os.path.dirname(__file__))
+    while current != os.path.dirname(current):
+        if os.path.exists(os.path.join(current, "Cargo.toml")):
+            return current
+        current = os.path.dirname(current)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+WORKSPACE_ROOT = _find_workspace_root()
 
 def parse_cargo_lock(lock_path):
     packages = []

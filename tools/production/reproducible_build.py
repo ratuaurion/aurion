@@ -14,7 +14,15 @@ import subprocess
 import sys
 import time
 
-WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+def _find_workspace_root() -> str:
+    current = os.path.abspath(os.path.dirname(__file__))
+    while current != os.path.dirname(current):
+        if os.path.exists(os.path.join(current, "Cargo.toml")):
+            return current
+        current = os.path.dirname(current)
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+WORKSPACE_ROOT = _find_workspace_root()
 
 def run_cmd(cmd, cwd=WORKSPACE_ROOT):
     result = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)

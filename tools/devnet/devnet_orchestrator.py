@@ -24,7 +24,13 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-WORKSPACE_ROOT = Path(__file__).resolve().parent.parent
+def _find_workspace_root() -> Path:
+    for p in Path(__file__).resolve().parents:
+        if (p / "Cargo.toml").exists():
+            return p
+    return Path(__file__).resolve().parent.parent.parent
+
+WORKSPACE_ROOT = _find_workspace_root()
 DEVNET_DIR = WORKSPACE_ROOT / "data" / "devnet"
 PID_FILE = DEVNET_DIR / "cluster_pids.json"
 
