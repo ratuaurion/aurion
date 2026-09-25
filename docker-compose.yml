@@ -3,44 +3,6 @@ networks:
     driver: bridge
 
 services:
-  val1:
-    image: aurion:latest
-    container_name: aurion-val1
-    networks:
-      - aurion-mesh
-    ports:
-      - "18545:18545"
-    volumes:
-      - val1-data:/data
-    command: >
-      validator start --dev --index 0
-      --data-dir /data/chain.redb
-      --p2p-bind 0.0.0.0:17447
-      --rpc-bind 0.0.0.0:18545
-      --bootnode tcp/116.212.72.89:7447
-      --peer tcp/val2:17447
-      --peer tcp/val3:17447
-      --peer tcp/val4:17447
-
-  val2:
-    image: aurion:latest
-    container_name: aurion-val2
-    networks:
-      - aurion-mesh
-    ports:
-      - "18546:18546"
-    volumes:
-      - val2-data:/data
-    command: >
-      validator start --dev --index 1
-      --data-dir /data/chain.redb
-      --p2p-bind 0.0.0.0:17447
-      --rpc-bind 0.0.0.0:18546
-      --bootnode tcp/116.212.72.89:7447
-      --peer tcp/val1:17447
-      --peer tcp/val3:17447
-      --peer tcp/val4:17447
-
   val3:
     image: aurion:latest
     container_name: aurion-val3
@@ -48,17 +10,18 @@ services:
       - aurion-mesh
     ports:
       - "18547:18547"
+      - "17449:17449"
     volumes:
       - val3-data:/data
     command: >
       validator start --dev --index 2
       --data-dir /data/chain.redb
-      --p2p-bind 0.0.0.0:17447
+      --p2p-bind 0.0.0.0:17449
       --rpc-bind 0.0.0.0:18547
       --bootnode tcp/116.212.72.89:7447
-      --peer tcp/val1:17447
-      --peer tcp/val2:17447
-      --peer tcp/val4:17447
+      --peer tcp/116.212.72.89:17447
+      --peer tcp/116.212.72.89:17448
+      --peer tcp/val4:17450
 
   val4:
     image: aurion:latest
@@ -67,17 +30,18 @@ services:
       - aurion-mesh
     ports:
       - "18548:18548"
+      - "17450:17450"
     volumes:
       - val4-data:/data
     command: >
       validator start --dev --index 3
       --data-dir /data/chain.redb
-      --p2p-bind 0.0.0.0:17447
+      --p2p-bind 0.0.0.0:17450
       --rpc-bind 0.0.0.0:18548
       --bootnode tcp/116.212.72.89:7447
-      --peer tcp/val1:17447
-      --peer tcp/val2:17447
-      --peer tcp/val3:17447
+      --peer tcp/116.212.72.89:17447
+      --peer tcp/116.212.72.89:17448
+      --peer tcp/val3:17449
 
   docker-node:
     image: aurion:latest

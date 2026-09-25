@@ -1,46 +1,18 @@
 {
-  "artifact": "aurion-suite",
-  "version": "1.0.0-rc1",
-  "release_tag": "v1.0.0-rc1",
-  "genesis_hash": "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4",
-  "chain_id": 1001,
-  "artifacts": [
-    {
-      "name": "aurion-linux-x86_64",
-      "target": "x86_64-unknown-linux-gnu",
-      "size_bytes": 10066329,
-      "sha256": "4d496dc4a152bbc3d1a770cf060805be96746cb35d5a34379bc276be52c37552",
-      "executable": "aurion"
-    },
-    {
-      "name": "aurion-windows-x86_64",
-      "target": "x86_64-pc-windows-msvc",
-      "size_bytes": 8903680,
-      "sha256": "46dd13f9563240f8235399dc3fbd5bf16715b7d0a653eaf4301b7713ddf51517",
-      "executable": "aurion.exe"
-    },
-    {
-      "name": "aurion-bootnode-linux-x86_64",
-      "target": "x86_64-unknown-linux-gnu",
-      "size_bytes": 19922944,
-      "sha256": "0bb16a3bf1ed60264c580b2d06c2f4aa20ec60cf47a444e2cbfc14c78be06cf6",
-      "executable": "aurion-bootnode"
-    },
-    {
-      "name": "aurion-bootnode-windows-x86_64",
-      "target": "x86_64-pc-windows-msvc",
-      "size_bytes": 15490048,
-      "sha256": "7d3ac9ebfd8ddd124190baf645e94d0adc81175e5254c14d44b6d021e1d32c92",
-      "executable": "aurion-bootnode.exe"
-    }
-  ],
-  "compiler": {
-    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
-    "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
-    "profile": "release",
-    "opt_level": 3,
-    "overflow_checks": true,
-    "forbid_unsafe": true,
-    "deny_float": true
-  }
+  "artifact": "aurion",
+  "version": "1.0.0",
+  "target_binary": "aurion.exe",
+  "size_bytes": 8956928,
+  "sha256": "77d90896dc791168912ca568bca250095c595ec88ab83d18f5632676c3de0fb0",
+  "rustc_version": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "cargo_version": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+  "git_commit": "28b4dce61dc3e6e7b06a1d0503f7ada973ffd04c",
+  "git_dirty": true,
+  "build_profile": "release",
+  "codegen_units": 1,
+  "lto": "fat",
+  "opt_level": 3,
+  "overflow_checks": true,
+  "forbid_unsafe": true,
+  "deny_float": true
 }
