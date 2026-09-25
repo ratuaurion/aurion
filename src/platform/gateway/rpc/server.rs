@@ -221,7 +221,7 @@ pub async fn handle_connection(
         let response = "HTTP/1.1 204 No Content\r\n\
 Access-Control-Allow-Origin: *\r\n\
 Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n\
-Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\n\
+Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma\r\n\
 Access-Control-Max-Age: 86400\r\n\
 Content-Length: 0\r\n\
 Connection: close\r\n\r\n";
@@ -466,7 +466,7 @@ Connection: close\r\n\r\n";
         };
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Methods: POST, GET, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Cache-Control, Pragma\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             response_payload.len(),
             response_payload
         );
