@@ -1,5 +1,7 @@
 # Build & Target
 /target
+*.rlib
+*.rmeta
 
 # Internal Agent & Task Ledger (PRIVATE / NEVER PUBLISHED TO GITHUB)
 .internal-tasks/
@@ -12,9 +14,64 @@ data/
 vault/
 cold_vault/
 
-# IDE & OS
+# Rahasia Kunci & Kredensial (JANGAN PERNAH DI-COMMIT)
+*.key
+*.pem
+*.pfx
+*.p12
+id_rsa
+id_ed25519
+id_ecdsa
+*.pub.key
+ssh/
+.ssh/
+gnupg/
+*.gpg
+*.asc
+*.ppk
+# Mnemonic BIP-39 / seed phrase
+mnemonic*.txt
+*mnemonic*
+seed*.txt
+*seed-phrase*
+# Environment & konfigurasi rahasia
+.env
+.env.*
+!.env.example
+*.env.local
+/secrets/
+/secrets.json
+/secrets.local.*
+/secret.json
+config.local.*
+*credentials*
+*password*.txt
+# KeyStore & wallet export apa pun
+*.keystore
+# Catatan: JANGAN pakai `*wallet*.json` — terlalu luas dan bisa menelan
+# artefak sah. Keystore sudah tertangkap oleh `*.keystore.json` di atas.
+
+# Backup & Editor
+*.sql
+*.dump
+*.bak
+*.old
+*.orig
+*.rej
+*.tmp
+*.swp
+*~
+.idea/
+.vscode/
+!.vscode/extensions.json
+
+# Log & diagnostik
+*.log
+logs/
+npm-debug.log*
+yarn-error.log*
+
+# OS
 .DS_Store
 Thumbs.db
-*.swp
-*.tmp
-*.bak
+desktop.ini
