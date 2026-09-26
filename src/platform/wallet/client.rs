@@ -210,6 +210,111 @@ pub fn get_account(rpc_url: &str, address: &str) -> Result<RpcAccount, RpcClient
     parse_account_value(&result)
 }
 
+/// Panggil `aur_call`: dry-run transaksi kontrak pada sandbox STF di simpul.
+///
+/// `raw_hex` adalah **serialisasi kanonikal transaksi** (`encode_canonical`).
+/// Transaksi belum bertanda tangan (`Signature::ZERO`) pun valid karena
+/// `aur_call` bersifat read-only dan tidak memverifikasi tanda tangan.
+///
+/// # Inputs
+/// - `rpc_url`: URL JSON-RPC simpul Aurion.
+/// - `raw_hex`: transaksi kanonikal dalam hex.
+///
+/// # Outputs
+/// Objek [`crate::state::sandbox::DryRunReport`] ter-deserialize.
+///
+/// # Errors
+/// Transport gagal, respons JSON tidak valid, atau simpul mengembalikan galat.
+pub fn contract_call(
+    rpc_url: &str,
+    raw_hex: &str,
+) -> Result<crate::state::sandbox::DryRunReport, RpcClientError> {
+    let result = call(rpc_url, "aur_call", &[raw_hex])?;
+    parse_dry_run_value(&result)
+}
+
+/// Panggil `aur_estimateGas`: estimasi gas dengan konteks eksekusi identik STF.
+pub fn estimate_gas(rpc_url: &str, raw_hex: &str) -> Result<u64, RpcClientError> {
+    let result = call(rpc_url, "aur_estimateGas", &[raw_hex])?;
+    match &result {
+        Value::Number(n) => n
+            .as_u64()
+            .ok_or_else(|| RpcClientError("aur_estimateGas bukan integer".to_string())),
+        Value::String(s) => s
+            .parse::<u64>()
+            .map_err(|_| RpcClientError(format!("aur_estimateGas tidak valid: {s}"))),
+        _ => Err(RpcClientError(
+            "aur_estimateGas mengembalikan tipe tak terduga".to_string(),
+        )),
+    }
+}
+
+/// Panggil `aur_getContractMetadata`: ambil metadata kontrak dari registry
+/// off-chain simpul berdasarkan `code_hash`.
+///
+/// # Errors
+/// Transport gagal atau registry mengembalikan galat.
+pub fn get_contract_metadata(rpc_url: &str, code_hash_hex: &str) -> Result<String, RpcClientError> {
+    let result = call(rpc_url, "aur_getContractMetadata", &[code_hash_hex])?;
+    match result {
+        Value::String(s) => Ok(s),
+        other => Ok(other.to_string()),
+    }
+}
+
+/// Parse objek hasil `aur_call` menjadi [`crate::state::sandbox::DryRunReport`].
+///
+/// # Inputs
+/// - `value`: objek JSON hasil endpoint.
+///
+/// # Outputs
+/// Laporan dry-run lengkap dengan gas, data kembalian, dan hasil deploy.
+///
+/// # Errors
+/// Field wajib (`success`/`gas_used`) tidak ada atau bertipe salah.
+fn parse_dry_run_value(
+    value: &Value,
+) -> Result<crate::state::sandbox::DryRunReport, RpcClientError> {
+    use crate::state::sandbox::DryRunReport;
+    let success = value
+        .get("success")
+        .and_then(Value::as_bool)
+        .ok_or_else(|| RpcClientError("aur_call tanpa field boolean 'success'".to_string()))?;
+    let gas_used = match value.get("gas_used") {
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .ok_or_else(|| RpcClientError("aur_call gas_used overflow".to_string()))?,
+        Some(Value::String(s)) => s
+            .parse::<u64>()
+            .map_err(|_| RpcClientError(format!("aur_call gas_used tidak valid: {s}")))?,
+        _ => return Err(RpcClientError("aur_call tanpa field 'gas_used'".to_string())),
+    };
+    let return_data = match value.get("return_data") {
+        Some(Value::String(s)) => hex::decode(s.trim_start_matches("0x")).unwrap_or_default(),
+        _ => Vec::new(),
+    };
+    let reason = value
+        .get("reason")
+        .and_then(Value::as_str)
+        .map(ToString::to_string);
+    let deployed_contract = value
+        .get("deployed_contract")
+        .and_then(Value::as_str)
+        .and_then(|s| crate::crypto::decode_address_bech32m(s, "aur").ok());
+    let storage_changes = value
+        .get("storage_changes")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
+    Ok(DryRunReport {
+        success,
+        gas_used,
+        return_data,
+        reason,
+        deployed_contract,
+        storage_changes: usize::try_from(storage_changes).unwrap_or(usize::MAX),
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse_http_url;

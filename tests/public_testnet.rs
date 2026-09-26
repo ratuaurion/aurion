@@ -27,9 +27,9 @@ use tokio::sync::watch;
 use aurion::consensus::block::Block;
 use aurion::consensus::certificate::{ValidatorEntry, ValidatorSet};
 use aurion::consensus::header::BlockHeader;
-use aurion::core::{Hash256, Quantum, Signature};
+use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::{derive_address_from_pubkey, encode_address_bech32m, Keypair};
-use aurion::gateway::faucet::{FaucetConfig, FaucetDispenser};
+use aurion::gateway::faucet::{FaucetConfig, FaucetDispenser, FaucetError};
 use aurion::gateway::rpc::methods::RpcContext;
 use aurion::gateway::rpc::pubsub::SubscriptionManager;
 use aurion::gateway::rpc::server::RpcServer;
@@ -252,6 +252,71 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
     let _ = server_handle.await;
 }
 
+/// Rakit proposal, buat precommit, dan komit satu blok BFT lengkap dengan
+/// sertifikat.
+///
+/// Mengotomatisasi alur berulang (rakit proposal -> precommit -> sertifikat commit
+/// -> apply -> sync) sehingga setiap skenario lifecycle hanya perlu fokus pada
+/// logika bisnisnya.
+fn commit_block(
+    node: &Arc<AurionNode>,
+    val_key: &Keypair,
+    val_addr: Address,
+    height: u64,
+    timestamp: u64,
+) -> Block {
+    let candidate = {
+        let ledger = node.ledger.lock().unwrap();
+        let mempool = node.mempool.lock().unwrap();
+        let bft = node.bft_engine.lock().unwrap();
+        bft.assemble_block_proposal(&ledger, &mempool, 0, timestamp, &val_addr, 1024 * 1024)
+    };
+
+    let block_hash = candidate.hash();
+    let precommit = node
+        .bft_engine
+        .lock()
+        .unwrap()
+        .produce_precommit(block_hash, height, 0)
+        .expect("precommit");
+    let cert = node
+        .bft_engine
+        .lock()
+        .unwrap()
+        .create_commit_certificate(
+            &ValidatorSet::new(vec![ValidatorEntry {
+                validator_id: val_addr,
+                consensus_pubkey: val_key.public_key_bytes(),
+                voting_weight: 100,
+            }]),
+            block_hash,
+            height,
+            0,
+            vec![precommit],
+        )
+        .expect("Commit certificate");
+
+    let block = Block::new(candidate.header, candidate.transactions, Some(cert));
+    node.ledger
+        .lock()
+        .unwrap()
+        .apply_block(block.clone(), &val_addr)
+        .unwrap_or_else(|e| panic!("apply block {height} gagal: {e}"));
+    node.sync_rpc_context();
+    block
+}
+
+/// Saldo sebuah akun pada ledger node.
+fn balance_of(node: &Arc<AurionNode>, address: &Address) -> Quantum {
+    node.ledger
+        .lock()
+        .unwrap()
+        .get_account(address)
+        .cloned()
+        .unwrap_or_default()
+        .balance
+}
+
 #[tokio::test]
 async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
     let temp_dir = TempDir::new().expect("Create temp dir");
@@ -260,15 +325,19 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
 
     let val_key = Keypair::generate();
     let val_addr = derive_address_from_pubkey(&val_key.public_key_bytes());
-    let dev_key = Keypair::generate();
-    let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
+    let faucet_key = Keypair::generate();
+    let faucet_addr = derive_address_from_pubkey(&faucet_key.public_key_bytes());
 
     let val_entry = ValidatorEntry {
         validator_id: val_addr,
         consensus_pubkey: val_key.public_key_bytes(),
         voting_weight: 100,
     };
-    let genesis = build_genesis(val_addr, dev_addr, vec![val_entry]);
+    // Genesis Aurion mengalokasikan 100% pasokan ke Master Treasury SAJA
+    // (AURION-GENESIS-SPECIFICATION.md Bagian 3.1). Akun faucet karena itu
+    // lahir dengan saldo 0 dan WAJIB didanai dari Master Treasury terlebih
+    // dahulu (AURION CONSTITUTION.md: Aturan Faucet).
+    let genesis = build_genesis(val_addr, faucet_addr, vec![val_entry]);
 
     let config = NodeConfig {
         chain_id: 9999,
@@ -285,62 +354,95 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
         store,
     ));
 
-    // Siapkan Faucet dengan Developer Keypair (memiliki alokasi 3.300.000 AUR di genesis)
-    let mut faucet = FaucetDispenser::new(dev_key.clone(), 9999, FaucetConfig::default());
-    assert_eq!(faucet.address(), dev_addr);
+    // Treasury memegang 100% pasokan; akun faucet mulai dari nol.
+    assert_eq!(
+        balance_of(&node, &val_addr),
+        Quantum::new(66_000_000_000_000_000)
+    );
+    assert_eq!(balance_of(&node, &faucet_addr), Quantum::ZERO);
 
-    // Pengembang komunitas baru (Bob) meminta 10 AUR dari Faucet
+    // BLOK 1: Master Treasury mendanai akun faucet (100.000 AUR).
+    let faucet_funding = Quantum::new(100_000_000_000);
+    let mut funding_tx = Transaction {
+        version: 1,
+        chain_id: 9999,
+        tx_type: TxType::Transfer,
+        flags: 0,
+        sender: val_addr,
+        recipient: faucet_addr,
+        amount: faucet_funding,
+        fee: Quantum::new(2_000),
+        nonce: 0,
+        valid_until: 1_800_000_000,
+        payload: Vec::new(),
+        signature: Signature::from_bytes([0u8; 64]),
+    };
+    let preimage = funding_tx.signing_preimage();
+    funding_tx.signature = val_key.sign(&preimage);
+
+    {
+        let treasury_acc = node
+            .ledger
+            .lock()
+            .unwrap()
+            .get_account(&val_addr)
+            .cloned()
+            .expect("treasury account");
+        node.mempool
+            .lock()
+            .unwrap()
+            .submit_transaction(
+                funding_tx,
+                &val_key.public_key_bytes(),
+                1_773_533_050,
+                &treasury_acc,
+            )
+            .expect("funding tx submitted");
+    }
+    let block1 = commit_block(&node, &val_key, val_addr, 1, 1_773_533_100);
+    assert_eq!(block1.transactions.len(), 1);
+    assert_eq!(balance_of(&node, &faucet_addr), faucet_funding);
+
+    // BLOK 2: Pengembang komunitas baru (Bob) meminta 10 AUR dari Faucet.
+    let mut faucet = FaucetDispenser::new(faucet_key.clone(), 9999, FaucetConfig::default());
+    assert_eq!(faucet.address(), faucet_addr);
+
     let bob_key = Keypair::generate();
     let bob_addr = derive_address_from_pubkey(&bob_key.public_key_bytes());
 
     let (faucet_tx_hash, faucet_tx) = {
         let ledger = node.ledger.lock().unwrap();
         let mut accounts_map = HashMap::new();
-        // Ambil akun dev
-        let dev_acc = ledger.get_account(&dev_addr).unwrap().clone();
-        accounts_map.insert(dev_addr, dev_acc);
+        let faucet_acc = ledger.get_account(&faucet_addr).cloned().expect("faucet account");
+        accounts_map.insert(faucet_addr, faucet_acc);
 
         let mut mempool = node.mempool.lock().unwrap();
-        faucet.dispense(&bob_addr, &accounts_map, &mut mempool, 1773533000).expect("Dispense faucet tokens")
+        faucet
+            .dispense(&bob_addr, &accounts_map, &mut mempool, 1_773_533_200)
+            .expect("Dispense faucet tokens")
     };
     assert_eq!(faucet_tx.amount, Quantum::new(1_000_000_000)); // 10 AUR
 
-    // Simpul memproses proposal Blok 1 yang memuat transaksi Faucet
-    let candidate = {
-        let ledger = node.ledger.lock().unwrap();
-        let mempool = node.mempool.lock().unwrap();
-        let bft = node.bft_engine.lock().unwrap();
-        bft.assemble_block_proposal(&ledger, &mempool, 0, 1773533100, &val_addr, 1024 * 1024)
-    };
-    assert_eq!(candidate.transactions.len(), 1);
-    assert_eq!(candidate.transactions[0].compute_tx_id(), faucet_tx_hash);
+    let block2 = commit_block(&node, &val_key, val_addr, 2, 1_773_533_300);
+    assert_eq!(block2.transactions.len(), 1);
+    assert_eq!(block2.transactions[0].compute_tx_id(), faucet_tx_hash);
 
-    let block_hash = candidate.hash();
-    let precommit = node.bft_engine.lock().unwrap().produce_precommit(block_hash, 1, 0).unwrap();
-    let cert = node.bft_engine.lock().unwrap().create_commit_certificate(
-        &ValidatorSet::new(vec![ValidatorEntry {
-            validator_id: val_addr,
-            consensus_pubkey: val_key.public_key_bytes(),
-            voting_weight: 100,
-        }]),
-        block_hash,
-        1,
-        0,
-        vec![precommit],
-    ).expect("Commit certificate");
-
-    let block1 = Block::new(candidate.header, candidate.transactions, Some(cert));
-
-    // Komit Blok 1 ke ledger
-    node.ledger.lock().unwrap().apply_block(block1, &val_addr).expect("Apply block 1");
-    node.sync_rpc_context();
-
-    // Verifikasi saldo Bob di on-chain ledger telah menerima 10 AUR penuh
-    let bob_acc = node.ledger.lock().unwrap().get_account(&bob_addr).unwrap().clone();
-    assert_eq!(bob_acc.balance, Quantum::new(1_000_000_000), "Bob received 10 AUR from testnet faucet");
+    // Bob menerima 10 AUR penuh di ledger on-chain.
+    assert_eq!(
+        balance_of(&node, &bob_addr),
+        Quantum::new(1_000_000_000),
+        "Bob should receive 10 AUR from the testnet faucet"
+    );
+    let bob_acc = node
+        .ledger
+        .lock()
+        .unwrap()
+        .get_account(&bob_addr)
+        .cloned()
+        .expect("bob account");
     assert_eq!(bob_acc.nonce, 0);
 
-    // Sekarang Bob mengirim 2 AUR (200.000.000 Quanta) ke Charlie menggunakan dana faucet
+    // BLOK 3: Bob mengirim 2 AUR (200.000.000 Quanta) ke Charlie memakai dana faucet.
     let charlie_key = Keypair::generate();
     let charlie_addr = derive_address_from_pubkey(&charlie_key.public_key_bytes());
 
@@ -354,55 +456,68 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
         amount: Quantum::new(200_000_000), // 2 AUR
         fee: Quantum::new(2_000),
         nonce: 0,
-        valid_until: 1800000000,
+        valid_until: 1_800_000_000,
         payload: Vec::new(),
         signature: Signature::from_bytes([0u8; 64]),
     };
     let preimage = bob_tx.signing_preimage();
     bob_tx.signature = bob_key.sign(&preimage);
 
-    node.mempool.lock().unwrap().submit_transaction(
-        bob_tx.clone(),
-        &bob_key.public_key_bytes(),
-        1773533200,
-        &bob_acc,
-    ).expect("Bob tx submitted to mempool");
+    node.mempool
+        .lock()
+        .unwrap()
+        .submit_transaction(
+            bob_tx,
+            &bob_key.public_key_bytes(),
+            1_773_533_400,
+            &bob_acc,
+        )
+        .expect("Bob tx submitted to mempool");
 
-    // Rakit & Komit Blok 2
-    let candidate2 = {
+    let block3 = commit_block(&node, &val_key, val_addr, 3, 1_773_533_500);
+    assert_eq!(block3.transactions.len(), 1);
+
+    // Charlie menerima 2 AUR.
+    assert_eq!(balance_of(&node, &charlie_addr), Quantum::new(200_000_000));
+
+    // Bob = 10 AUR - 2 AUR - 2.000 fee = 799.998.000 Quanta, nonce naik ke 1.
+    let bob_final = node
+        .ledger
+        .lock()
+        .unwrap()
+        .get_account(&bob_addr)
+        .cloned()
+        .expect("bob account");
+    assert_eq!(
+        bob_final.balance,
+        Quantum::new(1_000_000_000 - 200_000_000 - 2_000)
+    );
+    assert_eq!(bob_final.nonce, 1);
+
+    // Cooldown anti-abuse: reclaim oleh alamat yang SAMA dalam 60 detik ditolak.
+    // Pakai instance faucet yang sama dengan blok 2 (sudah mencatat Bob pada
+    // t=1_773_533_200), lalu klaim lagi pada t+10 detik.
+    {
         let ledger = node.ledger.lock().unwrap();
-        let mempool = node.mempool.lock().unwrap();
-        let bft = node.bft_engine.lock().unwrap();
-        bft.assemble_block_proposal(&ledger, &mempool, 0, 1773533300, &val_addr, 1024 * 1024)
-    };
-    assert_eq!(candidate2.transactions.len(), 1);
+        let mut accounts_map = HashMap::new();
+        accounts_map.insert(
+            faucet_addr,
+            ledger.get_account(&faucet_addr).cloned().unwrap_or_default(),
+        );
+        let mut mempool = node.mempool.lock().unwrap();
+        let cooldown = faucet
+            .dispense(&bob_addr, &accounts_map, &mut mempool, 1_773_533_210)
+            .expect_err("reclaim by same address within cooldown must be rejected");
+        assert!(
+            matches!(cooldown, FaucetError::CooldownActive(50)),
+            "expected CooldownActive(50), got: {cooldown:?}"
+        );
 
-    let block2_hash = candidate2.hash();
-    let precommit2 = node.bft_engine.lock().unwrap().produce_precommit(block2_hash, 2, 0).unwrap();
-    let cert2 = node.bft_engine.lock().unwrap().create_commit_certificate(
-        &ValidatorSet::new(vec![ValidatorEntry {
-            validator_id: val_addr,
-            consensus_pubkey: val_key.public_key_bytes(),
-            voting_weight: 100,
-        }]),
-        block2_hash,
-        2,
-        0,
-        vec![precommit2],
-    ).expect("Commit certificate 2");
-
-    let block2 = Block::new(candidate2.header, candidate2.transactions, Some(cert2));
-    node.ledger.lock().unwrap().apply_block(block2, &val_addr).expect("Apply block 2");
-    node.sync_rpc_context();
-
-    // Verifikasi saldo Charlie = 2 AUR
-    let charlie_acc = node.ledger.lock().unwrap().get_account(&charlie_addr).unwrap().clone();
-    assert_eq!(charlie_acc.balance, Quantum::new(200_000_000));
-
-    // Verifikasi saldo Bob = 10 AUR - 2 AUR - 2000 fee = 799.998.000 Quanta
-    let bob_acc_updated = node.ledger.lock().unwrap().get_account(&bob_addr).unwrap().clone();
-    assert_eq!(bob_acc_updated.balance, Quantum::new(1_000_000_000 - 200_000_000 - 2_000));
-    assert_eq!(bob_acc_updated.nonce, 1);
+        // Charlie adalah penerima berbeda: tidak terkena cooldown Bob.
+        faucet
+            .dispense(&charlie_addr, &accounts_map, &mut mempool, 1_773_533_210)
+            .expect("different recipient is not blocked by another address cooldown");
+    }
 
     println!("[SUCCESS] Public Testnet Faucet and Community Lifecycle 100% verified!");
 }

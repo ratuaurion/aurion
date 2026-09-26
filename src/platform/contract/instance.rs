@@ -200,8 +200,24 @@ struct PreparedCall {
     simulation: DryRunReport,
 }
 
-/// Susun transaksi kanonikal **belum ditandatangani** (signature ZERO).
-fn build_unsigned_tx(
+/// Parameter penyusun transaksi kanonikal **belum ditandatangani**
+/// (`Signature::ZERO`) untuk aksi deploy maupun call.
+///
+/// Menggantikan daftar argumen posisional `build_unsigned_tx` yang melampaui
+/// ambang `clippy::too_many_arguments`, sekaligus memperjelas makna setiap
+/// field di call site (AUR-ARCH-003: batas modul eksplisit).
+///
+/// # Fields
+/// - `tx_type`: `ContractDeploy` atau `ContractCall`.
+/// - `chain_id`: jaringan tujuan dari Provider.
+/// - `sender`: pemilik tanda tangan (harus sama dengan `Signer::address`).
+/// - `recipient`: alamat kontrak; `Address::ZERO` untuk deploy.
+/// - `nonce`: nonce on-chain dari Provider.
+/// - `amount`: nilai Quanta yang dikirim (value deploy / call payable).
+/// - `fee`: fee transaksi dalam Quanta.
+/// - `valid_until`: batas kedaluwarsa (detik Unix).
+/// - `payload`: AVM Call Frame (call) atau konstruktor terverifikasi (deploy).
+struct UnsignedTxSpec {
     tx_type: TxType,
     chain_id: u32,
     sender: Address,
@@ -210,21 +226,27 @@ fn build_unsigned_tx(
     amount: Quantum,
     fee: Quantum,
     valid_until: u64,
-    payload: &[u8],
-) -> Transaction {
-    Transaction {
-        version: 1,
-        chain_id,
-        tx_type,
-        flags: 0,
-        sender,
-        recipient,
-        nonce,
-        amount,
-        fee,
-        valid_until,
-        payload: payload.to_vec(),
-        signature: Signature::ZERO,
+    payload: Vec<u8>,
+}
+
+impl UnsignedTxSpec {
+    /// Bangun transaksi kanonikal **belum bertanda tangan** (signature ZERO).
+    #[must_use]
+    fn build(self) -> Transaction {
+        Transaction {
+            version: 1,
+            chain_id: self.chain_id,
+            tx_type: self.tx_type,
+            flags: 0,
+            sender: self.sender,
+            recipient: self.recipient,
+            nonce: self.nonce,
+            amount: self.amount,
+            fee: self.fee,
+            valid_until: self.valid_until,
+            payload: self.payload,
+            signature: Signature::ZERO,
+        }
     }
 }
 
@@ -357,17 +379,18 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
         }
         let valid_until = self.provider.current_time().saturating_add(opts.ttl_secs);
 
-        let tx = build_unsigned_tx(
-            TxType::ContractCall,
+        let tx = UnsignedTxSpec {
+            tx_type: TxType::ContractCall,
             chain_id,
             sender,
-            self.address,
+            recipient: self.address,
             nonce,
-            opts.value,
+            amount: opts.value,
             fee,
             valid_until,
-            &payload,
-        );
+            payload,
+        }
+        .build();
 
         // Gerbang dry-run: eksekusi persis STF pada state sandbox.
         let simulation = self.provider.simulate(&tx)?;
@@ -386,11 +409,14 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
             .map(|(param, value)| format!("{} = {}", param.name, value.render()))
             .collect();
 
+        // Hash payload diturunkan dari transaksi yang sudah dibangun; byte-nya
+        // identik sehingga tidak perlu menyalin payload.
+        let payload_hash = blake3_hash(&tx.payload);
         Ok(PreparedCall {
             tx,
             method,
             rendered_args,
-            payload_hash: blake3_hash(&payload),
+            payload_hash,
             code_hash: self.metadata.code_hash_bytes()?,
             chain_id,
             simulation,
@@ -506,17 +532,18 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
             request.methods,
         )?;
 
-        let tx = build_unsigned_tx(
-            TxType::ContractDeploy,
+        let tx = UnsignedTxSpec {
+            tx_type: TxType::ContractDeploy,
             chain_id,
             sender,
-            Address::ZERO,
+            recipient: Address::ZERO,
             nonce,
-            request.initial_balance,
+            amount: request.initial_balance,
             fee,
             valid_until,
-            &payload,
-        );
+            payload,
+        }
+        .build();
 
         // Gerbang dry-run sebelum signing.
         let simulation = provider.simulate(&tx)?;
@@ -539,6 +566,8 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
 
         let sender_bech32m = encode_address_bech32m(&sender, "aur")
             .map_err(|e| ContractError::InvalidAddress(e.to_string()))?;
+        // Panjang & hash payload diambil dari transaksi yang sudah dibangun.
+        let payload_len = tx.payload.len();
         let intent = ContractIntent {
             action: IntentAction::Deploy,
             chain_id,
@@ -550,15 +579,12 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
             contract_bech32m: contract_bech32m.clone(),
             contract_name: request.name.clone(),
             method_name: None,
-            rendered_args: vec![format!(
-                "konstruktor = {} byte bytecode",
-                payload.len()
-            )],
+            rendered_args: vec![format!("konstruktor = {payload_len} byte bytecode")],
             amount: request.initial_balance,
             fee,
             nonce,
             valid_until,
-            payload_hash: blake3_hash(&payload),
+            payload_hash: blake3_hash(&tx.payload),
             code_hash,
             dry_run: simulation.clone(),
         };

@@ -241,6 +241,19 @@ fn canonical_tx_hex(tx: &Transaction) -> String {
     hex::encode(buf)
 }
 
+/// Konversi endpoint `host:port` kanonikal Aurion ke multiaddr P2P.
+fn to_multiaddr(endpoint: &str) -> String {
+    if let Some((host, port)) = endpoint.rsplit_once(':') {
+        if host.parse::<std::net::IpAddr>().is_ok() {
+            format!("/ip4/{host}/tcp/{port}")
+        } else {
+            format!("/dns4/{host}/tcp/{port}")
+        }
+    } else {
+        endpoint.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,17 +272,14 @@ mod tests {
         assert!(first.get("traffic_in").and_then(|value| value.as_u64()).unwrap_or(0) > 0);
         assert!(first.get("traffic_out").and_then(|value| value.as_u64()).unwrap_or(0) > 0);
     }
-}
 
-/// Konversi endpoint `host:port` kanonikal Aurion ke multiaddr P2P.
-fn to_multiaddr(endpoint: &str) -> String {
-    if let Some((host, port)) = endpoint.rsplit_once(':') {
-        if host.parse::<std::net::IpAddr>().is_ok() {
-            format!("/ip4/{host}/tcp/{port}")
-        } else {
-            format!("/dns4/{host}/tcp/{port}")
-        }
-    } else {
-        endpoint.to_string()
+    #[test]
+    fn to_multiaddr_distinguishes_ip_and_dns_hosts() {
+        assert_eq!(to_multiaddr("127.0.0.1:7001"), "/ip4/127.0.0.1/tcp/7001");
+        assert_eq!(
+            to_multiaddr("bootnode.ratuaurion.store:7447"),
+            "/dns4/bootnode.ratuaurion.store/tcp/7447"
+        );
+        assert_eq!(to_multiaddr("no-port"), "no-port");
     }
 }

@@ -13,51 +13,28 @@ use crate::codec::CanonicalDecode;
 use crate::core::{Address, Hash256, Quantum};
 use crate::state::account::Account;
 use crate::state::monetary::MonetaryState;
-use crate::state::stf::{apply_transaction, derive_contract_address};
-use crate::transaction::types::{Transaction, TxType};
+use crate::state::sandbox::{dry_run, estimate_gas as sandbox_estimate_gas, SandboxError};
+use crate::transaction::types::Transaction;
 use crate::transaction::validator::validate_transaction_stateless;
-use crate::vm::context::ExecutionContext;
-use crate::vm::engine::{AvmEngine, ExecutionResult};
-use crate::vm::verifier::BytecodeVerifier;
 
 use super::error::ContractError;
 use crate::wallet::client;
 
-/// Gas limit eksekusi kontrak persis seperti pada STF (`AUR-VM-003`).
-const STF_GAS_LIMIT: u64 = 1_000_000;
+/// Re-export kanonik dari [`crate::state::sandbox`]: `contract::provider::DryRunReport`
+/// dan `state::DryRunReport` **menunjuk tipe yang sama** (AUR-ARCH-005), sehingga
+/// simulasi lokal SDK dan `aur_call` di simpul dijamin identik.
+pub use crate::state::sandbox::{
+    DryRunReport, SANDBOX_GAS_LIMIT, SANDBOX_GAS_LIMIT as STF_GAS_LIMIT,
+};
 
-/// Hasil simulasi lokal (dry-run) satu transaksi terhadap STF.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct DryRunReport {
-    /// Transaksi berhasil diterapkan pada state sandbox (tidak revert).
-    pub success: bool,
-    /// Gas terpakai hasil replikasi konteks eksekusi STF.
-    pub gas_used: u64,
-    /// Data kembalian VM (`RETURN`).
-    pub return_data: Vec<u8>,
-    /// Alasan kegagalan STF bila `success == false`.
-    pub reason: Option<String>,
-    /// Alamat kontrak yang diprediksi lahir (deploy saja).
-    pub deployed_contract: Option<Address>,
-    /// Jumlah perubahan storage yang dihasilkan (informasional).
-    pub storage_changes: usize,
-}
-
-impl DryRunReport {
-    /// Ringkasan satu baris untuk prompt clear signing.
-    #[must_use]
-    pub fn summary(&self) -> String {
-        if self.success {
-            format!(
-                "SUKSES, gas {}, return 0x{}",
-                self.gas_used,
-                hex::encode(&self.return_data)
-            )
-        } else {
-            format!(
-                "GAGAL: {}",
-                self.reason.as_deref().unwrap_or("tanpa keterangan")
-            )
+impl From<SandboxError> for ContractError {
+    fn from(e: SandboxError) -> Self {
+        match e {
+            SandboxError::Verification(m) => Self::Verification(m),
+            SandboxError::Revert(m) | SandboxError::Execution(m) => Self::SimulationFailed(m),
+            SandboxError::OutOfGas => {
+                Self::SimulationFailed("kontrak kehabisan gas".to_string())
+            }
         }
     }
 }
@@ -110,7 +87,19 @@ pub trait Provider {
     fn broadcast(&self, raw_hex: &str, sender_pubkey_hex: &str) -> Result<Hash256, ContractError>;
 
 
-    /// Simulasi lokal: terapkan `tx` pada **clone** state akun via STF kanonikal.
+    /// Simulasi read-only terhadap `tx` memakai **sandbox STF kanonik**
+    /// (`state::sandbox::dry_run`) pada salinan akun berukuran konstan.
+    ///
+    /// State asli tidak pernah dimutasi. Implementasi default melakukan
+    /// simulasi **lokal**; [`RpcProvider`] meng-override-nya untuk memakai
+    /// endpoint `aur_call` simpul agar hasil identik dengan node yang
+    /// benar-benar memvalidasi.
+    ///
+    /// # Inputs
+    /// - `tx`: transaksi kanonikal yang akan disimulasikan.
+    ///
+    /// # Outputs
+    /// Laporan gas, data kembalian, dan hasil deploy.
     ///
     /// # Errors
     /// Hanya untuk kegagalan infrastruktur provider; kegagalan STF dilaporkan
@@ -121,65 +110,42 @@ pub trait Provider {
         if tx.recipient != tx.sender {
             accounts.insert(tx.recipient, self.get_account(&tx.recipient)?);
         }
-        let mut monetary = MonetaryState::default();
-        let proposer = tx.sender;
-        let gas_used = self.estimate_gas(tx).unwrap_or(0);
-        match apply_transaction(&mut accounts, &mut monetary, &proposer, tx) {
-            Ok(receipt) => Ok(DryRunReport {
-                success: true,
-                gas_used,
-                return_data: receipt.return_data,
-                reason: None,
-                deployed_contract: receipt.deployed_contract,
-                storage_changes: receipt.storage_changes.len(),
-            }),
-            Err(e) => Ok(DryRunReport {
-                success: false,
-                gas_used: 0,
-                return_data: Vec::new(),
-                reason: Some(e.to_string()),
-                deployed_contract: None,
-                storage_changes: 0,
-            }),
-        }
+        Ok(dry_run(&accounts, tx))
     }
 
     /// Estimasi gas dengan **konteks eksekusi identik STF** (gas limit 1.000.000,
     /// storage kosong, block 0, timestamp 0).
     ///
+    /// # Inputs
+    /// - `tx`: transaksi kanonikal yang akan diestimasi.
+    ///
+    /// # Outputs
+    /// Gas terpakai, atau `0` untuk tipe non-kontrak.
+    ///
     /// # Errors
     /// Bytecode gagal verifikasi / eksekusi revert atau out-of-gas.
     fn estimate_gas(&self, tx: &Transaction) -> Result<u64, ContractError> {
-        match tx.tx_type {
-            TxType::ContractDeploy | TxType::ContractCall => {}
-            _ => return Ok(0),
-        }
-        let verified = BytecodeVerifier::verify(&tx.payload)
-            .map_err(|e| ContractError::Verification(e.to_string()))?;
-        let target = match tx.tx_type {
-            TxType::ContractDeploy => derive_contract_address(&tx.sender, tx.nonce),
-            _ => tx.recipient,
-        };
-        let ctx = ExecutionContext::new(
-            tx.sender,
-            target,
-            tx.sender,
-            tx.amount,
-            STF_GAS_LIMIT,
-            0,
-            0,
-        );
-        let empty_storage = HashMap::new();
-        match AvmEngine::execute(&verified, ctx, &empty_storage) {
-            ExecutionResult::Success { gas_used, .. } => Ok(gas_used),
-            ExecutionResult::Revert { reason, .. } => Err(ContractError::SimulationFailed(format!(
-                "kontrak revert: {reason}"
-            ))),
-            ExecutionResult::OutOfGas => Err(ContractError::SimulationFailed(
-                "kontrak kehabisan gas".to_string(),
-            )),
-            ExecutionResult::Error(e) => Err(ContractError::SimulationFailed(e)),
-        }
+        Ok(sandbox_estimate_gas(tx)?)
+    }
+
+    /// Ambil metadata kontrak (ABI + runtime) dari provider.
+    ///
+    /// Default: `Ok(None)` — metadata bersifat **off-chain** dan hanya
+    /// tersedia bila operator/`RpcProvider` mendaftarkannya ke simpul.
+    ///
+    /// # Inputs
+    /// - `code_hash`: `code_hash` on-chain kontrak (`blake3(payload deploy)`).
+    ///
+    /// # Outputs
+    /// Metadata terdaftar, atau `None` bila tidak ada registry.
+    ///
+    /// # Errors
+    /// Registry mengembalikan metadata yang gagal divalidasi.
+    fn fetch_metadata(
+        &self,
+        _code_hash: &Hash256,
+    ) -> Result<Option<super::metadata::ContractMetadata>, ContractError> {
+        Ok(None)
     }
 }
 
@@ -198,6 +164,33 @@ impl RpcProvider {
             rpc_url: rpc_url.into(),
         }
     }
+
+    /// Panggil `aur_call` (dry-run ter-sandbox di simpul).
+    ///
+    /// Transaksi **belum ditandatangani** (`Signature::ZERO`) tetap valid:
+    /// simpul tidak memverifikasi tanda tangan untuk simulasi.
+    ///
+    /// # Inputs
+    /// - `tx`: transaksi kanonikal yang akan disimulasikan.
+    ///
+    /// # Outputs
+    /// Laporan dry-run dari sandbox STF simpul.
+    ///
+    /// # Errors
+    /// Transport/parsing gagal, atau simpul menolak parameter.
+    pub fn call(&self, tx: &Transaction) -> Result<DryRunReport, ContractError> {
+        let raw_hex = hex::encode(encode_raw(tx));
+        client::contract_call(&self.rpc_url, &raw_hex)
+            .map_err(|e| ContractError::Provider(e.to_string()))
+    }
+}
+
+/// Serialisasi kanonikal transaksi untuk transport `aur_call`.
+fn encode_raw(tx: &Transaction) -> Vec<u8> {
+    use crate::codec::CanonicalEncode;
+    let mut buf = Vec::new();
+    tx.encode_canonical(&mut buf);
+    buf
 }
 
 impl Provider for RpcProvider {
@@ -232,6 +225,47 @@ impl Provider for RpcProvider {
         let mut arr = [0u8; 32];
         arr.copy_from_slice(&bytes);
         Ok(Hash256(arr))
+    }
+
+    /// Dry-run **di sisi simpul** lewat `aur_call`; jatuh ke simulasi lokal bila
+    /// simpul lama belum mendukung endpoint tersebut (backward compatibility).
+    fn simulate(&self, tx: &Transaction) -> Result<DryRunReport, ContractError> {
+        match self.call(tx) {
+            Ok(report) => Ok(report),
+            Err(_) => {
+                // Fallback: simulasi lokal dengan state yang di-fetch via RPC.
+                let mut accounts = HashMap::new();
+                accounts.insert(tx.sender, self.get_account(&tx.sender)?);
+                if tx.recipient != tx.sender {
+                    accounts.insert(tx.recipient, self.get_account(&tx.recipient)?);
+                }
+                Ok(dry_run(&accounts, tx))
+            }
+        }
+    }
+
+    /// Estimasi gas **di sisi simpul** lewat `aur_estimateGas`; jatuh ke
+    /// estimasi lokal bila endpoint belum tersedia.
+    fn estimate_gas(&self, tx: &Transaction) -> Result<u64, ContractError> {
+        let raw_hex = hex::encode(encode_raw(tx));
+        match client::estimate_gas(&self.rpc_url, &raw_hex) {
+            Ok(value) => Ok(value),
+            Err(_) => Ok(sandbox_estimate_gas(tx)?),
+        }
+    }
+
+    /// Ambil metadata kontrak dari registry off-chain simpul
+    /// (`aur_getContractMetadata`).
+    fn fetch_metadata(
+        &self,
+        code_hash: &Hash256,
+    ) -> Result<Option<super::metadata::ContractMetadata>, ContractError> {
+        match client::get_contract_metadata(&self.rpc_url, &code_hash.to_hex()) {
+            Ok(json) => super::metadata::ContractMetadata::from_json(json.as_str()).map(Some),
+            // Metadata off-chain bersifat opsional: simpul yang tidak memiliki
+            // registry akan mengembalikan galat, SDK lalu memakai metadata lokal.
+            Err(_) => Ok(None),
+        }
     }
 }
 
@@ -357,7 +391,8 @@ impl Provider for MemoryProvider {
         // Terapkan langsung pada ledger lokal (finalitas instan, untuk pengujian).
         let mut accounts = self.accounts.lock().expect("accounts lock");
         let mut monetary = self.monetary.lock().expect("monetary lock");
-        apply_transaction(&mut accounts, &mut monetary, &tx.sender, &tx)
+        let proposer = tx.sender;
+        crate::state::stf::apply_transaction(&mut accounts, &mut monetary, &proposer, &tx)
             .map_err(|e| ContractError::Broadcast(format!("STF menolak transaksi: {e}")))?;
         drop(monetary);
         drop(accounts);

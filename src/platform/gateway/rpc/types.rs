@@ -216,30 +216,114 @@ fn extract_json_id_field(json: &str) -> RpcId {
     RpcId::Null
 }
 
+/// Ekstrak array `params` secara sadar-kurung-kutip sehingga parameter
+/// berbentuk **objek/array JSON** tidak hancur oleh split koma sederhana.
+///
+/// String biasa tetap berperilaku identik dengan parser lama (kompatibilitas
+/// mundur penuh). Elemen non-string dikembalikan sebagai teks JSON mentah.
 fn extract_json_params_array(json: &str) -> Vec<String> {
     let pattern = "\"params\"";
-    if let Some(pos) = json.find(pattern) {
-        let after_field = &json[pos + pattern.len()..];
-        if let Some(colon_pos) = after_field.find(':') {
-            let after_colon = after_field[colon_pos + 1..].trim_start();
-            if after_colon.starts_with('[') {
-                if let Some(end_bracket) = after_colon.find(']') {
-                    let inside = &after_colon[1..end_bracket];
-                    return inside
-                        .split(',')
-                        .map(|item| {
-                            let trimmed = item.trim();
-                            if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
-                                trimmed[1..trimmed.len() - 1].to_string()
-                            } else {
-                                trimmed.to_string()
-                            }
-                        })
-                        .filter(|s| !s.is_empty())
-                        .collect();
+    let Some(pos) = json.find(pattern) else {
+        return Vec::new();
+    };
+    let after_field = &json[pos + pattern.len()..];
+    let Some(colon_pos) = after_field.find(':') else {
+        return Vec::new();
+    };
+    let after_colon = after_field[colon_pos + 1..].trim_start();
+    if !after_colon.starts_with('[') {
+        return Vec::new();
+    }
+    let Some(end_bracket) = find_matching_bracket(after_colon) else {
+        return Vec::new();
+    };
+    let inside = &after_colon[1..end_bracket];
+    split_top_level(inside)
+        .into_iter()
+        .map(|item| {
+            let trimmed = item.trim();
+            if trimmed.len() >= 2 && trimmed.starts_with('"') && trimmed.ends_with('"') {
+                trimmed[1..trimmed.len() - 1].to_string()
+            } else {
+                trimmed.to_string()
+            }
+        })
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// Cari indeks kurung penutup yang seimbang, mengabaikan kurung di dalam string
+/// literal dan melompati escape `\`.
+fn find_matching_bracket(text: &str) -> Option<usize> {
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    for (idx, b) in text.bytes().enumerate() {
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if b == b'\\' {
+                escaped = true;
+            } else if b == b'"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match b {
+            b'"' => in_string = true,
+            b'[' | b'{' => depth += 1,
+            b']' | b'}' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return Some(idx);
                 }
             }
+            _ => {}
         }
     }
-    Vec::new()
+    None
+}
+
+/// Pecah isi array pada koma **di level teratas** saja, sehingga koma di dalam
+/// objek, array, atau string tidak memotong parameter.
+fn split_top_level(inside: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut depth = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut current = String::new();
+
+    for ch in inside.chars() {
+        if in_string {
+            current.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == '"' {
+                in_string = false;
+            }
+            continue;
+        }
+        match ch {
+            '"' => {
+                in_string = true;
+                current.push(ch);
+            }
+            '[' | '{' => {
+                depth += 1;
+                current.push(ch);
+            }
+            ']' | '}' => {
+                depth = depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if depth == 0 => parts.push(std::mem::take(&mut current)),
+            _ => current.push(ch),
+        }
+    }
+    if !current.trim().is_empty() {
+        parts.push(current);
+    }
+    parts
 }

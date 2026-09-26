@@ -1,7 +1,6 @@
 //! Router dan Dispatcher Metode RPC Namespace "aur_*" Aurion.
 //! Mematuhi Dokumen 02 (02-RPC-API-RULES.md Bagian 4).
 
-use crate::codec::CanonicalDecode;
 use crate::consensus::bft::Block;
 use crate::consensus::certificate::CommitCertificate;
 use crate::consensus::header::BlockHeader;
@@ -9,6 +8,7 @@ use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::{decode_address_bech32m, encode_address_bech32m};
 use crate::gateway::faucet::FaucetDispenser;
 use crate::gateway::rpc::consistency::ConsistencySelector;
+use crate::gateway::rpc::contract_api;
 use crate::gateway::rpc::errors::*;
 use crate::gateway::rpc::types::{JsonRpcError, JsonRpcRequest, JsonRpcResponse};
 use crate::mempool::MempoolEngine;
@@ -46,6 +46,11 @@ pub struct RpcContext {
     pub process_started_at: Arc<AtomicU64>,
     pub tx_counts: Arc<Mutex<HashMap<u64, u64>>>,
     pub recent_transactions: Arc<Mutex<VecDeque<CommittedTxSummary>>>,
+    /// Pembatas laju token bucket untuk simulasi kontrak (`aur_call` /
+    /// `aur_estimateGas`) sebagai pertahanan DoS.
+    pub call_limiter: Arc<contract_api::CallRateLimiter>,
+    /// Registry metadata kontrak off-chain untuk `aur_getContractMetadata`.
+    pub contract_metadata: Arc<contract_api::MetadataRegistry>,
 }
 
 impl RpcContext {
@@ -76,6 +81,8 @@ impl RpcContext {
             process_started_at: Arc::new(AtomicU64::new(started_at)),
             tx_counts: Arc::new(Mutex::new(HashMap::new())),
             recent_transactions: Arc::new(Mutex::new(VecDeque::new())),
+            call_limiter: Arc::new(contract_api::CallRateLimiter::default()),
+            contract_metadata: Arc::new(contract_api::MetadataRegistry::default()),
         }
     }
 
@@ -147,6 +154,17 @@ impl RpcContext {
             "aur_getBalance" => self.handle_get_balance(&request.params),
             "aur_getNonce" => self.handle_get_nonce(&request.params),
             "aur_getAccount" => self.handle_get_account(&request.params),
+
+            // Modul Kontrak Cerdas (Contract SDK bridge - AUR-VM-003/006)
+            "aur_call" => contract_api::handle_call(self, &request.params, current_time),
+            "aur_estimateGas" => contract_api::handle_estimate_gas(self, &request.params),
+            "aur_getContractMetadata" => {
+                contract_api::handle_get_contract_metadata(self, &request.params)
+            }
+            "aur_getCode" => contract_api::handle_get_code(self, &request.params),
+            "aur_sendContractMetadata" => {
+                contract_api::handle_send_contract_metadata(self, &request.params)
+            }
 
             // Modul Komunitas & Testnet (NET-012)
             "aur_getNetworkStats" => self.handle_get_network_stats(),
@@ -251,6 +269,28 @@ impl RpcContext {
 
     // --- Handlers Transaksi & Mempool ---
 
+    /// Siar transaksi bertanda tangan ke mempool.
+    ///
+    /// Parameter: `[raw_tx_hex, sender_pubkey_hex]`, atau untuk transaksi kontrak
+    /// `[raw_tx_hex, sender_pubkey_hex, intent_payload_hash, intent_code_hash]`.
+    ///
+    /// Pemeriksaan tambahan untuk `ContractDeploy`/`ContractCall`:
+    /// 1. Bytecode payload diverifikasi statis (AUR-VM-005) sehingga bytecode rusak
+    ///    ditolak sejak awal, bukan hanya saat blok dibangun.
+    /// 2. Bila intent binding diberikan, `blake3(payload)` **dan** `code_hash`
+    ///    harus cocok dengan yang disetujui pengguna pada prompt clear signing.
+    /// 3. Verifikasi tanda tangan Ed25519, chain ID, kedaluwarsa, nonce, dan
+    ///    saldo tetap ditangani `MempoolEngine::submit_transaction`.
+    ///
+    /// # Inputs
+    /// - `params`: parameter JSON-RPC.
+    /// - `current_time`: waktu Unix simpul untuk uji kedaluwarsa.
+    ///
+    /// # Outputs
+    /// TxID kanonikal dalam hex.
+    ///
+    /// # Errors
+    /// `-32001` transaksi ditolak (rincian pada `error.data`), `-32602` parameter.
     fn handle_send_raw_transaction(
         &self,
         params: &[String],
@@ -262,22 +302,19 @@ impl RpcContext {
             ));
         }
 
-        let raw_tx_bytes = hex::decode(&params[0])
-            .map_err(|e| invalid_params(format!("Invalid raw_tx hex encoding: {e}")))?;
-        let pubkey_bytes = hex::decode(&params[1])
-            .map_err(|e| invalid_params(format!("Invalid sender_pubkey hex encoding: {e}")))?;
+        let tx = contract_api::decode_raw_tx(&params[0])?;
 
+        let pubkey_bytes = hex::decode(params[1].trim_start_matches("0x"))
+            .map_err(|e| invalid_params(format!("Invalid sender_pubkey hex encoding: {e}")))?;
         if pubkey_bytes.len() != 32 {
             return Err(invalid_params("Sender public key must be exactly 32 bytes"));
         }
         let mut sender_pubkey = [0u8; 32];
         sender_pubkey.copy_from_slice(&pubkey_bytes);
 
-        let mut cursor = 0;
-        let tx = Transaction::decode_canonical(&raw_tx_bytes, &mut cursor).map_err(|e| {
-            invalid_params(format!("Canonical transaction decoding failed: {e:?}"))
-        })?;
-
+        if tx.version != 1 {
+            return Err(invalid_params(format!("version {} != 1", tx.version)));
+        }
         if tx.chain_id != self.chain_id {
             return Err(invalid_params(format!(
                 "InvalidChainId: expected {}, got {}",
@@ -285,23 +322,55 @@ impl RpcContext {
             )));
         }
         if tx.valid_until != 0 && tx.valid_until <= current_time {
-            return Err(invalid_params(format!(
-                "TransactionExpired: valid_until {} is not after current time {}",
-                tx.valid_until, current_time
-            )));
+            return Err(tx_rejected(
+                &format!("TransactionExpired: valid_until {}", tx.valid_until),
+                Some(format!(
+                    r#"{{"valid_until":{},"current_time":{current_time}}}"#,
+                    tx.valid_until
+                )),
+            ));
         }
 
-        // Ambil atau inisialisasi state akun pengirim
-        let accounts = self.accounts.lock().unwrap();
-        let default_account = Account::default();
-        let account_state = accounts.get(&tx.sender).unwrap_or(&default_account);
+        // Verifikasi bytecode kontrak lebih awal (AUR-VM-005) agar payload rusak
+        // tidak pernah menduduki mempool dan menggagalkan block building.
+        if matches!(
+            tx.tx_type,
+            crate::transaction::types::TxType::ContractDeploy
+                | crate::transaction::types::TxType::ContractCall
+        )
+            && crate::vm::verifier::BytecodeVerifier::verify(&tx.payload).is_err()
+        {
+            return Err(tx_rejected(
+                "Bytecode kontrak gagal verifikasi statis (AUR-VM-005)",
+                None,
+            ));
+        }
+
+        // Validasi intent clear-signing anti-blind-signing (opsional & backward
+        // compatible): bila klien mengirim kedua hash, keduanya wajib cocok.
+        if let Some(binding) = contract_api::IntentBinding::from_params(params)? {
+            let on_chain_code_hash = {
+                let accounts = self.accounts.lock().unwrap();
+                accounts.get(&tx.recipient).and_then(|a| a.code_hash)
+            };
+            binding.verify(&tx, on_chain_code_hash)?;
+        }
+
+        // Snapshot state akun pengirim (tanpa menahan lock selama submit).
+        let account_state = {
+            let accounts = self.accounts.lock().unwrap();
+            accounts
+                .get(&tx.sender)
+                .cloned()
+                .unwrap_or_else(Account::default)
+        };
 
         let mut mempool = self.mempool.lock().unwrap();
         let tx_id = mempool
-            .submit_transaction(tx, &sender_pubkey, current_time, account_state)
+            .submit_transaction(tx, &sender_pubkey, current_time, &account_state)
             .map_err(|e| tx_rejected(&format!("{e}"), None))?;
 
-        Ok(format!("\"{}\"", hex::encode(tx_id.as_bytes())))
+        Ok(format!("\"0x{}\"", hex::encode(tx_id.as_bytes())))
     }
 
     fn handle_get_transaction_by_hash(&self, params: &[String]) -> Result<String, JsonRpcError> {
