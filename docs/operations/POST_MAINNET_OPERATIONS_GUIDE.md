@@ -35,7 +35,7 @@ scrape_configs:
 ### 2.2. Grafana Dashboard Import
 1. Buka antarmuka Grafana (`http://localhost:3000`).
 2. Masuk ke menu **Dashboards** $\to$ **New** $\to$ **Import**.
-3. Unggah file [`MAINNET_DASHBOARD.json`](file:///c:/Projects/aurion/MAINNET_DASHBOARD.json).
+3. Siapkan dashboard sendiri: definisikan panel Prometheus untuk metrik latensi BFT, TPS, ukuran mempool, dan tinggi blok (lihat `docs/operations/METRICS_SPECIFICATION.md` untuk daftar metrik kanonik), lalu unggah melalui menu **Dashboards** → **New** → **Import**.
 4. Pilih data source Prometheus Aurion. Panel metrik latensi BFT, TPS, ukuran mempool, dan tinggi blok akan aktif seketika.
 
 ---
@@ -87,7 +87,7 @@ aurion node start
    aurion wallet generate --output json
    ```
 2. Salin kunci publik baru dan daftarkan pada konfigurasi validator:
-   Perbarui entri `validator_keypair` di [`MAINNET_CONFIG.toml`](file:///c:/Projects/aurion/MAINNET_CONFIG.toml).
+   Perbarui entri `validator_keypair` pada konfigurasi node yang dipakai saat runtime (`--data-dir` / `--identity-key`).
 3. Lakukan restart anggun (*graceful restart*) simpul validator di antara slot konsensus yang aman.
 
 ---

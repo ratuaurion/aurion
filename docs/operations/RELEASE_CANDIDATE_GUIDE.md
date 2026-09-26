@@ -78,7 +78,7 @@ Di Linux / macOS:
 ```bash
 sha256sum target/release/aurion
 ```
-Bandingkan hash yang dihasilkan dengan file atestasi [`RELEASE_CANDIDATE_rc1.json`](file:///c:/Projects/aurion/RELEASE_CANDIDATE_rc1.json).
+Bandingkan hash yang dihasilkan dengan hash yang dicatat pada catatan rilis resmi untuk tag tersebut.
 
 ### 4.4 Verifikasi Identitas Biner & Invariant Kepatuhan
 ```bash

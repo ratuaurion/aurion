@@ -30,7 +30,7 @@ Seluruh panduan operasional di atas dapat diakses langsung oleh operator simpul 
 
 ```powershell
 # Menjalankan simpul FullNode Mainnet
-aurion node start --config MAINNET_CONFIG.toml
+aurion node start --rpc-bind 127.0.0.1:8545 --p2p-bind 0.0.0.0:9000
 
 # Memeriksa status telemetri operasional
 aurion metrics status --output json

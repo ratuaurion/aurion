@@ -225,21 +225,32 @@ belum diterapkan. Ini **bukan** kelalaian —-setiap repo memiliki siklus rilis 
 karakteristik sendiri — namun dicatat agar tidak disalahpahami sebagai
 "seluruh ekosistem Aurion sudah murni BFT".
 
-### 8.4 Tindakan yang TIDAK diambil
+### 8.4 Tindakan yang DIAMBIL
 
-Berkas berikut terbukti **nol referensi** dari `src/`, `tests/`, dan `tools/`
-namun **tidak dihapus** atas instruksi pemilik:
+Pemilik proyek memutuskan untuk menghapus berkas berikut setelah verifikasi
+nol referensi di seluruh `src/`, `tests/`, `tools/`, `benches/`, dan `examples/`:
 
-| Berkas | Referensi kode |
+| Berkas | Alasan |
 | :--- | :--- |
-| `CONFORMANCE_MATRIX.json` | 0 |
-| `MAINNET_CONFIG.toml` | 0 |
-| `MAINNET_DASHBOARD.json` | 0 |
-| `RELEASE_CANDIDATE_rc1.json` | 0 |
-| `SBOM_rc1.json` | 0 |
+| `CONFORMANCE_MATRIX.json` | Check-in duplikat, nol pembaca kode |
+| `MAINNET_CONFIG.toml` | Digantikan flag CLI runtime |
+| `MAINNET_DASHBOARD.json` | Template Grafana; langkah impor ditulis ulang |
+| `RELEASE_CANDIDATE_rc1.json` | Kandidat rilis usang (`v1.0.0-rc1`) |
+| `SBOM_rc1.json` | SBOM kandidat usang |
 
-> **Peringatan:** `GENESIS_CEREMONY.json` dan `MAINNET_GENESIS_BLOCK.json`
-> **HARUS TETAP ADA**. Keduanya di-embed lewat `include_str!` pada
-> `src/primitives/genesis/ceremony.rs`. Menghapusnya akan membuat build gagal.
+Rujukan dokumentasi yang menunjuk ke berkas tersebut ikut diperbarui agar
+tidak ada tautan rusak:
+
+- `docs/operations/POST_MAINNET_OPERATIONS_GUIDE.md` — langkah impor
+  dashboard Grafana ditulis ulang agar operator mendefinisikan panel sendiri
+  dari `METRICS_SPECIFICATION.md`; rujukan `MAINNET_CONFIG.toml` diganti
+  menjadi flag CLI (`--data-dir` / `--identity-key`).
+- `docs/operations/RELEASE_CANDIDATE_GUIDE.md` — rujukan file atestasi
+  diganti menjadi catatan rilis resmi.
+
+> **Peringatan (tetap berlaku):** `GENESIS_CEREMONY.json` dan
+> `MAINNET_GENESIS_BLOCK.json` **HARUS TETAP ADA**. Keduanya di-embed lewat
+> `include_str!` pada `src/primitives/genesis/ceremony.rs`. Menghapusnya akan
+> membuat build gagal.
 
 - `.internal-tasks/TASK_REGISTER.md` — entri AUD-BFT-001
