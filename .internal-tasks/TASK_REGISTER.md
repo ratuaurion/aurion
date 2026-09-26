@@ -596,4 +596,70 @@ python tools/guardrail.py
 * **2026-09-17 15:55:** Penyelesaian PRD-014: Mainnet Release Candidate (Langkah 14 Era VI). Mainnet release candidate `v1.0.0-rc1` freeze; zero changes to consensus/monetary rules; release binary deterministik (`target/release/aurion.exe`, 2,083,840 bytes, SHA-256: `5e8697bcd624acf86686f53c33a36264e16a03ffee5a4072a04202716b83b24c`); `RELEASE_CANDIDATE_rc1.json`, `RELEASE_HASHES.json`, `SBOM_rc1.json`, dan panduan verifikasi validator `RELEASE_CANDIDATE_GUIDE.md`. Progres Era VI naik menjadi 40.0%.
 * **2026-09-17 16:15:** Penyelesaian PRD-015: Deterministic Genesis Ceremony (Langkah 15 Era VI). Upacara pembentukan Genesis deterministik & multi-party hash attestation. Protokol multi-pihak melibatkan Creator, Developer, dan 4 Genesis Validators (𝒱₀). Atestasi kriptografis Ed25519 menandatangani canonical Genesis signing digest (`"AURION-GENESIS-CEREMONY-V1"`). Verifikasi kuorum BFT $\ge 666,667$ / $1,000,000$ validator voting weight ($> 2/3$). Invariant konservasi moneter 100% alokasi Genesis 66M AUR ke Master Treasury, zero-float `Quantum(u128)` 9 desimal ($10^9$). Integrasi CLI `/bin/aurion genesis ceremony run`, `verify`, `inspect`. Artefak `GENESIS_CEREMONY.json` dan panduan operasional `GENESIS_CEREMONY_GUIDE.md`, serta suite integrasi `tests/genesis_ceremony.rs` 100% PASS (9/9 tests). Progres Era VI naik menjadi 60.0%.
 * **2026-09-17 16:35:** Penyelesaian PRD-016: Aurion Mainnet Launch (Langkah 16 Era VI). Inisialisasi sovereign production Mainnet ledger dari sealed genesis ceremony transcript (`GENESIS_CEREMONY.json`). Konfigurasi parameter jaringan produksi: Chain ID `1001`, genesis timestamp `1773532800` (15 March 2026 00:00:00 UTC), wire magic `AUR0`, 4 bootnodes validator ($\mathcal{V}_0$). Implementasi transisi konsensus BFT Slot 0 $\to$ Block 1 dengan CommitCertificate 4 validator. Transaksi produksi pertama di Mainnet (transfer Creator, Ed25519 signature, mempool validation, block 2 inclusion, alokasi 100% fee validator, subsidi blok R, transisi root SMT, konservasi saldo exact). Verifikasi persistensi & crash recovery ACID pada database `redb 4.3`. Integrasi CLI terpadu: `aurion node start [--dry-run|status]`, `aurion validator start [--index <0..3>] [--dry-run|status]`, `aurion network [status|peers]`. Artefak produksi: `MAINNET_GENESIS_BLOCK.json`, `MAINNET_CONFIG.toml`, dan runbook operator `MAINNET_LAUNCH_GUIDE.md`. Suite integrasi otomatis `tests/mainnet_launch.rs` (5/5 tests PASS). Atestasi release binary deterministik `target/release/aurion.exe` (2,111,488 bytes, SHA-256: `7a427f8db6ca8176078e96f9f9baed2bbf38017d9c6b77d8868de799148307d7`). Progres Era VI naik menjadi 80.0% (4/5 langkah selesai). PRD-017 Siap Dieksekusi.
+
+### 2026-09-26 — AUD-BFT-001: Pemurnian Konsensus BFT & Gerbang Anti-Regresi
+
+**Latar belakang.** Audit kode menemukan sebuah agen sebelumnya telah
+menggabungkan model *account-based* dengan *mining*. Terminologi dan skema fee
+lamanya **bocor ke lapisan produksi**, bukan hanya ke dokumen. Konstitusi Pasal 2
+melarang total konsep penambangan, sehingga kondisi ini melanggar AUR-ARCH-004
+(tanpa implementasi protokol yang divergen).
+
+**Temuan utama:**
+
+1. **Skema fee bertentangan dengan implementasi aktual.**
+   `MonetaryState::split_fee` sudah benar (0% burn / 100% validator), tetapi
+   tiga lokasi masih menghitung sendiri angka **20% burn / 80% miner**:
+   `platform/audit/runner.rs` (memvalidasi skema yang sudah dihapus),
+   `platform/wallet/signing.rs` (`fee_split` + prompt pengguna), dan
+   `platform/conformance/vectors.rs` (golden vector SDK lintas bahasa).
+   Akibatnya audit dan golden vector bisa **menguji sesuatu yang salah**.
+2. **Istilah miner pada receipt on-chain.** `TransactionExecutionReceipt` punya
+   field `miner_fee` yang isinya duplikat `validator_fee`; dihapus.
+3. **Field duplikat pada receipt mempool.** `TransactionReceipt` punya
+   `fee_miner_quanta` dan `fee_validator_quanta` dengan nilai identik; yang
+   pertama dihapus.
+4. **Variabel produksi blok bernama `miner`.** `runtime/node.rs` memakai
+   `miner` untuk address proposer; diganti menjadi `proposer`.
+5. **Kunci seremoni dapat direkonstruksi.** `new_deterministic()` menurunkan
+   Master Treasury dari seed konstan `[0x01; 32]` yang terbaca di source publik.
+   Penghitungan address mengonfirmasi seed itu menghasilkan `cb095697…95aad`,
+   yang **cocok** dengan `creator_address_hex` di `GENESIS_CEREMONY.json`.
+   **Belum diperbaiki** — menunggu keputusan pemilik proyek.
+
+
+**Perbaikan yang dilakukan pada commit ini:**
+
+| Lokasi | Sebelum | Sesudah |
+| :--- | :--- | :--- |
+| `statemachine/state/stf.rs` | `miner_fee` (duplikat) | field dihapus |
+| `consensus/mempool/types.rs` | `fee_miner_quanta` (duplikat) | field dihapus |
+| `platform/wallet/signing.rs` | `fee_split` hitung 20/80 sendiri | memakai `MonetaryState::split_fee` |
+| `platform/wallet/signing.rs` | prompt "Permanent Burn 20% / Miner Reward 80%" | "BFT Validator Reward 100% / Protocol Burn 0%" |
+| `platform/audit/runner.rs` | hardcode 20/80 | diturunkan dari `FEE_*_PERCENTAGE` |
+| `platform/conformance/vectors.rs` | `fee_miner_percent: 80` | `fee_validator_percent: 100` + `proof_of_work: forbidden` |
+| `platform/runtime/node.rs` | `let miner = …` | `let proposer = …` |
+| `tests/mining_subsidy.rs` | nama file & test | `tests/bft_block_reward.rs` |
+
+**Gerbang Anti-Regresi (`tests/bft_purity_gate.rs`, 5 test):** aturan ini kini
+dapat diuji, bukan sekadar dinyatakan. Perintah
+`cargo test --offline --test bft_purity_gate` gagal dengan nama file + nomor
+baris bila istilah mining atau skema 20/80 kembali masuk ke `src/`. Komentar yang
+*mencatat penghapusan* skema lama tetap diizinkan — itu dokumentasi.
+
+**Invariant baru:** `AUR-ARCH-013` (larangan konsep PoW di lapisan konsensus) dan
+`AUR-ARCH-014` (larangan reintroduksi terminologi PoW), didokumentasikan pada
+`README.md` bagian 4 dan 4.1.
+
+**Temuan yang TIDAK diperbaiki pada commit ini (memerlukan keputusan pemilik):**
+
+- **Kunci seremoni masih deterministik** (`seed [0x01; 32]`). Tidak dapat
+  diperbaiki tanpa mnemonic milik pemilik.
+- **Tiga angka alokasi Treasury tidak konsisten:** Konstitusi menyebut 66.000.000
+  AUR; `GENESIS_CEREMONY.json` `initial_supply_aur` = 23.100.000 AUR dengan
+  `creator_allocation_aur` = 19.800.000 AUR; `conformance/vectors.rs`
+  `genesis_allocation_quanta` = 2.310.000.000.000.000 Q.
+- **Dua salinan Konstitusi** (`CONSTITUTION.md` di root dan
+  `docs/Constitutions/AURION CONSTITUTION.md`) dengan isi berbeda.
+
 * **2026-09-17 17:30:** Penyelesaian PRD-017: Post-Mainnet Operations, Observability & Governance (Langkah 17 dan Terakhir Era VI). Membangun infrastruktur observabilitas dan operasional pasca-peluncuran Mainnet berdaulat: (1) `MetricsRegistry` OpenMetrics text format v0.0.4 (`src/platform/telemetry/metrics.rs`) dengan 11 metrik atomik zero-float (tinggi blok, putaran BFT, validator aktif, peers terkoneksi, ukuran mempool, status sinkronisasi, total tx diproses, total blok final, total kuinta dibakar via atomic mutex, latensi finalitas ms, versi protokol aktif) yang diekspos di `GET /metrics`, (2) Tiered health check probes (`src/platform/telemetry/health.rs`): shallow liveness (`/healthz`) dan deep readiness (`/healthz/deep`) memvalidasi integritas ACID storage `redb 4.3`, mempool buffer, ambang batas peer, dan konsensus BFT, (3) Mesin tata kelola peningkatan desentralistik on-chain (`src/consensus/bft/governance.rs`) berbasis bit-signaling `BlockHeader.version` dengan ambang kelulusan integer exact $\ge 80.00\%$ ($8.000$ bps) di atas jendela evaluasi blok dan aktivasi deterministik di `activation_height`, (4) Subsistem pemulihan bencana dan pemutus sirkuit darurat (`src/platform/runtime/recovery.rs`): `CircuitBreaker` otomatis saat deteksi kegagalan putaran konsensus berulang / partisi kritis dan `DisasterRecoveryManager` pemulihan cepat ACID dari snapshot `.auss` terotentikasi serta audit integritas ledger, (5) Integrasi single binary CLI dispatchers: `aurion metrics [status|export]`, `aurion governance [status|propose|signal]`, dan `aurion recovery [status|restore|audit|trip|reset]` mendukung human-readable dan machine-readable `--output json`, (6) Artefak operasional produksi: kamus metrik formal `METRICS_SPECIFICATION.md`, template dasbor Grafana 7 panel `MAINNET_DASHBOARD.json`, dan runbook insiden komprehensif `POST_MAINNET_OPERATIONS_GUIDE.md`, (7) Suite integrasi otomatis `tests/post_mainnet_operations.rs` 100% PASS (5/5 tests). Kompilasi dan atestasi release binary deterministik `target/release/aurion.exe` (2,181,120 bytes, SHA-256: `58c2fa275c2fae195caea219c31d5d04110eb041cf6307fa56c2b311171e2815`). Seluruh 5 Langkah Era VI (Production & Mainnet Readiness) RESMI 100.0% SELESAI. Seluruh 17 Langkah Master Roadmap Aurion kini resmi 100.0% LENGKAP & OPERASIONAL.

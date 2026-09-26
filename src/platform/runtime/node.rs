@@ -391,7 +391,7 @@ impl AurionNode {
                             Ok(mempool) => mempool,
                             Err(_) => break,
                         };
-                        let miner = match validator_set.get_validator(validator_index) {
+                        let proposer = match validator_set.get_validator(validator_index) {
                             Some(entry) => entry.validator_id,
                             None => break,
                         };
@@ -408,7 +408,7 @@ impl AurionNode {
                                             .unwrap_or(0);
                                         now_secs.max(ledger.latest_block().header.timestamp + 1)
                                     },
-                                    &miner,
+                                    &proposer,
                                     1024 * 1024,
                                 );
                         BlockProposalEnvelope::new_signed(
@@ -561,7 +561,7 @@ impl AurionNode {
     pub fn produce_and_commit_block(
         &self,
         cert: CommitCertificate,
-        miner: &Address,
+        proposer: &Address,
         timestamp: u64,
     ) -> Result<Block, BftEngineError> {
         let mut ledger_guard = self.ledger.lock().unwrap();
@@ -574,7 +574,7 @@ impl AurionNode {
             &mempool_guard,
             cert.round,
             timestamp,
-            miner,
+            proposer,
             1024 * 1024,
         );
 
@@ -586,7 +586,7 @@ impl AurionNode {
             &mut mempool_guard,
             block.clone(),
             cert,
-            miner,
+            proposer,
         )?;
 
         // 3. Perbarui rpc_context

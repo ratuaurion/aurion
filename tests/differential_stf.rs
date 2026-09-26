@@ -150,14 +150,14 @@ impl ReferenceSTF {
         sender_acct.nonce += 1;
 
         // Alokasi fee transaksi: 100% dialokasikan ke validator pembuat blok (0% burn)
-        let miner_fee = fee_u128;
+        let validator_reward_quanta = fee_u128;
 
         // Kredit miner
         let miner_acct = self.accounts.entry(*miner).or_insert(ReferenceAccount {
             balance: 0,
             nonce: 0,
         });
-        miner_acct.balance += miner_fee;
+        miner_acct.balance += validator_reward_quanta;
 
         // Kredit recipient
         let recipient_acct = self

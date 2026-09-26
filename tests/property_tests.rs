@@ -359,11 +359,11 @@ fn test_property_quantum_arithmetic_associativity_and_conservation() {
         let burn_amt = (fee_raw * 20) / 100;
         let miner_amt_raw = (fee_raw * 80) / 100;
         let remainder = fee_raw - (burn_amt + miner_amt_raw);
-        let miner_fee = miner_amt_raw + remainder;
+        let validator_reward_quanta = miner_amt_raw + remainder;
 
         // Konservasi mutlak: burn + miner == total fee
         assert_eq!(
-            burn_amt + miner_fee,
+            burn_amt + validator_reward_quanta,
             fee.as_u128(),
             "Fee conservation invariant violated"
         );

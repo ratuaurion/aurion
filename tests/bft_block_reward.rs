@@ -21,7 +21,7 @@ use aurion::state::monetary::calculate_block_reward;
 use aurion::transaction::types::{Transaction, TxType};
 
 #[test]
-fn test_block_mining_subsidy_and_fee_distribution() {
+fn test_bft_block_reward_and_fee_distribution() {
     // 1. Setup Genesis dengan 4 Validator
     let val_keys: Vec<Keypair> = (0..4).map(|_| Keypair::generate()).collect();
     let val_entries: Vec<ValidatorEntry> = val_keys

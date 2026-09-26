@@ -199,6 +199,39 @@ Setiap kontribusi kode, refaktorisasi, dan rilis Aurion wajib mematuhi invariant
 | **AUR-ARCH-010** | Conformance test suites **MUST** evaluate the single binary across all supported operational modes. | Verifikasi |
 | **AUR-ARCH-011** | All production code within the single repository **MUST** enforce `#![forbid(unsafe_code)]`. | Keamanan Memori |
 | **AUR-ARCH-012** | All balance and monetary calculations **MUST** use the fixed-point `Quantum` ($u128$) primitive with zero floating-point arithmetic. | Integritas Finansial |
+| **AUR-ARCH-013** | The consensus layer **MUST NOT** contain any Proof-of-Work concept: no *mining*, no *difficulty target*, no hash-rate competition. Block production is exclusive to the deterministic BFT Proposer. | Integritas Konsensus |
+| **AUR-ARCH-014** | Terminology **MUST NOT** reintroduce PoW semantics (e.g. `miner`, `mining`) in production code, receipts, user-facing prompts, or conformance vectors. | Kejelasan Konsep |
+
+### 4.1 Gerbang Kemurnian BFT (BFT Purity Gate)
+
+Aurion adalah protokol **BFT deterministik dengan single-slot finality**. Konstitusi
+Pasal 2 melarang total konsep penambangan (*mining*), kalkulasi tingkat kesulitan
+(*difficulty*), dan kompetisi hash.
+
+> **Konteks historis.** Sebuah agen pernah menggabungkan model *account-based*
+> dengan *mining*. Terminologi dan skema fee lamanya bocor ke lapisan produksi:
+> receipt STF (`miner_fee`), prompt clear-signing wallet (menampilkan
+> "Permanent Burn 20% / Miner Reward 80%"), audit runner, dan conformance
+> vectors. Yang paling berbahaya: skema itu **bertentangan dengan implementasi
+> aktual** `MonetaryState::split_fee` (0% burn / 100% validator), sehingga
+> validasi sempat menguji sesuatu yang sudah dihapus dari kanonik.
+
+Aturan tersebut kini **diuji secara otomatis**, bukan sekadar dinyatakan:
+
+```bash
+cargo test --offline --test bft_purity_gate
+```
+
+| Test | Yang dijaga |
+| :--- | :--- |
+| `production_source_has_no_mining_terminology` | Nol istilah `miner`/`mining` di `src/` |
+| `no_hardcoded_legacy_fee_split_in_production` | Skema 20/80 tidak lagi bisa dieksekusi |
+| `canonical_fee_constants_match_constitution` | `FEE_BURN_PERCENTAGE = 0`, `FEE_VALIDATOR_PERCENTAGE = 100` |
+| `split_fee_matches_canonical_constants` | Nilai STF sama dengan konstanta kanonik |
+| `no_proof_of_work_concepts_in_consensus` | Nol pola kompetisi hash di `src/` |
+
+Komentar yang **mencatat penghapusan** skema lama tetap diizinkan — itu
+justru dokumentasi, bukan kontaminasi.
 
 ---
 

@@ -46,7 +46,6 @@ pub fn derive_contract_address(sender: &Address, nonce: u64) -> Address {
 #[derive(Debug, Clone)]
 pub struct TransactionExecutionReceipt {
     pub burned_fee: Quantum,
-    pub miner_fee: Quantum,
     pub validator_fee: Quantum,
     pub deployed_contract: Option<Address>,
     pub return_data: Vec<u8>,
@@ -129,7 +128,6 @@ pub fn apply_transaction(
 
             Ok(TransactionExecutionReceipt {
                 burned_fee: burn_amt,
-                miner_fee: validator_fee,
                 validator_fee,
                 deployed_contract: None,
                 return_data: Vec::new(),
@@ -172,7 +170,6 @@ pub fn apply_transaction(
 
                     Ok(TransactionExecutionReceipt {
                         burned_fee: burn_amt,
-                        miner_fee: validator_fee,
                         validator_fee,
                         deployed_contract: Some(contract_addr),
                         return_data,
@@ -231,7 +228,6 @@ pub fn apply_transaction(
                     ..
                 } => Ok(TransactionExecutionReceipt {
                     burned_fee: burn_amt,
-                    miner_fee: validator_fee,
                     validator_fee,
                     deployed_contract: None,
                     return_data,

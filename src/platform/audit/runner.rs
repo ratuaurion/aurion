@@ -7,7 +7,9 @@
 
 use super::{AuditCategory, AuditCheckResult, AuditReport, AuditSeverity, AuditStatus};
 use crate::consensus::mempool::MempoolEngine;
-use crate::core::{Address, Quantum, Signature};
+use crate::core::{
+    Address, Quantum, Signature, FEE_BURN_PERCENTAGE, FEE_VALIDATOR_PERCENTAGE,
+};
 use crate::crypto::{ed25519_verify_strict, Keypair};
 use crate::vm::context::ExecutionContext;
 use crate::vm::engine::{AvmEngine, ExecutionResult};
@@ -142,11 +144,17 @@ impl SecurityAuditRunner {
     }
 
     fn check_quantum_conservation_and_rounding() -> AuditCheckResult {
-        // Uji pemisahan biaya fee (20% burn, 80% miner)
+        // Kanonik Aurion (AUR-MON-003): 100% fee ke validator BFT, 0% burn.
+        // Skema lama "20% burn / 80% miner" telah dihapus total dan TIDAK BOLEH
+        // divalidasi lagi. Angka diturunkan dari konstanta FEE_BURN_PERCENTAGE /
+        // FEE_VALIDATOR_PERCENTAGE, bukan angka tetap, supaya tidak bisa
+        // menyimpang dari STF tanpa ketahuan.
         let total_fee = 100u128;
-        let burn = (total_fee * 20) / 100;
-        let miner = total_fee - burn;
-        let conserved = (burn + miner) == total_fee && burn == 20 && miner == 80;
+        let burn = (total_fee * FEE_BURN_PERCENTAGE) / 100;
+        let validator = total_fee - burn;
+        let conserved = (burn + validator) == total_fee
+            && burn == (total_fee * FEE_BURN_PERCENTAGE) / 100
+            && validator == (total_fee * FEE_VALIDATOR_PERCENTAGE) / 100;
 
         AuditCheckResult {
             id: "SEC-CHK-04".to_string(),
@@ -155,7 +163,10 @@ impl SecurityAuditRunner {
             severity: AuditSeverity::Critical,
             invariant: "AUR-ARCH-012, AUR-MON-001".to_string(),
             status: if conserved { AuditStatus::Passed } else { AuditStatus::Failed },
-            details: "Konservasi biaya transfer 20% burn / 80% miner terverifikasi tanpa kebocoran kuanta.".to_string(),
+            details: format!(
+                "Konservasi biaya transfer terverifikasi: {burn} burn / {validator} validator BFT \
+                 (kanonik {FEE_BURN_PERCENTAGE}% burn / {FEE_VALIDATOR_PERCENTAGE}% validator)."
+            ),
         }
     }
 

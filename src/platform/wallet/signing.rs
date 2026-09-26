@@ -4,6 +4,7 @@
 use crate::codec::CanonicalEncode;
 use crate::core::{Address, Quantum, Signature};
 use crate::crypto::decode_address_bech32m;
+use crate::state::monetary::MonetaryState;
 use crate::transaction::types::{Transaction, TxType, MAX_TRANSACTION_PAYLOAD_BYTES};
 use ed25519_dalek::{Signer, SigningKey};
 
@@ -104,17 +105,21 @@ impl ClearSigningDetails {
         })
     }
 
-    /// Menghitung rincian pembakaran biaya 20% protokol dan 80% imbalan penambang (Zero Float).
+    /// Menghitung rincian alokasi biaya transaksi (Zero Float).
+    ///
+    /// ## Aturan kanonikal (AUR-MON-003)
+    ///
+    /// 100% biaya transaksi diberikan kepada validator BFT dan **0% dibakar**.
+    /// Nilai diambil dari `MonetaryState::split_fee` sehingga wallet tidak
+    /// pernah memiliki skema pembagian sendiri yang bisa berbeda dari STF.
+    /// Skema lama "20% burn / 80% miner" telah dihapus total.
     pub fn fee_split(&self) -> (Quantum, Quantum) {
-        let fee_raw = self.fee.as_u128();
-        let burn_raw = fee_raw * 20 / 100;
-        let miner_raw = fee_raw - burn_raw;
-        (Quantum::new(burn_raw), Quantum::new(miner_raw))
+        MonetaryState::split_fee(self.fee).unwrap_or((Quantum::ZERO, self.fee))
     }
 
     /// Format teks prompt transparan manusiawi untuk CLI atau Hardware Display.
     pub fn format_clear_signing_prompt(&self) -> String {
-        let (burn, miner) = self.fee_split();
+        let (burn, validator) = self.fee_split();
         let amount_aur_whole = self.amount.as_u128() / 100_000_000;
         let amount_aur_frac = self.amount.as_u128() % 100_000_000;
         let fee_aur_whole = self.fee.as_u128() / 100_000_000;
@@ -128,8 +133,8 @@ impl ClearSigningDetails {
   Recipient (To):   {}
   Amount:           {} Quantum ({}.{:08} AUR)
   Network Fee:      {} Quantum ({}.{:08} AUR)
-    ├─ Permanent Burn (20%):   {} Quantum
-    └─ Miner Reward   (80%):   {} Quantum
+    ├─ BFT Validator Reward (100%):   {} Quantum
+    └─ Protocol Burn (0%):           {} Quantum
   Account Nonce:    {}
   Memo / Payload:   "{}"
 --------------------------------------------------------------------------------
@@ -145,8 +150,8 @@ impl ClearSigningDetails {
             self.fee.as_u128(),
             fee_aur_whole,
             fee_aur_frac,
+            validator.as_u128(),
             burn.as_u128(),
-            miner.as_u128(),
             self.nonce,
             self.memo
         )
@@ -211,9 +216,18 @@ mod tests {
         )
         .expect("Validasi harus berhasil");
 
-        let (burn, miner) = details.fee_split();
-        assert_eq!(burn.as_u128(), 20_000);  // 20% dari 100.000
-        assert_eq!(miner.as_u128(), 80_000); // 80% dari 100.000
+        // Kanonik AUR-MON-003: 100% fee ke validator BFT, 0% burn.
+        let (burn, validator) = details.fee_split();
+        assert_eq!(burn.as_u128(), 0, "0% burn adalah kanonik Aurion");
+        assert_eq!(validator.as_u128(), 100_000, "100% ke validator BFT");
+        // Prompt yang ditampilkan ke pengguna harus jujur dan tidak boleh
+        // memakai istilah legacy.
+        let prompt = details.format_clear_signing_prompt();
+        let prompt_lower = prompt.to_lowercase();
+        assert!(
+            !prompt_lower.contains("miner") && !prompt_lower.contains("mining"),
+            "prompt clear-signing tidak boleh memakai istilah legacy"
+        );
 
         let (tx, raw_hex) = details.sign(&key_sender, 1, 1000);
         assert!(!raw_hex.is_empty());

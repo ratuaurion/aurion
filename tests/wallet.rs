@@ -112,11 +112,16 @@ fn test_clear_signing_mandate_fee_split_and_validation() {
     )
     .expect("Validasi transaksi harus berhasil");
 
-    // Evaluasi 20% burn dan 80% miner reward
-    let (burn, miner) = details.fee_split();
-    assert_eq!(burn, Quantum::new(10_000));
-    assert_eq!(miner, Quantum::new(40_000));
-    assert_eq!(burn.checked_add(miner).unwrap(), Quantum::new(50_000));
+    // Kanonik AUR-MON-003: 0% burn, 100% ke validator BFT.
+    // Skema lama "20% burn / 80% miner" telah dicabut (lihat AUD-BFT-001).
+    let (burn, validator) = details.fee_split();
+    assert_eq!(burn, Quantum::ZERO, "0% burn adalah kanonik Aurion");
+    assert_eq!(validator, Quantum::new(50_000), "100% fee ke validator BFT");
+    assert_eq!(
+        burn.checked_add(validator).unwrap(),
+        Quantum::new(50_000),
+        "konservasi fee harus terjaga"
+    );
 
     // Clear signing prompt format
     let prompt = details.format_clear_signing_prompt();
@@ -124,8 +129,10 @@ fn test_clear_signing_mandate_fee_split_and_validation() {
     assert!(prompt.contains(&sender_bech));
     assert!(prompt.contains(&recip_bech));
     assert!(prompt.contains("10.00000000 AUR"));
-    assert!(prompt.contains("Permanent Burn (20%):   10000 Quantum"));
-    assert!(prompt.contains("Miner Reward   (80%):   40000 Quantum"));
+    // Prompt harus jujur: tidak boleh menampilkan skema yang sudah dicabut.
+    assert!(prompt.contains("BFT Validator Reward (100%):   50000 Quantum"));
+    assert!(prompt.contains("Protocol Burn (0%):           0 Quantum"));
+    assert!(!prompt.contains("Miner"), "prompt tidak boleh memakai istilah miner");
 
     // Penandatanganan
     let (tx, raw_hex) = details.sign(&key_sender, 1, 999_999);
