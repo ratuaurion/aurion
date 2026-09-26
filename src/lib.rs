@@ -22,6 +22,6 @@ pub use scaling as l2;
 pub use specialized as l3;
 pub use interop as l4;
 pub use infrastructure as l5;
-pub use platform::{audit, cli, conformance, gateway, runtime, storage, wallet, wire};
+pub use platform::{audit, cli, conformance, contract, gateway, runtime, storage, wallet, wire};
 
 

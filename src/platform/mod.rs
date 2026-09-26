@@ -5,6 +5,7 @@
 pub mod audit;
 pub mod cli;
 pub mod conformance;
+pub mod contract;
 pub mod gateway;
 pub mod runtime;
 pub mod storage;

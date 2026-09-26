@@ -450,11 +450,19 @@ impl RpcContext {
             .cloned()
             .unwrap_or_else(Account::default);
 
+        // Field `code_hash`/`is_contract` menopang Contract SDK melakukan
+        // binding metadata kontrak ke kode on-chain (AUR-VM-006).
+        let code_hash_json = match acc.code_hash {
+            Some(h) => format!("\"{}\"", h.to_hex()),
+            None => "null".to_string(),
+        };
         Ok(format!(
-            r#"{{"address":"{}","balance":"{}","nonce":{},"consistency":"{consistency:?}"}}"#,
+            r#"{{"address":"{}","balance":"{}","nonce":{},"is_contract":{},"code_hash":{},"consistency":"{consistency:?}"}}"#,
             params[0],
             acc.balance.as_u128(),
-            acc.nonce
+            acc.nonce,
+            acc.is_contract(),
+            code_hash_json
         ))
     }
 

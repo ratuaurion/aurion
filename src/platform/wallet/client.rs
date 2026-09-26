@@ -117,6 +117,99 @@ pub fn broadcast_raw_tx(
         .ok_or_else(|| RpcClientError("RPC TxID bukan string".to_string()))
 }
 
+/// Panggilan JSON-RPC generik (dipakai Contract SDK untuk `aur_chainId`, dsb.).
+pub fn rpc_call(rpc_url: &str, method: &str, params: &[&str]) -> Result<Value, RpcClientError> {
+    call(rpc_url, method, params)
+}
+
+/// Ambil chain ID simpul (`aur_chainId`).
+pub fn get_chain_id(rpc_url: &str) -> Result<u32, RpcClientError> {
+    let result = call(rpc_url, "aur_chainId", &[])?;
+    if let Some(value) = result.as_str() {
+        return value
+            .parse::<u32>()
+            .map_err(|_| RpcClientError(format!("RPC chain ID tidak valid: {value}")));
+    }
+    result
+        .as_u64()
+        .and_then(|v| u32::try_from(v).ok())
+        .ok_or_else(|| RpcClientError("RPC chain ID bukan integer".to_string()))
+}
+
+/// Snapshot akun on-chain hasil `aur_getAccount` (termasuk binding kontrak).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RpcAccount {
+    /// Saldo dalam Quanta.
+    pub balance: u128,
+    /// Nonce on-chain.
+    pub nonce: u64,
+    /// `code_hash` kontrak (hex 32-byte) bila akun adalah kontrak.
+    pub code_hash: Option<[u8; 32]>,
+    /// Apakah akun adalah kontrak (`code_hash` ada).
+    pub is_contract: bool,
+}
+
+/// Parse objek hasil `aur_getAccount` (tahan terhadap simpul lama tanpa
+/// field `code_hash`/`is_contract`).
+///
+/// # Errors
+/// Field utama (`balance`/`nonce`) tidak dapat diparse.
+pub fn parse_account_value(value: &Value) -> Result<RpcAccount, RpcClientError> {
+    let balance = match value.get("balance") {
+        Some(Value::String(s)) => s
+            .parse::<u128>()
+            .map_err(|_| RpcClientError(format!("RPC balance tidak valid: {s}")))?,
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .map(u128::from)
+            .ok_or_else(|| RpcClientError("RPC balance bukan integer".to_string()))?,
+        _ => return Err(RpcClientError("RPC akun tanpa balance".to_string())),
+    };
+    let nonce = match value.get("nonce") {
+        Some(Value::String(s)) => s
+            .parse::<u64>()
+            .map_err(|_| RpcClientError(format!("RPC nonce tidak valid: {s}")))?,
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .ok_or_else(|| RpcClientError("RPC nonce bukan integer".to_string()))?,
+        _ => return Err(RpcClientError("RPC akun tanpa nonce".to_string())),
+    };
+    let code_hash = match value.get("code_hash") {
+        Some(Value::String(s)) => {
+            let bytes =
+                hex::decode(s.trim_start_matches("0x")).map_err(|e| {
+                    RpcClientError(format!("RPC code_hash hex tidak valid: {e}"))
+                })?;
+            if bytes.len() != 32 {
+                return Err(RpcClientError(format!(
+                    "RPC code_hash harus 32 byte, diterima {}",
+                    bytes.len()
+                )));
+            }
+            let mut arr = [0u8; 32];
+            arr.copy_from_slice(&bytes);
+            Some(arr)
+        }
+        _ => None,
+    };
+    let is_contract = value
+        .get("is_contract")
+        .and_then(Value::as_bool)
+        .unwrap_or_else(|| code_hash.is_some());
+    Ok(RpcAccount {
+        balance,
+        nonce,
+        code_hash,
+        is_contract,
+    })
+}
+
+/// Ambil snapshot akun on-chain (`aur_getAccount`).
+pub fn get_account(rpc_url: &str, address: &str) -> Result<RpcAccount, RpcClientError> {
+    let result = call(rpc_url, "aur_getAccount", &[address])?;
+    parse_account_value(&result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::parse_http_url;
