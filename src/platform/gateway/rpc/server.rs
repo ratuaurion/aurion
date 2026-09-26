@@ -428,6 +428,28 @@ Connection: close\r\n\r\n";
         return write_json_200(&mut stream, &body).await;
     }
 
+    // Endpoint REST detail transaksi (termasuk dekode interaksi kontrak).
+    if method == "GET" && path.starts_with("/api/v1/transactions/") {
+        let rest = &path["/api/v1/transactions/".len()..];
+        // Hindari tumpang tindih dengan `/api/v1/transactions/recent`.
+        if !rest.is_empty() && rest != "recent" && !rest.starts_with("recent?") {
+            let hash = rest.split('?').next().unwrap_or(rest).to_string();
+            let ctx = Arc::clone(&context);
+            let body = tokio::task::spawn_blocking(move || {
+                match crate::gateway::explorer::render_tx_by_hash(&ctx, &hash) {
+                    Some(json) => json,
+                    None => {
+                        r#"{"status":"error","error":"Transaction not found in mempool or recent blocks"}"#
+                            .to_string()
+                    }
+                }
+            })
+            .await
+            .unwrap_or_default();
+            return write_json_200(&mut stream, &body).await;
+        }
+    }
+
     // Endpoint JSON-RPC 2.0 HTTP POST
     if method == "POST" {
         let body_start = request_str.find("\r\n\r\n").map(|idx| idx + 4).unwrap_or(0);

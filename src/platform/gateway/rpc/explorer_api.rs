@@ -235,6 +235,31 @@ fn render_tx_summary(summary: &CommittedTxSummary) -> String {
     )
 }
 
+/// Ringkasan ringkas interaksi kontrak untuk daftar transaksi.
+///
+/// Sengaja hanya memuat field yang sering ditampilkan pada list (metode,
+/// argumen, status) agar payload mentah yang besar tidak membanjiri endpoint
+/// daftar. Detail penuh tersedia di `/explorer/tx/:hash` dan
+/// `/api/v1/transactions/{hash}`.
+pub fn render_tx_contract_summary(
+    ctx: &RpcContext,
+    tx: &Transaction,
+    status: crate::gateway::contract_decode::TxStatus,
+) -> String {
+    let interaction = crate::gateway::contract_decode::describe_contract_interaction(ctx, tx, status);
+    serde_json::json!({
+        "kind": interaction.kind,
+        "status": interaction.status,
+        "contract_address": interaction.contract_address,
+        "method": interaction.method,
+        "selector": interaction.selector,
+        "arguments": interaction.arguments,
+        "decode_status": interaction.decode_status,
+        "raw_payload_bytes": interaction.raw_payload_bytes,
+    })
+    .to_string()
+}
+
 fn canonical_tx_hex(tx: &Transaction) -> String {
     let mut buf = Vec::with_capacity(transaction_wire_size(tx.payload.len()));
     tx.encode_canonical(&mut buf);

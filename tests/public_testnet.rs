@@ -222,7 +222,12 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
         let n = stream.read(&mut buf).await.unwrap();
         let resp = String::from_utf8_lossy(&buf[..n]);
         assert!(resp.contains("200 OK"));
-        assert!(resp.contains("PENDING_IN_MEMPOOL"));
+        // Status mempool kini `PENDING` (sebelumnya `PENDING_IN_MEMPOOL`),
+        // diseragamkan dengan label status di endpoint lain.
+        assert!(resp.contains("\"status\":\"PENDING\""));
+        // Eksplorasi kontrak kini selalu menyertakan blok info kontrak.
+        assert!(resp.contains("\"contract_interaction\""));
+        assert!(resp.contains("\"kind\":\"none\""));
         assert!(resp.contains(&alice_bech));
         assert!(resp.contains("1000000000")); // 10 AUR in Quanta
     }

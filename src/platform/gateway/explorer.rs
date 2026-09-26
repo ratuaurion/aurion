@@ -13,6 +13,7 @@
 use std::sync::atomic::Ordering;
 
 use crate::crypto::encode_address_bech32m;
+use crate::gateway::contract_decode::{describe_contract_interaction, TxStatus};
 use crate::gateway::rpc::methods::RpcContext;
 
 /// Menghasilkan representasi JSON statistik jaringan untuk endpoint `/explorer/stats`.
@@ -60,23 +61,103 @@ pub fn render_block_by_height(ctx: &RpcContext, height: u64) -> Option<String> {
     ))
 }
 
-/// Menghasilkan representasi JSON detail transaksi dari mempool atau riwayat untuk `/explorer/tx/:hash`.
+/// Menghasilkan representasi JSON detail transaksi dari mempool atau riwayat
+/// untuk `/explorer/tx/:hash`.
+///
+/// Mencakup dua sumber: mempool (`PENDING`) dan riwayat transaksi terkonfirmasi
+/// (`FINALIZED`). Field kontrak (`tx_type`, `raw_payload`, `contract_interaction`)
+/// ditambahkan agar Explorer dapat menampilkan interaksi kontrak ter-decode.
 pub fn render_tx_by_hash(ctx: &RpcContext, hash_hex: &str) -> Option<String> {
     let clean_hash = hash_hex.strip_prefix("0x").unwrap_or(hash_hex);
-    let mempool = ctx.mempool.lock().unwrap();
 
-    for (tx_hash, entry) in &mempool.entries {
-        if hex::encode(tx_hash.as_bytes()) == clean_hash {
-            let tx = &entry.tx;
-            let sender_bech = encode_address_bech32m(&tx.sender, "aur").unwrap_or_default();
-            let recipient_bech = encode_address_bech32m(&tx.recipient, "aur").unwrap_or_default();
-            return Some(format!(
-                r#"{{"hash":"0x{}","status":"PENDING_IN_MEMPOOL","chain_id":{},"sender":"{}","recipient":"{}","amount_quanta":{},"fee_quanta":{},"nonce":{},"valid_until":{}}}"#,
-                clean_hash, tx.chain_id, sender_bech, recipient_bech, tx.amount.as_u128(), tx.fee.as_u128(), tx.nonce, tx.valid_until
-            ));
+    // Mempool lebih dulu: transaksi yang belum komit berstatus PENDING.
+    {
+        let mempool = ctx.mempool.lock().unwrap();
+        for (tx_hash, entry) in &mempool.entries {
+            if hex::encode(tx_hash.as_bytes()) == clean_hash {
+                let tx = &entry.tx;
+                let interaction =
+                    describe_contract_interaction(ctx, tx, TxStatus::Pending);
+                return Some(render_tx_detail_json(
+                    clean_hash,
+                    "PENDING",
+                    tx,
+                    None,
+                    interaction,
+                ));
+            }
         }
     }
-    None
+
+    // Riwayat transaksi yang sudah tercakup blok berstatus FINALIZED.
+    let summaries: Vec<crate::gateway::rpc::methods::CommittedTxSummary> = {
+        let recent = ctx.recent_transactions.lock().unwrap();
+        recent
+            .iter()
+            .filter(|s| hex::encode(s.tx_id.as_bytes()) == clean_hash)
+            .cloned()
+            .collect()
+    };
+    let summary = summaries.first()?;
+    let interaction = describe_contract_interaction(ctx, &summary.tx, TxStatus::Finalized);
+    Some(render_tx_detail_json(
+        clean_hash,
+        "FINALIZED",
+        &summary.tx,
+        Some(summary.height),
+        interaction,
+    ))
+}
+
+/// Render JSON detail transaksi lengkap (explorer + dekoder kontrak).
+///
+/// Dibangun lewat `serde_json` (bukan `format!`) agar peng-escaping nilai
+/// yang berasal dari jaringan (alamat, hex, reason) selalu valid dan aman.
+/// `raw_payload` memakai versi terpotong dari dekoder agar respons tetap
+/// berbatas untuk calldata besar.
+fn render_tx_detail_json(
+    clean_hash: &str,
+    status: &str,
+    tx: &crate::transaction::types::Transaction,
+    height: Option<u64>,
+    interaction: crate::gateway::contract_decode::ContractInteraction,
+) -> String {
+    use serde_json::json;
+
+    let body = json!({
+        "hash": format!("0x{clean_hash}"),
+        "status": status,
+        "chain_id": tx.chain_id,
+        "block_height": height,
+        "sender": encode_address_bech32m(&tx.sender, "aur").unwrap_or_default(),
+        "recipient": encode_address_bech32m(&tx.recipient, "aur").unwrap_or_default(),
+        "amount_quanta": tx.amount.as_u128().to_string(),
+        "fee_quanta": tx.fee.as_u128().to_string(),
+        "nonce": tx.nonce,
+        "valid_until": tx.valid_until,
+        "tx_type": tx_type_label(tx.tx_type),
+        "raw_payload": format!("0x{}", interaction.raw_payload),
+        "raw_payload_bytes": interaction.raw_payload_bytes,
+        "raw_payload_truncated": interaction.raw_payload_truncated,
+        "size_bytes": crate::transaction::types::transaction_wire_size(tx.payload.len()),
+        "contract_interaction": interaction,
+    });
+
+    serde_json::to_string(&body).unwrap_or_else(|_| r#"{"status":"error"}"#.to_string())
+}
+
+/// Label tipe transaksi yang stabil untuk UI/API.
+#[must_use]
+pub fn tx_type_label(tx_type: crate::transaction::types::TxType) -> &'static str {
+    use crate::transaction::types::TxType;
+    match tx_type {
+        TxType::Transfer => "transfer",
+        TxType::Stake => "stake",
+        TxType::Unstake => "unstake",
+        TxType::GovernanceVote => "governance_vote",
+        TxType::ContractDeploy => "contract_deploy",
+        TxType::ContractCall => "contract_call",
+    }
 }
 
 /// Menyajikan dokumen HTML5 mandiri untuk Community Sandbox Dashboard (/sandbox).
@@ -114,6 +195,22 @@ pub fn render_sandbox_html(chain_id: u32) -> String {
     button {{ background: var(--accent); color: #07090e; font-weight: 700; border: none; border-radius: 6px; padding: 10px 18px; cursor: pointer; transition: 0.2s; }}
     button:hover {{ filter: brightness(1.15); box-shadow: 0 0 12px var(--accent-glow); }}
     .result-box {{ margin-top: 12px; font-size: 13px; padding: 10px; border-radius: 6px; background: rgba(0,0,0,0.4); border-left: 3px solid var(--accent); display: none; word-break: break-all; }}
+    /* --- Contract Interaction card (Smart Contract Visualization) --- */
+    .grid-wide {{ grid-column: 1 / -1; }}
+    .kv {{ display: grid; grid-template-columns: 180px 1fr; gap: 6px 14px; font-size: 13px; margin-top: 10px; }}
+    .kv dt {{ color: var(--text-muted); }}
+    .kv dd {{ margin: 0; word-break: break-all; }}
+    .tag {{ display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 700; letter-spacing: 0.4px; }}
+    .tag-ok {{ background: rgba(0,240,144,0.12); border: 1px solid var(--success); color: var(--success); }}
+    .tag-warn {{ background: rgba(255,204,0,0.12); border: 1px solid #ffcc00; color: #ffcc00; }}
+    .tag-mute {{ background: rgba(139,148,158,0.12); border: 1px solid var(--text-muted); color: var(--text-muted); }}
+    table.args {{ width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }}
+    table.args th, table.args td {{ text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--card-border); word-break: break-all; }}
+    table.args th {{ color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; }}
+    details.raw {{ margin-top: 12px; }}
+    details.raw summary {{ cursor: pointer; color: var(--text-muted); font-size: 12px; }}
+    details.raw pre {{ white-space: pre-wrap; word-break: break-all; font-size: 11px; background: rgba(0,0,0,0.45); padding: 10px; border-radius: 6px; max-height: 220px; overflow: auto; }}
+    .hidden {{ display: none !important; }}
   </style>
 </head>
 <body>
@@ -156,6 +253,44 @@ pub fn render_sandbox_html(chain_id: u32) -> String {
         <button onclick="checkBalance()">Check State</button>
       </div>
       <div id="acc-res" class="result-box"></div>
+    </div>
+    <div class="card">
+      <h3>Transaction Inspector — Smart Contract Visualization</h3>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Paste a transaction TxID to decode contract calls into human-readable
+        method names and arguments. Non-contract transactions render normally.
+      </p>
+      <div class="input-group">
+        <input type="text" id="tx-hash" placeholder="Transaction TxID (hex, with or without 0x)" />
+        <button onclick="inspectTx()">Inspect</button>
+      </div>
+      <div id="tx-meta" class="result-box"></div>
+      <div id="contract-card" class="hidden" style="margin-top:16px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <strong style="font-size:14px;">Contract Interaction</strong>
+          <span id="ci-kind" class="tag tag-mute">—</span>
+          <span id="ci-status" class="tag tag-mute">—</span>
+          <span id="ci-decode" class="tag tag-mute">—</span>
+        </div>
+        <dl class="kv">
+          <dt>Contract Address</dt><dd id="ci-address">—</dd>
+          <dt>Contract Name</dt><dd id="ci-name">—</dd>
+          <dt>Method</dt><dd id="ci-method">—</dd>
+          <dt>Selector</dt><dd id="ci-selector">—</dd>
+          <dt>Code Hash</dt><dd id="ci-codehash">—</dd>
+        </dl>
+        <div id="ci-args-wrap">
+          <table class="args">
+            <thead><tr><th>#</th><th>Parameter</th><th>Type</th><th>Value</th></tr></thead>
+            <tbody id="ci-args"></tbody>
+          </table>
+        </div>
+        <div id="ci-reason" style="display:none;margin-top:10px;font-size:12px;color:#ffcc00;"></div>
+        <details class="raw">
+          <summary>Raw Calldata (advanced)</summary>
+          <pre id="ci-raw">—</pre>
+        </details>
+      </div>
     </div>
   </div>
 
@@ -233,6 +368,102 @@ pub fn render_sandbox_html(chain_id: u32) -> String {
       }} catch (e) {{
         resBox.style.color = 'var(--error)';
         resBox.innerText = 'Network error: ' + e;
+      }}
+    }}
+
+    function setTag(id, text, cls) {{
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = 'tag ' + cls;
+    }}
+
+    function renderArgs(args) {{
+      const tbody = document.getElementById('ci-args');
+      tbody.innerHTML = '';
+      const list = Array.isArray(args) ? args : [];
+      document.getElementById('ci-args-wrap').style.display = list.length ? 'block' : 'none';
+      list.forEach(function (a) {{
+        const tr = document.createElement('tr');
+        // textContent (bukan innerHTML): data kontrak berasal dari jaringan,
+        // sehingga tidak boleh pernah di-parse sebagai HTML.
+        [String(a.index), a.name || '-', a.abi_type || '-', a.value || '-'].forEach(function (cell) {{
+          const td = document.createElement('td');
+          td.textContent = cell;
+          tr.appendChild(td);
+        }});
+        tbody.appendChild(tr);
+      }});
+    }}
+
+    function renderContract(ci) {{
+      const card = document.getElementById('contract-card');
+      if (!ci || ci.kind === 'none') {{ card.classList.add('hidden'); return; }}
+      card.classList.remove('hidden');
+
+      setTag('ci-kind', ci.kind === 'deploy' ? 'DEPLOYMENT' : 'CALL',
+             ci.kind === 'deploy' ? 'tag-warn' : 'tag-ok');
+      setTag('ci-status', String(ci.status || '').toUpperCase(),
+             ci.status === 'finalized' ? 'tag-ok' : 'tag-warn');
+      setTag('ci-decode', ci.decode_status === 'decoded' ? 'DECODED' : 'UNKNOWN',
+             ci.decode_status === 'decoded' ? 'tag-ok' : 'tag-warn');
+
+      document.getElementById('ci-address').textContent = ci.contract_address || '—';
+      document.getElementById('ci-name').textContent = ci.contract_name || '—';
+      document.getElementById('ci-method').textContent = ci.method || 'Unknown Method';
+      document.getElementById('ci-selector').textContent = ci.selector || '—';
+      document.getElementById('ci-codehash').textContent = ci.code_hash || '—';
+
+      renderArgs(ci.arguments);
+
+      const reason = document.getElementById('ci-reason');
+      if (ci.reason) {{
+        reason.style.display = 'block';
+        reason.textContent = ci.reason;
+      }} else {{
+        reason.style.display = 'none';
+      }}
+
+      const raw = (ci.raw_payload || '') +
+        (ci.raw_payload_truncated ? '... [truncated, ' + ci.raw_payload_bytes + ' bytes total]' : '');
+      document.getElementById('ci-raw').textContent = raw || '—';
+    }}
+
+    async function inspectTx() {{
+      const hash = document.getElementById('tx-hash').value.trim();
+      const meta = document.getElementById('tx-meta');
+      const card = document.getElementById('contract-card');
+      if (!hash) {{
+        meta.style.display = 'block';
+        meta.style.color = 'var(--error)';
+        meta.textContent = 'Please enter a transaction TxID';
+        return;
+      }}
+      meta.style.display = 'block';
+      meta.style.color = 'var(--accent)';
+      meta.textContent = 'Loading transaction...';
+      card.classList.add('hidden');
+      try {{
+        const res = await fetch('/api/v1/transactions/' + encodeURIComponent(hash));
+        const data = await res.json();
+        if (data.status === 'error') {{
+          meta.style.color = 'var(--error)';
+          meta.textContent = 'Not found: ' + (data.error || 'unknown error');
+          return;
+        }}
+        meta.style.color = 'var(--success)';
+        meta.textContent = [
+          'TxID: ' + data.hash,
+          'Status: ' + data.status,
+          'Type: ' + data.tx_type,
+          'Block: ' + (data.block_height === null ? 'pending' : data.block_height),
+          'From: ' + data.sender,
+          'Amount: ' + data.amount_quanta + ' Quanta',
+          'Fee: ' + data.fee_quanta + ' Quanta'
+        ].join('  |  ');
+        renderContract(data.contract_interaction);
+      }} catch (e) {{
+        meta.style.color = 'var(--error)';
+        meta.textContent = 'Network error: ' + e;
       }}
     }}
 

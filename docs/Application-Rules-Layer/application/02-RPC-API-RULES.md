@@ -238,6 +238,59 @@ Response:
 }
 ```
 
+#### 4.4.4.1 Smart Contract Visualization pada Explorer (REST)
+
+> **Catatan penomoran:** bagian ini adalah turunan dari §4.4.4 (asumsi metadata off-chain), bukan §4.4.5. Penomoran §4.4.5 dan seterusnya dipertahankan apa adanya agar tidak menggeser referensi dokumen lain.
+
+Explorer menampilkan transaksi kontrak sebagai **metode + argumen terbaca manusia**, bukan hex mentah. Dekoder berada di `platform::gateway::contract_decode` dan murni **read-only**: ia hanya membaca `Account.code_hash` dan registry metadata off-chain. Dekoder **tidak pernah** menulis state, tidak menyentuh BFT, dan tidak memengaruhi `state_root`.
+
+- **`GET /api/v1/transactions/{tx_hash}`** dan **`GET /explorer/tx/{tx_hash}`** menyertakan blok `contract_interaction`:
+
+```json
+{
+  "hash": "0x<txid>", "status": "FINALIZED", "tx_type": "contract_call",
+  "contract_interaction": {
+    "kind": "call", "status": "finalized", "decode_status": "decoded",
+    "contract_address": "aur1...", "contract_name": "Echo",
+    "code_hash": "<64 hex>", "method": "transfer(u64,address)", "method_name": "transfer",
+    "selector": "0x3056d944",
+    "arguments": [
+      { "index": 0, "name": "amount", "abi_type": "U64", "value": "42", "raw_word": "0x…2a" },
+      { "index": 1, "name": "to", "abi_type": "Address", "value": "aur1…", "raw_word": "0xabab…" }
+    ],
+    "runtime_bytes": 10, "raw_payload": "0x65…", "raw_payload_bytes": 111,
+    "raw_payload_truncated": false, "reason": null
+  }
+}
+```
+
+**Bentuk payload AVM (bukan ABI encoding linear).** Sesuai AVM-005, `ContractCall`.payload adalah *program* AVM, bukan array argumen:
+
+```text
+payload := PUSH32 argN … PUSH32 arg1  PUSH4 selector  <runtime script>
+           \___ argumen (urutan TERBALIK) ___/  \___ top ___/
+```
+
+Argumen didorong terbalik agar selector berada di puncak stack saat runtime dieksekusi. Karena itu dekoder wajib (a) membaca stream instruksi dari depan, (b) **membalik** hasilnya agar sejajar dengan urutan deklarasi parameter metadata, dan (c) mengambil 4 byte selector setelah seluruh argumen.
+
+**Anti-ambiguitas (WAJIB dipatuhi).** Script runtime *bisa* diawali `PUSH32`, sehingga pemindaian buta ("selama opcode == PUSH32, anggap itu argumen") **tidak sound** dan dilarang. Dekoder wajib mencoba **setiap metode pada metadata sebagai hipotesis arity**, lalu mencocokkan selector hasil framing dengan selector metode tersebut. Kecocokan bersifat eksak. Heuristik tanpa metadata hanya dipakai untuk menampilkan selector, dan hasilnya **tidak pernah diklaim ter-decode**.
+
+**Kegagalan yang harus ditangani secara valid (bukan error 500):**
+
+| Kondisi | `decode_status` | Perilaku UI |
+|---|---|---|
+| Metadata terdaftar, framing cocok | `decoded` | Tampilkan metode + argumen |
+| Metadata terdaftar, selector tak dikenal | `unknown_method` | "Unknown Method (0x…)" + hex mentah |
+| Metadata belum terdaftar | `metadata_missing` | "Unknown Method (0x…)" + hex mentah + ajan mendaftarkan metadata |
+| Bukan transaksi kontrak | `not_a_contract` | Sembunyikan kartu kontrak |
+| `ContractDeploy` | `decoded` | "Contract Deployment" + alamat hasil deploy |
+
+Kegagalan decoding **tidak pernah** menggagalkan halaman: field `reason` membawa penjelasan, dan `raw_payload` tetap tersedia sebagai fallback audit.
+
+**Batas ukuran (Anti-UI-Crash).** `raw_payload` dipotong pada **4.096 karakter** hex dan ditandai `raw_payload_truncated: true`, sementara `raw_payload_bytes` tetap melaporkan panjang penuh. Daftar argumen dibatasi 8 entri.
+
+Payload `ContractDeploy` adalah bytecode konstruktor, sehingga tidak memiliki selector maupun argumen; alamat kontrak diturunkan deterministik dari `(sender, nonce)` — sama dengan STF.
+
 #### 4.4.5 Validasi Intent pada `aur_sendRawTransaction`
 
 Parameter `aur_sendRawTransaction` diperluas secara **backward compatible** dari `[raw_hex, sender_pubkey_hex]` menjadi:
