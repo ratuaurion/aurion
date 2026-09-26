@@ -7,6 +7,12 @@
 //! 4. `ContractDeploy` -> alamat kontrak hasil deploy.
 //! 5. Integrasi API `/explorer/tx/:hash` dan `/api/v1/transactions/{hash}`.
 //! 6. Truncation payload besar agar UI tidak crash.
+//!
+//! # Peran file ini
+//!
+//! Test di sini memakai call frame **sintetis** agar tiap kasus dekoder terisolasi
+//! dan deterministik. Alur `deploy -> call -> lihat di Explorer` yang benar-benar
+//! melewati STF (state nyata) diuji di `tests/contract_visualization_e2e.rs`.
 
 #![forbid(unsafe_code)]
 
