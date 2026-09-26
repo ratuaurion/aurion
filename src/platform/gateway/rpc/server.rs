@@ -25,7 +25,11 @@ pub struct RpcServer {
 }
 
 impl RpcServer {
-    pub fn new(context: Arc<RpcContext>, pubsub: Arc<SubscriptionManager>, bind_addr: &str) -> Self {
+    pub fn new(
+        context: Arc<RpcContext>,
+        pubsub: Arc<SubscriptionManager>,
+        bind_addr: &str,
+    ) -> Self {
         Self {
             context,
             pubsub,
@@ -86,7 +90,8 @@ async fn dispatch_on_storage_worker(
 }
 
 fn payload_too_large_response() -> String {
-    let body = r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload too large"},"id":null}"#;
+    let body =
+        r#"{"jsonrpc":"2.0","error":{"code":-32000,"message":"Payload too large"},"id":null}"#;
     format!(
         "HTTP/1.1 413 Payload Too Large\r\nAccess-Control-Allow-Origin: *\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         body.len(),
@@ -111,7 +116,10 @@ async fn write_json_200(writer: &mut TcpStream, body: &str) -> io::Result<()> {
 /// Langkah ini memicu pengiriman FIN segera setelah payload terkirim sehingga
 /// kernel dapat menuntaskan handshake penutupan dan soket tidak bertahan dalam
 /// status CLOSE_WAIT / TIME_WAIT yang menumpuk (AUR-ISSUE-011).
-async fn write_response_and_shutdown(stream: &mut TcpStream, response: impl AsRef<str>) -> io::Result<()> {
+async fn write_response_and_shutdown(
+    stream: &mut TcpStream,
+    response: impl AsRef<str>,
+) -> io::Result<()> {
     let written = stream.write_all(response.as_ref().as_bytes()).await;
     let _ = stream.shutdown().await;
     written
@@ -159,17 +167,15 @@ pub async fn handle_connection(
 ) -> Result<(), io::Error> {
     let mut buffer = [0u8; 8192];
     // Timeout 3 detik: cegah CLOSE_WAIT menumpuk dari koneksi idle (AUR-ISSUE-011)
-    let bytes_read = match tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        stream.read(&mut buffer),
-    )
-    .await
-    {
-        Ok(Ok(n)) => n,
-        Ok(Err(e)) => return Err(e),
-        Err(_elapsed) => return Ok(()), // timeout
-        //  - tutup koneksi idle
-    };
+    let bytes_read =
+        match tokio::time::timeout(std::time::Duration::from_secs(3), stream.read(&mut buffer))
+            .await
+        {
+            Ok(Ok(n)) => n,
+            Ok(Err(e)) => return Err(e),
+            Err(_elapsed) => return Ok(()), // timeout
+                                            //  - tutup koneksi idle
+        };
     if bytes_read == 0 {
         return Ok(());
     }
@@ -300,7 +306,7 @@ Connection: close\r\n\r\n";
         return Ok(());
     }
 
-// Endpoint REST Explorer Stats (NET-012)
+    // Endpoint REST Explorer Stats (NET-012)
     if method == "GET" && (path == "/explorer/stats" || path == "/explorer/summary") {
         let ctx = Arc::clone(&context);
         let body = tokio::task::spawn_blocking(move || {
@@ -325,7 +331,11 @@ Connection: close\r\n\r\n";
             &path["/explorer/block/".len()..]
         };
         let height = if target == "latest" {
-            Some(context.current_height.load(std::sync::atomic::Ordering::SeqCst))
+            Some(
+                context
+                    .current_height
+                    .load(std::sync::atomic::Ordering::SeqCst),
+            )
         } else {
             target.parse::<u64>().ok()
         };
@@ -390,15 +400,16 @@ Connection: close\r\n\r\n";
     // Endpoint REST Explorer API v1 (Opsi B — Gateway Terpadu)
     if method == "GET" && path == "/api/v1/network/stats" {
         let ctx = Arc::clone(&context);
-        let body =
-            tokio::task::spawn_blocking(move || explorer_api::render_network_stats(&ctx)).await
-                .unwrap_or_default();
+        let body = tokio::task::spawn_blocking(move || explorer_api::render_network_stats(&ctx))
+            .await
+            .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 
     if method == "GET" && path == "/api/v1/peers" {
         let ctx = Arc::clone(&context);
-        let body = tokio::task::spawn_blocking(move || explorer_api::render_peers(&ctx)).await
+        let body = tokio::task::spawn_blocking(move || explorer_api::render_peers(&ctx))
+            .await
             .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
@@ -421,10 +432,11 @@ Connection: close\r\n\r\n";
     {
         let limit = explorer_api::parse_limit(path);
         let ctx = Arc::clone(&context);
-        let body =
-            tokio::task::spawn_blocking(move || explorer_api::render_recent_transactions(&ctx, limit))
-                .await
-                .unwrap_or_default();
+        let body = tokio::task::spawn_blocking(move || {
+            explorer_api::render_recent_transactions(&ctx, limit)
+        })
+        .await
+        .unwrap_or_default();
         return write_json_200(&mut stream, &body).await;
     }
 
@@ -460,13 +472,14 @@ Connection: close\r\n\r\n";
             return Ok(());
         }
 
-        let body = match read_request_body_with_limit(&mut stream, initial_body, content_length).await? {
-            Some(body) => body,
-            None => {
-                write_response_and_shutdown(&mut stream, payload_too_large_response()).await?;
-                return Ok(());
-            }
-        };
+        let body =
+            match read_request_body_with_limit(&mut stream, initial_body, content_length).await? {
+                Some(body) => body,
+                None => {
+                    write_response_and_shutdown(&mut stream, payload_too_large_response()).await?;
+                    return Ok(());
+                }
+            };
 
         let current_time = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -475,7 +488,8 @@ Connection: close\r\n\r\n";
 
         let response_payload = match parse_json_rpc_request(&body) {
             Ok(req) => {
-                let resp = dispatch_on_storage_worker(Arc::clone(&context), req, current_time).await;
+                let resp =
+                    dispatch_on_storage_worker(Arc::clone(&context), req, current_time).await;
                 serialize_json_rpc_response(&resp)
             }
             Err(_) => {

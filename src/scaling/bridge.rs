@@ -7,13 +7,13 @@
 //! - AUR-ARCH-011 (#![forbid(unsafe_code)])
 //! - AUR-ARCH-012 (Zero-Float Quantum u128)
 
-use std::collections::{BTreeMap, VecDeque};
-use thiserror::Error;
 use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::blake3_hash;
 use crate::l2::abi::{AbiError, BridgeCall};
 use crate::l2::codec::{L2BatchFrame, L2CodecError};
 use crate::l2::types::L2Batch;
+use std::collections::{BTreeMap, VecDeque};
+use thiserror::Error;
 
 /// Kode status keberhasilan eksekusi ABI bridge: 0x00 SUCCESS
 pub const STATUS_SUCCESS: u8 = 0x00;
@@ -48,10 +48,14 @@ pub enum BridgeError {
     #[error("Saldo vault bridge L1 tidak mencukupi untuk klaim penarikan")]
     InsufficientVaultBalance,
 
-    #[error("State root sebelumnya ({actual}) tidak cocok dengan komitmen L1 terkini ({expected})")]
+    #[error(
+        "State root sebelumnya ({actual}) tidak cocok dengan komitmen L1 terkini ({expected})"
+    )]
     InvalidPrevRoot { expected: Hash256, actual: Hash256 },
 
-    #[error("Indeks batch tidak urut secara sekuensial (diharapkan {expected}, diterima {actual})")]
+    #[error(
+        "Indeks batch tidak urut secara sekuensial (diharapkan {expected}, diterima {actual})"
+    )]
     NonSequentialBatch { expected: u64, actual: u64 },
 
     #[error("Rentang blok batch tidak valid (start_block {start_block} > end_block {end_block})")]
@@ -284,7 +288,10 @@ impl L2SettlementBridgeClient {
     }
 
     /// Memverifikasi transisi state sekaligus memeriksa integritas DA framing L2BatchFrame
-    pub fn verify_state_transition_with_da(&mut self, raw_batch_frame: &[u8]) -> Result<(), BridgeError> {
+    pub fn verify_state_transition_with_da(
+        &mut self,
+        raw_batch_frame: &[u8],
+    ) -> Result<(), BridgeError> {
         let frame = L2BatchFrame::decode(raw_batch_frame)?;
         let calldata_hash = frame.compute_da_hash();
 
@@ -299,7 +306,11 @@ impl L2SettlementBridgeClient {
     }
 
     /// Memproses penarikan dana dari L2 kembali ke L1 (Withdrawal Sederhana)
-    pub fn process_withdrawal(&mut self, amount: Quantum, proof_valid: bool) -> Result<(), BridgeError> {
+    pub fn process_withdrawal(
+        &mut self,
+        amount: Quantum,
+        proof_valid: bool,
+    ) -> Result<(), BridgeError> {
         if !proof_valid {
             return Err(BridgeError::InvalidMerkleProof);
         }
@@ -386,7 +397,10 @@ impl L2SettlementBridgeClient {
         let call = BridgeCall::decode(calldata)?;
 
         match call {
-            BridgeCall::Deposit { recipient_l2, amount } => {
+            BridgeCall::Deposit {
+                recipient_l2,
+                amount,
+            } => {
                 self.process_deposit_full(self.contract_address, recipient_l2, amount)?;
                 Ok(vec![STATUS_SUCCESS])
             }
@@ -477,7 +491,9 @@ mod tests {
         assert_eq!(bridge.events.len(), 2);
 
         // 3. Withdraw 10 AUR dengan bukti sah
-        bridge.process_withdrawal(Quantum::new(1_000_000_000), true).unwrap();
+        bridge
+            .process_withdrawal(Quantum::new(1_000_000_000), true)
+            .unwrap();
         assert_eq!(bridge.vault_balance.as_u128(), 4_000_000_000);
         assert_eq!(bridge.events.len(), 3);
     }
@@ -529,7 +545,9 @@ mod tests {
         bridge.process_deposit(Quantum::new(1_000_000)).unwrap(); // Hanya 0.01 AUR
 
         // Coba withdraw 10 AUR
-        let err = bridge.process_withdrawal(Quantum::new(1_000_000_000), true).unwrap_err();
+        let err = bridge
+            .process_withdrawal(Quantum::new(1_000_000_000), true)
+            .unwrap_err();
         assert_eq!(err, BridgeError::InsufficientVaultBalance);
         assert_eq!(err.status_code(), STATUS_ERR_INSUFFICIENT_VAULT);
     }
@@ -591,7 +609,10 @@ mod tests {
 
         assert_eq!(bridge.latest_state_root, new_root);
         assert_eq!(bridge.latest_batch_index, 1);
-        assert_eq!(bridge.da_commitments.get(&1), Some(&frame.compute_da_hash()));
+        assert_eq!(
+            bridge.da_commitments.get(&1),
+            Some(&frame.compute_da_hash())
+        );
     }
 
     #[test]
@@ -605,7 +626,9 @@ mod tests {
             amount: Quantum::new(2_000_000_000),
         };
         let calldata = deposit_call.encode();
-        let res = bridge.dispatch_calldata(&calldata).expect("Dispatch deposit gagal");
+        let res = bridge
+            .dispatch_calldata(&calldata)
+            .expect("Dispatch deposit gagal");
         assert_eq!(res, vec![STATUS_SUCCESS]);
         assert_eq!(bridge.vault_balance.as_u128(), 2_000_000_000);
         assert_eq!(bridge.deposit_nonce, 1);
@@ -621,7 +644,9 @@ mod tests {
             calldata_hash: Hash256::ZERO,
         };
         let calldata_tx = transition_call.encode();
-        let res_tx = bridge.dispatch_calldata(&calldata_tx).expect("Dispatch state transition gagal");
+        let res_tx = bridge
+            .dispatch_calldata(&calldata_tx)
+            .expect("Dispatch state transition gagal");
         assert_eq!(res_tx, vec![STATUS_SUCCESS]);
         assert_eq!(bridge.latest_state_root, new_root);
         assert_eq!(bridge.latest_batch_index, 1);
@@ -635,4 +660,3 @@ mod tests {
         assert_eq!(bridge.forced_tx_queue.len(), 1);
     }
 }
-

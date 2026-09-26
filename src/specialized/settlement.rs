@@ -4,16 +4,19 @@
 //! AUR-L3-ARCH-001 (L1 Sovereignty Root), AUR-L3-ARCH-003 (Zero Float Mandate),
 //! dan AUR-L3-SEC-002 (Settlement Verification Mandate).
 
-use thiserror::Error;
 use crate::core::{Hash256, Signature};
 use crate::crypto::Keypair;
 use crate::specialized::types::{DomainId, L3Block, L3Checkpoint};
+use thiserror::Error;
 
 /// Kesalahan Operasi Settlement & Checkpointing L3
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum L3SettlementError {
     #[error("Domain ID tidak cocok: diharapkan {expected}, aktual {actual}")]
-    DomainMismatch { expected: DomainId, actual: DomainId },
+    DomainMismatch {
+        expected: DomainId,
+        actual: DomainId,
+    },
 
     #[error("ID Checkpoint tidak berurutan: diharapkan {expected}, aktual {actual}")]
     NonSequentialCheckpointId { expected: u64, actual: u64 },
@@ -136,9 +139,16 @@ impl L3CheckpointGenerator {
 
         let start_block = self.pending_blocks.first().map_or(0, |b| b.block_number);
         let end_block = self.pending_blocks.last().map_or(0, |b| b.block_number);
-        let new_state_root = self.pending_blocks.last().map_or(Hash256::ZERO, |b| b.state_root);
+        let new_state_root = self
+            .pending_blocks
+            .last()
+            .map_or(Hash256::ZERO, |b| b.state_root);
 
-        let total_txs: u64 = self.pending_blocks.iter().map(|b| b.transactions.len() as u64).sum();
+        let total_txs: u64 = self
+            .pending_blocks
+            .iter()
+            .map(|b| b.transactions.len() as u64)
+            .sum();
 
         let mut checkpoint = L3Checkpoint::new(
             self.domain_id,
@@ -250,7 +260,8 @@ mod tests {
         let pk = kp.public_key_bytes();
 
         let initial_root = Hash256::from_bytes([0xaa; 32]);
-        let mut generator = L3CheckpointGenerator::new(domain_id, 2, initial_state_root(initial_root));
+        let mut generator =
+            L3CheckpointGenerator::new(domain_id, 2, initial_state_root(initial_root));
 
         let block1 = L3Block::new(
             domain_id,
@@ -326,7 +337,9 @@ mod tests {
         );
         cp1.signature = kp.sign(&cp1.signing_preimage());
 
-        client.ingest_checkpoint(cp1).expect("Ingest CP 1 harus berhasil");
+        client
+            .ingest_checkpoint(cp1)
+            .expect("Ingest CP 1 harus berhasil");
         assert_eq!(client.latest_checkpoint_id, 1);
         assert_eq!(client.latest_settled_root, Hash256::from_bytes([0x20; 32]));
 
@@ -369,6 +382,9 @@ mod tests {
         bad_cp.signature = kp.sign(&bad_cp.signing_preimage());
 
         let res = client.ingest_checkpoint(bad_cp);
-        assert!(matches!(res, Err(L3SettlementError::NonSequentialCheckpointId { .. })));
+        assert!(matches!(
+            res,
+            Err(L3SettlementError::NonSequentialCheckpointId { .. })
+        ));
     }
 }

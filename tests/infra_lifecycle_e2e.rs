@@ -6,14 +6,13 @@
 //! kanal pembayaran streaming off-chain, grid penyimpanan terdistribusi Blake3,
 //! komputasi zero-knowledge, dan injeksi kegagalan Bizantium dengan pemotongan jaminan (slashing).
 
+use aurion::infrastructure::types::NodeType;
 use aurion::infrastructure::{
     compute_node_id, AgentExecutive, AgentMandate, ArbitrationEngine, DelegatedAction,
     FraudChallenge, NodeLifecycleStatus, NodeRegistrationRequest, NodeRegistry,
     OffChainBalanceProof, ProofOfRetrievability, StorageGrid, StorageManifest,
-    StreamingPaymentEngine, ViolationType, L5_MIN_NODE_COLLATERAL_QUANTA,
-    L5_UNBONDING_DELAY_SLOTS,
+    StreamingPaymentEngine, ViolationType, L5_MIN_NODE_COLLATERAL_QUANTA, L5_UNBONDING_DELAY_SLOTS,
 };
-use aurion::infrastructure::types::NodeType;
 use aurion::primitives::core::{Address, Quantum};
 use ed25519_dalek::{Signer, SigningKey};
 
@@ -51,26 +50,52 @@ fn test_infra_lifecycle_phase_transitions() {
     };
 
     // Phase 1: Registration -> ActiveNode
-    let node_id = registry.register_node(req, 1_000).expect("Registration must succeed");
-    assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::ActiveNode);
+    let node_id = registry
+        .register_node(req, 1_000)
+        .expect("Registration must succeed");
+    assert_eq!(
+        registry.get_node(&node_id).unwrap().status,
+        NodeLifecycleStatus::ActiveNode
+    );
 
     // Phase 2: Serving
-    registry.update_status(&node_id, NodeLifecycleStatus::Serving, 1_050).unwrap();
-    assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Serving);
+    registry
+        .update_status(&node_id, NodeLifecycleStatus::Serving, 1_050)
+        .unwrap();
+    assert_eq!(
+        registry.get_node(&node_id).unwrap().status,
+        NodeLifecycleStatus::Serving
+    );
 
     // Phase 3: Auditing
-    registry.update_status(&node_id, NodeLifecycleStatus::Auditing, 1_080).unwrap();
-    assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Auditing);
+    registry
+        .update_status(&node_id, NodeLifecycleStatus::Auditing, 1_080)
+        .unwrap();
+    assert_eq!(
+        registry.get_node(&node_id).unwrap().status,
+        NodeLifecycleStatus::Auditing
+    );
 
     // Phase 4: Challenged
-    registry.update_status(&node_id, NodeLifecycleStatus::Challenged, 1_100).unwrap();
-    assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Challenged);
+    registry
+        .update_status(&node_id, NodeLifecycleStatus::Challenged, 1_100)
+        .unwrap();
+    assert_eq!(
+        registry.get_node(&node_id).unwrap().status,
+        NodeLifecycleStatus::Challenged
+    );
 
     // Phase 5: Slashed
     let (slashed_quanta, remaining_collateral) = registry.slash_node(&node_id, 2_500).unwrap(); // 25%
     assert_eq!(slashed_quanta, q(L5_MIN_NODE_COLLATERAL_QUANTA * 25 / 100));
-    assert_eq!(remaining_collateral, q(L5_MIN_NODE_COLLATERAL_QUANTA * 75 / 100));
-    assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Slashed);
+    assert_eq!(
+        remaining_collateral,
+        q(L5_MIN_NODE_COLLATERAL_QUANTA * 75 / 100)
+    );
+    assert_eq!(
+        registry.get_node(&node_id).unwrap().status,
+        NodeLifecycleStatus::Slashed
+    );
 
     // Node 2 tests orderly Unbonding -> Retired lifecycle
     let (sk2, pk2) = sample_keypair(0x20);
@@ -91,12 +116,20 @@ fn test_infra_lifecycle_phase_transitions() {
 
     // Phase 6: Unbonding
     registry.initiate_unbonding(&node_id2, 2_100).unwrap();
-    assert_eq!(registry.get_node(&node_id2).unwrap().status, NodeLifecycleStatus::Unbonding);
+    assert_eq!(
+        registry.get_node(&node_id2).unwrap().status,
+        NodeLifecycleStatus::Unbonding
+    );
 
     // Phase 7: Retired
-    let returned = registry.complete_unbonding(&node_id2, 2_100 + L5_UNBONDING_DELAY_SLOTS).unwrap();
+    let returned = registry
+        .complete_unbonding(&node_id2, 2_100 + L5_UNBONDING_DELAY_SLOTS)
+        .unwrap();
     assert_eq!(returned, collateral);
-    assert_eq!(registry.get_node(&node_id2).unwrap().status, NodeLifecycleStatus::Retired);
+    assert_eq!(
+        registry.get_node(&node_id2).unwrap().status,
+        NodeLifecycleStatus::Retired
+    );
     assert!(registry.initiate_unbonding(&node_id2, 4_000).is_err());
 }
 
@@ -139,12 +172,19 @@ fn test_byzantine_fault_injection_and_slashing_adjudication() {
         10_050,
     );
 
-    let cid = arb.file_challenge(challenge, &mut registry, 10_050).unwrap();
-    let verdict = arb.adjudicate_challenge(&cid, true, &mut registry, 10_100).unwrap();
+    let cid = arb
+        .file_challenge(challenge, &mut registry, 10_050)
+        .unwrap();
+    let verdict = arb
+        .adjudicate_challenge(&cid, true, &mut registry, 10_100)
+        .unwrap();
 
     assert!(verdict.convicted);
     assert_eq!(verdict.slashed_quanta, q(L5_MIN_NODE_COLLATERAL_QUANTA / 2)); // 50%
-    assert_eq!(verdict.whistleblower_bounty, q(L5_MIN_NODE_COLLATERAL_QUANTA / 4));
+    assert_eq!(
+        verdict.whistleblower_bounty,
+        q(L5_MIN_NODE_COLLATERAL_QUANTA / 4)
+    );
     assert_eq!(verdict.burned_quanta, q(L5_MIN_NODE_COLLATERAL_QUANTA / 4));
     assert_eq!(arb.total_burned(), verdict.burned_quanta);
 
@@ -176,8 +216,12 @@ fn test_byzantine_fault_injection_and_slashing_adjudication() {
         b"DA_WITHHOLDING_PROOF",
         10_250,
     );
-    let cid2 = arb.file_challenge(challenge2, &mut registry, 10_250).unwrap();
-    let verdict2 = arb.adjudicate_challenge(&cid2, true, &mut registry, 10_300).unwrap();
+    let cid2 = arb
+        .file_challenge(challenge2, &mut registry, 10_250)
+        .unwrap();
+    let verdict2 = arb
+        .adjudicate_challenge(&cid2, true, &mut registry, 10_300)
+        .unwrap();
 
     assert!(verdict2.convicted);
     assert_eq!(verdict2.slashed_quanta, collateral); // 100%
@@ -208,8 +252,12 @@ fn test_byzantine_fault_injection_and_slashing_adjudication() {
         b"BOGUS_CHALLENGE",
         10_450,
     );
-    let cid3 = arb.file_challenge(challenge3, &mut registry, 10_450).unwrap();
-    let verdict3 = arb.adjudicate_challenge(&cid3, false, &mut registry, 10_500).unwrap();
+    let cid3 = arb
+        .file_challenge(challenge3, &mut registry, 10_450)
+        .unwrap();
+    let verdict3 = arb
+        .adjudicate_challenge(&cid3, false, &mut registry, 10_500)
+        .unwrap();
 
     assert!(!verdict3.convicted);
     assert_eq!(verdict3.slashed_quanta, q(0));
@@ -248,7 +296,9 @@ fn test_integrated_edge_ecosystem_interaction() {
     let host_addr = Address::from_bytes([0x55; 32]);
 
     let deposit = q(500_000);
-    let channel_id = payments.open_channel(reader_addr, reader_pk, host_addr, deposit).unwrap();
+    let channel_id = payments
+        .open_channel(reader_addr, reader_pk, host_addr, deposit)
+        .unwrap();
 
     // Stream payment for 3 chunks retrieved @ 25,000 Quanta each = 75,000 Quanta
     let fee = q(75_000);
@@ -278,13 +328,8 @@ fn test_integrated_edge_ecosystem_interaction() {
     let cap = q(100_000);
     let valid_until = 50_000;
 
-    let digest = AgentMandate::compute_mandate_digest(
-        &user_addr,
-        &agent_pk,
-        &allowed_ops,
-        cap,
-        valid_until,
-    );
+    let digest =
+        AgentMandate::compute_mandate_digest(&user_addr, &agent_pk, &allowed_ops, cap, valid_until);
     let principal_sig = user_sk.sign(&digest).to_bytes();
 
     let mid = [0x77; 32];
@@ -317,7 +362,8 @@ fn test_integrated_edge_ecosystem_interaction() {
         action_nonce: 1,
         agent_signature: agent_sk.sign(&action_digest).to_bytes(),
     };
-    exec.execute_delegated_action(&renew_action, 40_000).unwrap();
+    exec.execute_delegated_action(&renew_action, 40_000)
+        .unwrap();
 
     let m_info = exec.get_mandate(&mid).unwrap();
     assert_eq!(m_info.cumulative_spent_quanta, q(30_000));

@@ -18,7 +18,9 @@ impl OutputFormat {
         let mut i = 0;
 
         while i < args.len() {
-            if (args[i] == "--output" || args[i] == "-o" || args[i] == "--format") && i + 1 < args.len() {
+            if (args[i] == "--output" || args[i] == "-o" || args[i] == "--format")
+                && i + 1 < args.len()
+            {
                 if args[i + 1].eq_ignore_ascii_case("json") {
                     format = Self::Json;
                 }
@@ -50,9 +52,8 @@ impl OutputFormat {
     pub fn print<T: Serialize>(&self, data: &T, text_fn: impl FnOnce()) {
         match self {
             Self::Json => {
-                let s = serde_json::to_string_pretty(data).unwrap_or_else(|e| {
-                    format!("{{\"status\":\"error\",\"message\":\"{}\"}}", e)
-                });
+                let s = serde_json::to_string_pretty(data)
+                    .unwrap_or_else(|e| format!("{{\"status\":\"error\",\"message\":\"{}\"}}", e));
                 println!("{s}");
             }
             Self::Text => {

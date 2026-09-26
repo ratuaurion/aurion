@@ -39,10 +39,7 @@ fn test_bft_block_reward_and_fee_distribution() {
     let treasury_key = Keypair::generate();
     let treasury_addr = derive_address_from_pubkey(&treasury_key.public_key_bytes());
 
-    let dev_key = Keypair::generate();
-    let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
-
-    let genesis = build_genesis(treasury_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(treasury_addr, val_entries.clone());
     let validator_set = ValidatorSet::new(val_entries);
     let mut ledger = ChainLedger::from_genesis(genesis);
 
@@ -74,9 +71,11 @@ fn test_bft_block_reward_and_fee_distribution() {
         let block_hash = candidate_block.hash();
         let mut precommits = Vec::new();
         for (idx, key) in val_keys.iter().enumerate().take(3) {
-            let prevote = Vote::new_signed(key, PHASE_PREVOTE, 1, 0, block_hash, idx as u32).unwrap();
+            let prevote =
+                Vote::new_signed(key, PHASE_PREVOTE, 1, 0, block_hash, idx as u32).unwrap();
             prevote.verify(&validator_set).unwrap();
-            let precommit = Vote::new_signed(key, PHASE_PRECOMMIT, 1, 0, block_hash, idx as u32).unwrap();
+            let precommit =
+                Vote::new_signed(key, PHASE_PRECOMMIT, 1, 0, block_hash, idx as u32).unwrap();
             precommit.verify(&validator_set).unwrap();
             precommits.push(precommit);
         }
@@ -85,9 +84,15 @@ fn test_bft_block_reward_and_fee_distribution() {
             .create_commit_certificate(&validator_set, block_hash, 1, 0, precommits)
             .unwrap();
 
-        let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
+        let block = Block::new(
+            candidate_block.header,
+            candidate_block.transactions,
+            Some(cert),
+        );
 
-        ledger.apply_block(block, &proposer_addr).expect("Block 1 apply failed");
+        ledger
+            .apply_block(block, &proposer_addr)
+            .expect("Block 1 apply failed");
 
         // Verifikasi saldo proposer bertambah tepat 1 AUR
         assert_eq!(
@@ -157,9 +162,11 @@ fn test_bft_block_reward_and_fee_distribution() {
         let block_hash = candidate_block.hash();
         let mut precommits = Vec::new();
         for (idx, key) in val_keys.iter().enumerate().take(3) {
-            let prevote = Vote::new_signed(key, PHASE_PREVOTE, 2, 0, block_hash, idx as u32).unwrap();
+            let prevote =
+                Vote::new_signed(key, PHASE_PREVOTE, 2, 0, block_hash, idx as u32).unwrap();
             prevote.verify(&validator_set).unwrap();
-            let precommit = Vote::new_signed(key, PHASE_PRECOMMIT, 2, 0, block_hash, idx as u32).unwrap();
+            let precommit =
+                Vote::new_signed(key, PHASE_PRECOMMIT, 2, 0, block_hash, idx as u32).unwrap();
             precommit.verify(&validator_set).unwrap();
             precommits.push(precommit);
         }
@@ -168,9 +175,15 @@ fn test_bft_block_reward_and_fee_distribution() {
             .create_commit_certificate(&validator_set, block_hash, 2, 0, precommits)
             .unwrap();
 
-        let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
+        let block = Block::new(
+            candidate_block.header,
+            candidate_block.transactions,
+            Some(cert),
+        );
 
-        ledger.apply_block(block, &proposer_addr).expect("Block 2 apply failed");
+        ledger
+            .apply_block(block, &proposer_addr)
+            .expect("Block 2 apply failed");
 
         // Saldo Proposer:
         // Awal: 1 AUR (dari Blok 1)
@@ -194,10 +207,7 @@ fn test_bft_block_reward_and_fee_distribution() {
         );
 
         // Total Burned: 0 AUR (0% Burn)
-        assert_eq!(
-            ledger.monetary.total_burned,
-            Quantum::ZERO
-        );
+        assert_eq!(ledger.monetary.total_burned, Quantum::ZERO);
 
         // Total Issued: Genesis (66.000.000) + Blok 1 (1) + Blok 2 (1) = 66.000.002 AUR
         assert_eq!(
@@ -221,6 +231,12 @@ fn test_bft_block_reward_invariants() {
     // Blok >= 1: Hadiah tetap R = 1 AUR (1.000.000.000 Quantum)
     assert_eq!(calculate_block_reward(1), Quantum::from_aur(1).unwrap());
     assert_eq!(calculate_block_reward(100), Quantum::from_aur(1).unwrap());
-    assert_eq!(calculate_block_reward(2_145_000), Quantum::from_aur(1).unwrap());
-    assert_eq!(calculate_block_reward(10_000_000), Quantum::from_aur(1).unwrap());
+    assert_eq!(
+        calculate_block_reward(2_145_000),
+        Quantum::from_aur(1).unwrap()
+    );
+    assert_eq!(
+        calculate_block_reward(10_000_000),
+        Quantum::from_aur(1).unwrap()
+    );
 }

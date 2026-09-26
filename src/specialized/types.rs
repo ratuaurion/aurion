@@ -43,13 +43,22 @@ impl fmt::Display for L3CodecError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnexpectedEof { expected, found } => {
-                write!(f, "Data biner L3 tidak lengkap: butuh {expected} byte, hanya ada {found} byte")
+                write!(
+                    f,
+                    "Data biner L3 tidak lengkap: butuh {expected} byte, hanya ada {found} byte"
+                )
             }
             Self::PayloadTooLarge { max, actual } => {
-                write!(f, "Payload L3 melebihi batas maksimum {max} byte: aktual {actual} byte")
+                write!(
+                    f,
+                    "Payload L3 melebihi batas maksimum {max} byte: aktual {actual} byte"
+                )
             }
             Self::InvalidSecurityModel(v) => {
-                write!(f, "Security model L3 tidak valid: {v} (harus bernilai 1..=5)")
+                write!(
+                    f,
+                    "Security model L3 tidak valid: {v} (harus bernilai 1..=5)"
+                )
             }
             Self::InvalidFormat(msg) => write!(f, "Format data L3 tidak valid: {msg}"),
         }
@@ -533,7 +542,10 @@ impl L3Block {
         if transactions.is_empty() {
             return Hash256::ZERO;
         }
-        let mut hashes: Vec<Hash256> = transactions.iter().map(L3Transaction::compute_hash).collect();
+        let mut hashes: Vec<Hash256> = transactions
+            .iter()
+            .map(L3Transaction::compute_hash)
+            .collect();
         while hashes.len() > 1 {
             let mut next = Vec::with_capacity(hashes.len().div_ceil(2));
             for chunk in hashes.chunks(2) {
@@ -557,7 +569,8 @@ impl L3Block {
     /// Mengodekan blok L3 ke format biner kanonikal Big-Endian
     #[must_use]
     pub fn encode_canonical(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(L3_BLOCK_HEADER_SIZE + self.transactions.len() * L3_TX_BASE_SIZE);
+        let mut buf =
+            Vec::with_capacity(L3_BLOCK_HEADER_SIZE + self.transactions.len() * L3_TX_BASE_SIZE);
         buf.extend_from_slice(self.domain_id.as_bytes());
         buf.extend_from_slice(&self.block_number.to_be_bytes());
         buf.extend_from_slice(self.previous_block_hash.as_bytes());
@@ -717,7 +730,8 @@ impl L3Checkpoint {
     /// Konstruksi data signing preimage yang ditandatangani sequencer/komite L3
     #[must_use]
     pub fn signing_preimage(&self) -> Vec<u8> {
-        let mut data = Vec::with_capacity(32 + 32 + 8 + 8 + 8 + 32 + 32 + 8 + self.proof_data.len());
+        let mut data =
+            Vec::with_capacity(32 + 32 + 8 + 8 + 8 + 32 + 32 + 8 + self.proof_data.len());
         data.extend_from_slice(DST_L3_CHECKPOINT.as_bytes());
         data.extend_from_slice(self.domain_id.as_bytes());
         data.extend_from_slice(&self.checkpoint_id.to_be_bytes());
@@ -893,14 +907,7 @@ mod tests {
         let sig = kp.sign(&preimage);
 
         let tx = L3Transaction::new(
-            domain_id,
-            sender,
-            recipient,
-            amount,
-            fee,
-            nonce,
-            sig,
-            payload,
+            domain_id, sender, recipient, amount, fee, nonce, sig, payload,
         );
 
         assert!(tx.verify_signature(&pk));
@@ -1003,7 +1010,9 @@ mod tests {
         let encoded = unsigned_cp.encode_canonical();
         let decoded = L3Checkpoint::decode_canonical(&encoded).unwrap();
         assert_eq!(unsigned_cp, decoded);
-        assert_eq!(unsigned_cp.compute_checkpoint_hash(), decoded.compute_checkpoint_hash());
+        assert_eq!(
+            unsigned_cp.compute_checkpoint_hash(),
+            decoded.compute_checkpoint_hash()
+        );
     }
 }
-

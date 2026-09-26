@@ -3,10 +3,10 @@
 //! Kanal Pembayaran Streaming Mikro (State Channels) L5 (REQ-L5-07).
 //! Invariant: AUR-L5-PREC-001 (Zero-Float Quantum), AUR-L5-PREC-002 (Exact Balance Conservation).
 
-use std::collections::BTreeMap;
+use crate::primitives::core::{Address, Quantum};
 use blake3::Hasher;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use crate::primitives::core::{Address, Quantum};
+use std::collections::BTreeMap;
 
 /// Pengenal Unik Kanal Pembayaran Streaming.
 pub type PaymentChannelId = [u8; 32];
@@ -43,11 +43,8 @@ impl OffChainBalanceProof {
     }
 
     pub fn verify_signature(&self, sender_pubkey: &[u8; 32]) -> bool {
-        let digest = Self::compute_digest(
-            &self.channel_id,
-            self.cumulative_amount_quanta,
-            self.nonce,
-        );
+        let digest =
+            Self::compute_digest(&self.channel_id, self.cumulative_amount_quanta, self.nonce);
 
         let vk = match VerifyingKey::from_bytes(sender_pubkey) {
             Ok(k) => k,

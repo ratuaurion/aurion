@@ -20,10 +20,9 @@ pub struct GenesisInitialization {
 }
 
 /// Bangun state awal σ0 dan blok genesis kanonikal.
-/// Mengalokasikan 100% pasokan (66.000.000 AUR = 66.000.000.000.000.000 Q) ke Master Treasury Account.
+/// Model Single Treasury: 100% pasokan genesis dialokasikan ke satu akun Master Treasury.
 pub fn build_genesis(
     treasury_addr: Address,
-    developer_addr: Address,
     validators: Vec<ValidatorEntry>,
 ) -> GenesisInitialization {
     let mut accounts = HashMap::new();
@@ -33,10 +32,6 @@ pub fn build_genesis(
         treasury_addr,
         Account::new(Quantum::new(MASTER_TREASURY_ALLOCATION_QUANTA), 0),
     );
-
-    if developer_addr != treasury_addr {
-        accounts.insert(developer_addr, Account::new(Quantum::ZERO, 0));
-    }
 
     let monetary = MonetaryState::new(
         Quantum::new(MASTER_TREASURY_ALLOCATION_QUANTA),

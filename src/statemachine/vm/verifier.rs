@@ -1,9 +1,9 @@
 //! Verifier Statis Bytecode Aurion VM (AVM).
 //! Mematuhi Invariant AUR-VM-005 (Pre-Deployment Bytecode Verification).
 
+use crate::vm::opcode::{Opcode, OpcodeError};
 use std::collections::HashSet;
 use thiserror::Error;
-use crate::vm::opcode::{Opcode, OpcodeError};
 
 pub const MAX_BYTECODE_SIZE: usize = 24 * 1024; // 24 KB
 
@@ -16,7 +16,11 @@ pub enum VerifierError {
     #[error("Invalid opcode at PC {pc}: {source}")]
     InvalidOpcode { pc: usize, source: OpcodeError },
     #[error("Truncated PUSH data at PC {pc}: expected {expected} bytes, got {available}")]
-    TruncatedPush { pc: usize, expected: usize, available: usize },
+    TruncatedPush {
+        pc: usize,
+        expected: usize,
+        available: usize,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

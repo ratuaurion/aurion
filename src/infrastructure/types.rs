@@ -4,8 +4,8 @@
 //! Mematuhi Dokumen Aturan Aplikasi 20 (20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md).
 //! Invariant: AUR-L5-ARCH-001 (Non-Consensus), AUR-L5-PREC-001 (Zero-Float Quantum), AUR-L5-DATA-001 (Blake3).
 
-use blake3::Hasher;
 use crate::primitives::core::Quantum;
+use blake3::Hasher;
 
 /// Ukuran chunk kanonikal untuk content-addressed storage (64 KB).
 pub const L5_STORAGE_CHUNK_BYTES: usize = 65_536;

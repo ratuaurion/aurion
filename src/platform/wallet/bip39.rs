@@ -16,7 +16,9 @@ pub enum MnemonicError {
 impl std::fmt::Display for MnemonicError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidWordCount(n) => write!(f, "Jumlah kata harus tepat 24 kata, ditemukan: {n}"),
+            Self::InvalidWordCount(n) => {
+                write!(f, "Jumlah kata harus tepat 24 kata, ditemukan: {n}")
+            }
             Self::UnknownWord(w) => write!(f, "Kata tidak dikenal dalam kamus BIP-39: '{w}'"),
             Self::ChecksumMismatch => write!(f, "Checksum mnemonik tidak cocok"),
         }

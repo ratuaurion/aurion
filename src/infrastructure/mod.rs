@@ -12,42 +12,38 @@
 //! - AUR-L5-SEC-001: Byzantine Infrastructure Resiliency (Toleransi kesalahan Bizantium >= 51%).
 //! - AUR-L5-SEC-002: Cryptographic Agent Mandate (Batas pengeluaran dana & waktu kedaluwarsa agen AI).
 
-pub mod types;
-pub mod node;
-pub mod compute;
-pub mod storage;
-pub mod da;
-pub mod indexing;
-pub mod identity;
 pub mod agent;
-pub mod payment;
+pub mod compute;
+pub mod da;
+pub mod identity;
+pub mod indexing;
 pub mod m2m;
+pub mod node;
+pub mod payment;
 pub mod relay;
 pub mod slashing;
+pub mod storage;
+pub mod types;
 
 // Re-export Kanonikal Simbol Utama L5
-pub use types::{
-    compute_node_id, InfrastructureNodeId, NodeLifecycleStatus, NodeMetadata, NodeType,
-    L5_CHALLENGE_WINDOW_SLOTS, L5_DEFAULT_MAX_AGENT_CAP_QUANTA, L5_MAX_STREAMING_CHANNELS,
-    L5_MIN_NODE_COLLATERAL_QUANTA, L5_STORAGE_CHUNK_BYTES, L5_UNBONDING_DELAY_SLOTS,
-};
-pub use node::{NodeRegistrationRequest, NodeRegistry, UnbondingRecord};
+pub use agent::{AgentExecutive, AgentMandate, DelegatedAction, MandateId};
 pub use compute::{ComputeEngine, ComputeJob, ComputeReceipt, ComputeTaskId, ZkComputeAttestation};
+pub use da::{DasSample, DasSamplingClient, DataAvailabilityMatrix, DataAvailabilityRoot};
+pub use identity::{ReputationEngine, SovereignDid, VerifiableCredential};
+pub use indexing::{IndexingMesh, IndexingQuery, QueryAttestation, QueryId};
+pub use m2m::{DeviceId, M2MClearingHouse, M2MContract, MeteredUsageReceipt, ServiceMetric};
+pub use node::{NodeRegistrationRequest, NodeRegistry, UnbondingRecord};
+pub use payment::{
+    ChannelStatus, OffChainBalanceProof, PaymentChannelId, StreamingChannel, StreamingPaymentEngine,
+};
+pub use relay::{AntiDdosShield, DdosFilterDecision, EdgeRelayMesh, RelayPeer};
+pub use slashing::{ArbitrationEngine, ArbitrationVerdict, FraudChallenge, ViolationType};
 pub use storage::{
     compute_chunk_id, hash_storage_branch, ChunkId, ProofOfRetrievability, StorageGrid,
     StorageManifest,
 };
-pub use da::{
-    DasSample, DasSamplingClient, DataAvailabilityMatrix, DataAvailabilityRoot,
-};
-pub use indexing::{IndexingMesh, IndexingQuery, QueryAttestation, QueryId};
-pub use identity::{ReputationEngine, SovereignDid, VerifiableCredential};
-pub use agent::{AgentExecutive, AgentMandate, DelegatedAction, MandateId};
-pub use payment::{
-    ChannelStatus, OffChainBalanceProof, PaymentChannelId, StreamingChannel, StreamingPaymentEngine,
-};
-pub use m2m::{DeviceId, M2MContract, M2MClearingHouse, MeteredUsageReceipt, ServiceMetric};
-pub use relay::{AntiDdosShield, DdosFilterDecision, EdgeRelayMesh, RelayPeer};
-pub use slashing::{
-    ArbitrationEngine, ArbitrationVerdict, FraudChallenge, ViolationType,
+pub use types::{
+    compute_node_id, InfrastructureNodeId, NodeLifecycleStatus, NodeMetadata, NodeType,
+    L5_CHALLENGE_WINDOW_SLOTS, L5_DEFAULT_MAX_AGENT_CAP_QUANTA, L5_MAX_STREAMING_CHANNELS,
+    L5_MIN_NODE_COLLATERAL_QUANTA, L5_STORAGE_CHUNK_BYTES, L5_UNBONDING_DELAY_SLOTS,
 };

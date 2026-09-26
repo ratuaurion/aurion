@@ -39,7 +39,11 @@ fn call(rpc_url: &str, method: &str, params: &[&str]) -> Result<Value, RpcClient
         .to_socket_addrs()
         .map_err(|e| RpcClientError(format!("Gagal terhubung ke RPC node di {rpc_url}: {e}")))?
         .next()
-        .ok_or_else(|| RpcClientError(format!("Gagal terhubung ke RPC node di {rpc_url}: alamat tidak ditemukan")))?;
+        .ok_or_else(|| {
+            RpcClientError(format!(
+                "Gagal terhubung ke RPC node di {rpc_url}: alamat tidak ditemukan"
+            ))
+        })?;
     let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))
         .map_err(|e| RpcClientError(format!("Gagal terhubung ke RPC node di {rpc_url}: {e}")))?;
     stream
@@ -48,9 +52,8 @@ fn call(rpc_url: &str, method: &str, params: &[&str]) -> Result<Value, RpcClient
 
     let params_json = serde_json::to_string(params)
         .map_err(|e| RpcClientError(format!("Gagal menyusun parameter RPC: {e}")))?;
-    let request_body = format!(
-        r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":{params_json}}}"#
-    );
+    let request_body =
+        format!(r#"{{"jsonrpc":"2.0","id":1,"method":"{method}","params":{params_json}}}"#);
     let request = format!(
         "POST /rpc HTTP/1.1\r\nHost: {host}:{port}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{request_body}",
         request_body.len()
@@ -176,10 +179,8 @@ pub fn parse_account_value(value: &Value) -> Result<RpcAccount, RpcClientError> 
     };
     let code_hash = match value.get("code_hash") {
         Some(Value::String(s)) => {
-            let bytes =
-                hex::decode(s.trim_start_matches("0x")).map_err(|e| {
-                    RpcClientError(format!("RPC code_hash hex tidak valid: {e}"))
-                })?;
+            let bytes = hex::decode(s.trim_start_matches("0x"))
+                .map_err(|e| RpcClientError(format!("RPC code_hash hex tidak valid: {e}")))?;
             if bytes.len() != 32 {
                 return Err(RpcClientError(format!(
                     "RPC code_hash harus 32 byte, diterima {}",
@@ -312,7 +313,11 @@ fn parse_dry_run_value(
         Some(Value::String(s)) => s
             .parse::<u64>()
             .map_err(|_| RpcClientError(format!("aur_call gas_used tidak valid: {s}")))?,
-        _ => return Err(RpcClientError("aur_call tanpa field 'gas_used'".to_string())),
+        _ => {
+            return Err(RpcClientError(
+                "aur_call tanpa field 'gas_used'".to_string(),
+            ))
+        }
     };
     let return_data = match value.get("return_data") {
         Some(Value::String(s)) => hex::decode(s.trim_start_matches("0x")).unwrap_or_default(),
@@ -346,7 +351,10 @@ mod tests {
 
     #[test]
     fn parses_http_rpc_url() {
-        assert_eq!(parse_http_url("http://127.0.0.1:8545").unwrap(), ("127.0.0.1", 8545));
+        assert_eq!(
+            parse_http_url("http://127.0.0.1:8545").unwrap(),
+            ("127.0.0.1", 8545)
+        );
     }
 
     #[test]

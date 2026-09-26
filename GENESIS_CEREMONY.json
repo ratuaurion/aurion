@@ -3,27 +3,18 @@
   "protocol_version": 1,
   "chain_id": 1001,
   "timestamp": 1773532800,
-  "genesis_block_hash": "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4",
-  "state_root": "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4",
+  "genesis_block_hash": "42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a",
+  "state_root": "ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f",
   "hard_cap_aur": 66000000,
-  "initial_supply_aur": 23100000,
-  "creator_allocation_aur": 19800000,
-  "developer_allocation_aur": 3300000,
-  "creator_address_hex": "cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad",
-  "developer_address_hex": "708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc",
+  "initial_supply_aur": 66000000,
+  "master_treasury_allocation_aur": 66000000,
+  "master_treasury_address_hex": "cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad",
   "participants": [
     {
-      "role": "Creator",
-      "name": "Creator Sovereign Vault",
+      "role": "MasterTreasury",
+      "name": "Master Treasury Sovereign Vault",
       "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
       "address_hex": "cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad",
-      "voting_weight": 0
-    },
-    {
-      "role": "Developer",
-      "name": "Developer Core Research Vault",
-      "public_key_hex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-      "address_hex": "708ab607c168ebfed3fabb05f8308d8c70f56f7ada67b70dad7e1265a35a48fc",
       "voting_weight": 0
     },
     {
@@ -65,17 +56,10 @@
   ],
   "attestations": [
     {
-      "role": "Creator",
-      "participant_name": "Creator Sovereign Vault",
+      "role": "MasterTreasury",
+      "participant_name": "Master Treasury Sovereign Vault",
       "public_key_hex": "8a88e3dd7409f195fd52db2d3cba5d72ca6709bf1d94121bf3748801b40f6f5c",
-      "signature_hex": "c97a35323dbb24f34634687407864f8b12f20790727055f52820ddd2c7c044b4320b39a80a257dd260229c86dea354ee52cf58d7448c9765ed84f67f02b19201",
-      "signed_at": 1773532800
-    },
-    {
-      "role": "Developer",
-      "participant_name": "Developer Core Research Vault",
-      "public_key_hex": "8139770ea87d175f56a35466c34c7ecccb8d8a91b4ee37a25df60f5b8fc9b394",
-      "signature_hex": "49b61a664df01cab1169e3187d3bb966e0273c4f4a728024b8e366b6f21a3e297121044a230df4ed1867bd2028812f95fff67d4da2f122143b810b4d761b580d",
+      "signature_hex": "2e75baf21268060e767fa84d92602ad3d92c9f18035eb4132a78ea8825d1d549ce9e370c138b789c6ed5d7f6253a92a50771649350e329211a64a764a7810a09",
       "signed_at": 1773532800
     },
     {
@@ -84,7 +68,7 @@
       },
       "participant_name": "Genesis Validator 1 (Bootnode Alpha)",
       "public_key_hex": "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737",
-      "signature_hex": "442a8e341c6e73e42f42167c58f3ba2dfe44963c3b157828824c2488cfd2fac66366c47cf0b0392cd2a5408a5ee4491947b5b63c2e1eea7b4e8576fcc427d405",
+      "signature_hex": "4decd8c80ee2313aea495dffd9e3cc72d4e5a1bb622087bc1859699274ae631afe8d6ea1326e02344c4818cb6511ec2afb82a36c63a249de3df8d4e4a9714b03",
       "signed_at": 1773532800
     },
     {
@@ -93,7 +77,7 @@
       },
       "participant_name": "Genesis Validator 2 (Bootnode Beta)",
       "public_key_hex": "204040e364c10f2bec9c1fe500a1cd4c247c89d650a01ed7e82caba867877c21",
-      "signature_hex": "3131c4903c12f833d7abb57fed35d82104c71a9a1abc9d75d3eb0f084fb739f7f40255779cd404349b8d24e7657f69071713b92fd4286ae39caef935b895cd0b",
+      "signature_hex": "29b38c31c9cd6777886bfce3fe6973547521dc8efe13636de741602429ddcec1d8e063cbe8b222ac408d5752aee7a262fd562d3f7814cc1442ec6bc5dd937601",
       "signed_at": 1773532800
     },
     {
@@ -102,7 +86,7 @@
       },
       "participant_name": "Genesis Validator 3 (Bootnode Gamma)",
       "public_key_hex": "66cd608b928b88e50e0efeaa33faf1c43cefe07294b0b87e9fe0aba6a3cf7633",
-      "signature_hex": "efcdbe34c070463ca0846fccba8cb58e7e2274e5edf5a6d555b1b19a3406f8f837be38c5d097ca662027f09d6cec0e1d89fba217f2dde941d5feea12c0d36706",
+      "signature_hex": "8c77ed5705e3eae94ad0d5f5246b5e1a81fb65e86caa2346bae0f8254afa4549981cfb9d75c1ca455ca0f0e59091188219f6866ce869a38e06e50dc89ee5da06",
       "signed_at": 1773532800
     },
     {
@@ -111,7 +95,7 @@
       },
       "participant_name": "Genesis Validator 4 (Bootnode Delta)",
       "public_key_hex": "20828bf5c5bdcacb684863336c202fb5599da48be5596615742170705beca9f7",
-      "signature_hex": "ac4a0ed59adb16ba0e30e00df443ca58afc14dc474f4ca3ac2a126f119591ada924c2f51f58872b79d32d84d15c722b0fe39ceddd44488a97ef5f9a64c21e006",
+      "signature_hex": "f38ee6b8c0e271168b14b6e82bb648ffdf8756feee25706db18a597004065171696806c1b853f00ae178e14a718c7225bad9feeb2ee62c26aa6a66652c33ca06",
       "signed_at": 1773532800
     }
   ],
@@ -119,5 +103,5 @@
   "attested_validator_power": 1000000,
   "quorum_threshold": 666667,
   "quorum_achieved": true,
-  "ceremony_hash": "8edb15019ca0f0b83396804cb8d6fdd20c1a72a71d0844e17e7413a2adbe37ba"
+  "ceremony_hash": "a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880"
 }

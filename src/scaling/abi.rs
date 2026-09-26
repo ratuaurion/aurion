@@ -2,9 +2,9 @@
 //! Sesuai Dokumen Spesifikasi: docs/Application-Rules-Layer/application/aurion-l2-scaling/01-L2-SETTLEMENT-BRIDGE-ABI-SPECIFICATION.md
 //! Mematuhi Invariant: L2-SETTLE-001..005, AUR-ARCH-011 (#![forbid(unsafe_code)]), AUR-ARCH-012 (Zero-Float Quantum).
 
-use thiserror::Error;
 use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::blake3_hash;
+use thiserror::Error;
 
 /// Selector fungsi 4-byte kanonikal
 pub const SELECTOR_DEPOSIT: [u8; 4] = [0x5D, 0x43, 0x7F, 0x01];
@@ -17,7 +17,10 @@ pub const SELECTOR_ESCAPE_HATCH_CLAIM: [u8; 4] = [0x7C, 0x92, 0x46, 0xD3];
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum AbiError {
     #[error("Calldata terlalu pendek (diharapkan minimal {expected_at_least} byte, diterima {actual} byte)")]
-    CalldataTooShort { expected_at_least: usize, actual: usize },
+    CalldataTooShort {
+        expected_at_least: usize,
+        actual: usize,
+    },
 
     #[error("Selector fungsi tidak dikenal: {0:02X?}")]
     UnknownSelector([u8; 4]),
@@ -65,7 +68,10 @@ impl BridgeCall {
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         match self {
-            Self::Deposit { recipient_l2, amount } => {
+            Self::Deposit {
+                recipient_l2,
+                amount,
+            } => {
                 let mut buf = Vec::with_capacity(4 + 32 + 16);
                 buf.extend_from_slice(&SELECTOR_DEPOSIT);
                 buf.extend_from_slice(recipient_l2.as_bytes());
@@ -116,7 +122,11 @@ impl BridgeCall {
                 buf.extend_from_slice(payload);
                 buf
             }
-            Self::EscapeHatchClaim { recipient_l1, amount, proof } => {
+            Self::EscapeHatchClaim {
+                recipient_l1,
+                amount,
+                proof,
+            } => {
                 let mut buf = Vec::with_capacity(4 + 32 + 16 + 4 + proof.len());
                 buf.extend_from_slice(&SELECTOR_ESCAPE_HATCH_CLAIM);
                 buf.extend_from_slice(recipient_l1.as_bytes());
@@ -157,7 +167,10 @@ impl BridgeCall {
                 amount_bytes.copy_from_slice(&body[32..48]);
                 let amount = Quantum::new(u128::from_be_bytes(amount_bytes));
 
-                Ok(Self::Deposit { recipient_l2, amount })
+                Ok(Self::Deposit {
+                    recipient_l2,
+                    amount,
+                })
             }
             SELECTOR_VERIFY_STATE_TRANSITION => {
                 if body.len() != 120 {

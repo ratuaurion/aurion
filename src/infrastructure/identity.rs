@@ -3,11 +3,11 @@
 //! Infrastruktur Identitas Berdaulat Global (DID) & Mesin Reputasi Kriptografis (REQ-L5-06).
 //! Invariant: AUR-L5-ARCH-001 (Sovereign DIDs & Verifiable Credentials).
 
-use std::collections::BTreeMap;
-use blake3::Hasher;
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use super::types::InfrastructureNodeId;
 use crate::primitives::core::Address;
+use blake3::Hasher;
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use std::collections::BTreeMap;
 
 /// Format Pengenal Terdesentralisasi Berdaulat Aurion (`did:aurion:<identifier>`).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

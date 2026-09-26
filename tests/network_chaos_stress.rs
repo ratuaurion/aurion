@@ -87,15 +87,29 @@ fn test_bft_proposer_rotation_and_deterministic_convergence_5_blocks() {
         let mut total_weight = 0;
         for &idx in &voter_indices {
             // Fase Prevote
-            let prevote = Vote::new_signed(&val_keys[idx], PHASE_PREVOTE, height, 0, block_hash, idx as u32)
-                .expect("Prevote signing must succeed");
+            let prevote = Vote::new_signed(
+                &val_keys[idx],
+                PHASE_PREVOTE,
+                height,
+                0,
+                block_hash,
+                idx as u32,
+            )
+            .expect("Prevote signing must succeed");
             prevote
                 .verify(&node.ledger.lock().unwrap().validator_set)
                 .expect("Prevote must verify");
 
             // Fase Precommit
-            let precommit = Vote::new_signed(&val_keys[idx], PHASE_PRECOMMIT, height, 0, block_hash, idx as u32)
-                .expect("Precommit signing must succeed");
+            let precommit = Vote::new_signed(
+                &val_keys[idx],
+                PHASE_PRECOMMIT,
+                height,
+                0,
+                block_hash,
+                idx as u32,
+            )
+            .expect("Precommit signing must succeed");
             precommit
                 .verify(&node.ledger.lock().unwrap().validator_set)
                 .expect("Precommit must verify");
@@ -126,11 +140,7 @@ fn test_bft_proposer_rotation_and_deterministic_convergence_5_blocks() {
         assert_eq!(node.ledger.lock().unwrap().latest_height(), height);
 
         // Verifikasi saldo proposer bertambah hadiah blok kanonikal 1 AUR (10^9 Quanta)
-        let proposer_bal = node
-            .ledger
-            .lock()
-            .unwrap()
-            .get_balance(&proposer_addr);
+        let proposer_bal = node.ledger.lock().unwrap().get_balance(&proposer_addr);
         assert!(proposer_bal >= Quantum::new(QUANTA_PER_AUR));
     }
 
@@ -179,7 +189,7 @@ fn test_acid_redb_persistence_crash_recovery_after_multi_block_stress() {
     let expected_height = 3;
     let pre_crash_hash;
     let pre_crash_state_root;
-    let treasury_addr = keys.creator.derive_address();
+    let treasury_addr = keys.master_treasury.derive_address();
 
     // Sesi 1: Jalankan simpul dan buat 3 blok
     {
@@ -190,13 +200,8 @@ fn test_acid_redb_persistence_crash_recovery_after_multi_block_stress() {
             ..NodeConfig::new_validator(Vec::new())
         };
 
-        let node = AurionNode::new_with_store(
-            config,
-            genesis,
-            Some(val_keys[0].clone()),
-            Some(0),
-            store,
-        );
+        let node =
+            AurionNode::new_with_store(config, genesis, Some(val_keys[0].clone()), Some(0), store);
 
         let mut current_timestamp = GENESIS_TIMESTAMP;
 
@@ -222,8 +227,9 @@ fn test_acid_redb_persistence_crash_recovery_after_multi_block_stress() {
 
             let mut precommits = Vec::new();
             for (idx, key) in val_keys[0..3].iter().enumerate() {
-                let vote = Vote::new_signed(key, PHASE_PRECOMMIT, height, 0, block_hash, idx as u32)
-                    .expect("Vote signing must succeed");
+                let vote =
+                    Vote::new_signed(key, PHASE_PRECOMMIT, height, 0, block_hash, idx as u32)
+                        .expect("Vote signing must succeed");
                 precommits.push(vote);
             }
 
@@ -254,13 +260,8 @@ fn test_acid_redb_persistence_crash_recovery_after_multi_block_stress() {
             ..NodeConfig::new_validator(Vec::new())
         };
 
-        let recovered_node = AurionNode::new_with_store(
-            config,
-            genesis,
-            Some(val_keys[0].clone()),
-            Some(0),
-            store,
-        );
+        let recovered_node =
+            AurionNode::new_with_store(config, genesis, Some(val_keys[0].clone()), Some(0), store);
 
         let ledger = recovered_node.ledger.lock().unwrap();
         assert_eq!(ledger.latest_height(), expected_height);

@@ -6,7 +6,9 @@ use crate::codec::{CanonicalDecode, CanonicalEncode};
 use crate::core::Hash256;
 use crate::crypto::Keypair;
 use crate::genesis::builder::GENESIS_CHAIN_ID;
-use crate::wire::frame::{parse_network_frame, serialize_network_frame, WireError, WireFrameHeader};
+use crate::wire::frame::{
+    parse_network_frame, serialize_network_frame, WireError, WireFrameHeader,
+};
 use crate::wire::handshake::{
     validate_handshake_ack, HandshakeAck, HandshakeError, HandshakeHello,
 };

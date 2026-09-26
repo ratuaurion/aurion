@@ -9,10 +9,11 @@ use aurion::cli::dispatcher::dispatch;
 use aurion::cli::output::OutputFormat;
 use aurion::consensus::certificate::ValidatorEntry;
 use aurion::core::Address;
+use aurion::core::{MASTER_TREASURY_ALLOCATION_QUANTA, QUANTA_PER_AUR};
 use aurion::genesis::builder::build_genesis;
 use aurion::genesis::ceremony::{
     CanonicalCeremonyKeypairs, CeremonyError, CeremonyRole, CeremonyTranscript,
-    CEREMONY_QUORUM_THRESHOLD,
+    CANONICAL_GENESIS_HASH, CANONICAL_GENESIS_STATE_ROOT, CEREMONY_QUORUM_THRESHOLD,
 };
 use aurion::statemachine::state::chain::ChainLedger;
 use aurion::storage::{RedbStorageEngine, StateStore};
@@ -27,7 +28,10 @@ fn test_ceremony_deterministic_genesis_generation() {
     let transcript2 = CeremonyTranscript::build_and_seal(&keys2).expect("Seal 2 failed");
 
     // Block Hash, State Root, dan Ceremony Hash wajib 100% identik antar eksekusi terpisah
-    assert_eq!(transcript1.genesis_block_hash, transcript2.genesis_block_hash);
+    assert_eq!(
+        transcript1.genesis_block_hash,
+        transcript2.genesis_block_hash
+    );
     assert_eq!(transcript1.state_root, transcript2.state_root);
     assert_eq!(transcript1.ceremony_hash, transcript2.ceremony_hash);
     assert_eq!(transcript1.chain_id, 1001);
@@ -42,7 +46,8 @@ fn test_ceremony_full_attestation_and_signature_verification() {
     let report = transcript.verify().expect("Verification should succeed");
 
     assert_eq!(report.overall_status, "VERIFIED_CANONICAL");
-    assert_eq!(report.total_attestations, 6);
+    assert_eq!(report.total_attestations, 5);
+    assert_eq!(transcript.participants.len(), 5);
     assert_eq!(report.attested_validator_power, 1_000_000);
     assert_eq!(report.quorum_threshold, CEREMONY_QUORUM_THRESHOLD);
     assert!(report.quorum_status.contains("PASSED"));
@@ -57,7 +62,9 @@ fn test_ceremony_tamper_detection_altered_block_hash() {
     // Palsukan hash blok genesis
     transcript.genesis_block_hash = "00".repeat(32);
 
-    let err = transcript.verify().expect_err("Must fail on altered block hash");
+    let err = transcript
+        .verify()
+        .expect_err("Must fail on altered block hash");
     match err {
         CeremonyError::GenesisHashMismatch { .. } => {}
         other => panic!("Expected GenesisHashMismatch, got {other:?}"),
@@ -72,7 +79,9 @@ fn test_ceremony_tamper_detection_altered_state_root() {
     // Palsukan state root
     transcript.state_root = "ff".repeat(32);
 
-    let err = transcript.verify().expect_err("Must fail on altered state root");
+    let err = transcript
+        .verify()
+        .expect_err("Must fail on altered state root");
     match err {
         CeremonyError::StateRootMismatch { .. } => {}
         other => panic!("Expected StateRootMismatch, got {other:?}"),
@@ -84,7 +93,7 @@ fn test_ceremony_tamper_detection_forged_signature() {
     let keys = CanonicalCeremonyKeypairs::new_deterministic();
     let mut transcript = CeremonyTranscript::build_and_seal(&keys).expect("Seal failed");
 
-    // Mutasi 1 byte pada signature Creator
+    // Mutasi 1 byte pada signature Master Treasury
     let mut sig_bytes = hex::decode(&transcript.attestations[0].signature_hex).unwrap();
     sig_bytes[0] ^= 0x01;
     transcript.attestations[0].signature_hex = hex::encode(sig_bytes);
@@ -92,7 +101,9 @@ fn test_ceremony_tamper_detection_forged_signature() {
     // Recompute transcript hash agar lolos check hash, tapi gagal pada ed25519 verify
     transcript.ceremony_hash = transcript.compute_transcript_hash();
 
-    let err = transcript.verify().expect_err("Must fail on forged signature");
+    let err = transcript
+        .verify()
+        .expect_err("Must fail on forged signature");
     match err {
         CeremonyError::InvalidSignature { .. } => {}
         other => panic!("Expected InvalidSignature, got {other:?}"),
@@ -105,12 +116,14 @@ fn test_ceremony_validator_quorum_threshold() {
     let mut transcript = CeremonyTranscript::build_and_seal(&keys).expect("Seal failed");
 
     // Hapus 2 atestasi validator (Validator 3 dan Validator 4), menyisakan 500.000 bobot (< 666.667)
-    transcript.attestations.retain(|a| {
-        a.role != CeremonyRole::Validator(3) && a.role != CeremonyRole::Validator(4)
-    });
+    transcript
+        .attestations
+        .retain(|a| a.role != CeremonyRole::Validator(3) && a.role != CeremonyRole::Validator(4));
     transcript.ceremony_hash = transcript.compute_transcript_hash();
 
-    let err = transcript.verify().expect_err("Must fail when quorum is below 666,667");
+    let err = transcript
+        .verify()
+        .expect_err("Must fail when quorum is below 666,667");
     match err {
         CeremonyError::QuorumNotAchieved { attested, required } => {
             assert_eq!(attested, 500_000);
@@ -132,13 +145,89 @@ fn test_ceremony_monetary_conservation_invariants() {
         Err(CeremonyError::MonetaryInvariantViolation { .. })
     ));
 
-    // Uji pelanggaran alokasi 35% genesis
+    // Uji pelanggaran alokasi: initial supply bukan 100% (model Single Treasury)
     transcript.hard_cap_aur = 66_000_000;
     transcript.initial_supply_aur = 25_000_000;
     assert!(matches!(
         transcript.verify(),
         Err(CeremonyError::MonetaryInvariantViolation { .. })
     ));
+
+    // Uji skema alokasi pecahan lama (mis. 19.800.000 AUR) ditolak oleh model Single Treasury
+    transcript.initial_supply_aur = 66_000_000;
+    transcript.master_treasury_allocation_aur = 19_800_000;
+    assert!(matches!(
+        transcript.verify(),
+        Err(CeremonyError::MonetaryInvariantViolation { .. })
+    ));
+}
+
+#[test]
+fn test_genesis_single_treasury_allocation_invariant() {
+    let keys = CanonicalCeremonyKeypairs::new_deterministic();
+    let transcript = CeremonyTranscript::build_and_seal(&keys).expect("Seal failed");
+    let genesis = transcript
+        .build_genesis_initialization()
+        .expect("Genesis initialization reconstruction must succeed");
+
+    // 1. Seluruh initial supply (100%) berada pada satu akun Master Treasury.
+    assert_eq!(transcript.initial_supply_aur, 66_000_000);
+    assert_eq!(transcript.master_treasury_allocation_aur, 66_000_000);
+
+    // 2. Tidak ada akun lain yang memegang saldo genesis selain Treasury.
+    let treasury = keys.master_treasury.derive_address();
+    let funded: Vec<_> = genesis
+        .accounts
+        .iter()
+        .filter(|(_, acc)| acc.balance.as_u128() != 0)
+        .map(|(addr, _)| *addr)
+        .collect();
+    assert_eq!(
+        funded,
+        vec![treasury],
+        "Exactly one funded account must exist at genesis (Single Treasury)"
+    );
+
+    // 3. Saldo Treasury = 100% initial supply dalam Quantum (u128, zero-float).
+    assert_eq!(
+        genesis
+            .accounts
+            .get(&treasury)
+            .expect("Treasury account exists")
+            .balance
+            .as_u128(),
+        MASTER_TREASURY_ALLOCATION_QUANTA
+    );
+    assert_eq!(
+        MASTER_TREASURY_ALLOCATION_QUANTA,
+        (transcript.initial_supply_aur as u128) * QUANTA_PER_AUR
+    );
+
+    // 4. Konservasi suplai: total issued = 100% initial supply, burned = 0.
+    assert_eq!(
+        genesis.monetary.total_issued.as_u128(),
+        MASTER_TREASURY_ALLOCATION_QUANTA
+    );
+    assert_eq!(genesis.monetary.total_burned.as_u128(), 0);
+
+    // 5. State genesis hanya memuat SATU akun (Master Treasury), tanpa rekening Developer.
+    assert_eq!(
+        genesis.accounts.len(),
+        1,
+        "Single Treasury: blok 0 hanya boleh memuat satu rekening"
+    );
+    assert!(genesis.accounts.contains_key(&treasury));
+
+    // 6. Blok genesis tetap height 0 dengan state root dari Treasury tunggal.
+    assert_eq!(genesis.header.height, 0);
+    assert_eq!(
+        genesis.header.compute_block_hash().to_hex(),
+        CANONICAL_GENESIS_HASH
+    );
+    assert_eq!(
+        genesis.header.state_root.to_hex(),
+        CANONICAL_GENESIS_STATE_ROOT
+    );
 }
 
 #[test]
@@ -149,8 +238,12 @@ fn test_ceremony_redb_storage_initialization() {
     let keys = CanonicalCeremonyKeypairs::new_deterministic();
     let transcript = CeremonyTranscript::build_and_seal(&keys).expect("Seal failed");
 
-    let creator_addr = Address::from_bytes(hex::decode(&transcript.creator_address_hex).unwrap().try_into().unwrap());
-    let dev_addr = Address::from_bytes(hex::decode(&transcript.developer_address_hex).unwrap().try_into().unwrap());
+    let treasury_addr = Address::from_bytes(
+        hex::decode(&transcript.master_treasury_address_hex)
+            .unwrap()
+            .try_into()
+            .unwrap(),
+    );
 
     let val_entries: Vec<ValidatorEntry> = transcript
         .participants
@@ -158,7 +251,9 @@ fn test_ceremony_redb_storage_initialization() {
         .filter_map(|p| {
             if let CeremonyRole::Validator(_) = p.role {
                 Some(ValidatorEntry {
-                    validator_id: Address::from_bytes(hex::decode(&p.address_hex).unwrap().try_into().unwrap()),
+                    validator_id: Address::from_bytes(
+                        hex::decode(&p.address_hex).unwrap().try_into().unwrap(),
+                    ),
                     consensus_pubkey: hex::decode(&p.public_key_hex).unwrap().try_into().unwrap(),
                     voting_weight: p.voting_weight,
                 })
@@ -168,10 +263,12 @@ fn test_ceremony_redb_storage_initialization() {
         })
         .collect();
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries);
+    let genesis = build_genesis(treasury_addr, val_entries);
 
     // Buka RedbStorageEngine fisik baru
-    let store = std::sync::Arc::new(RedbStorageEngine::open_or_create(&db_path).expect("Failed to open redb"));
+    let store = std::sync::Arc::new(
+        RedbStorageEngine::open_or_create(&db_path).expect("Failed to open redb"),
+    );
 
     // Inisialisasi ChainLedger dari Genesis
     let ledger = ChainLedger::from_genesis_with_store(genesis.clone(), store.clone())
@@ -184,12 +281,16 @@ fn test_ceremony_redb_storage_initialization() {
     drop(ledger);
     drop(store);
 
-    let store_reopened = std::sync::Arc::new(RedbStorageEngine::open_or_create(&db_path).expect("Reopen failed"));
+    let store_reopened =
+        std::sync::Arc::new(RedbStorageEngine::open_or_create(&db_path).expect("Reopen failed"));
     let ledger_recovered = ChainLedger::from_genesis_with_store(genesis, store_reopened.clone())
         .expect("Ledger recovery failed");
 
     assert_eq!(ledger_recovered.latest_height(), 0);
-    assert_eq!(ledger_recovered.compute_current_state_root().to_hex(), transcript.state_root);
+    assert_eq!(
+        ledger_recovered.compute_current_state_root().to_hex(),
+        transcript.state_root
+    );
 }
 
 #[tokio::test]

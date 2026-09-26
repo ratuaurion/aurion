@@ -3,6 +3,8 @@
 
 #![allow(clippy::collapsible_match)]
 
+use crate::crypto::encode_address_bech32m;
+use crate::genesis::ceremony::CanonicalCeremonyKeypairs;
 use crate::wallet::bip39::{entropy_to_mnemonic_24, mnemonic_to_entropy_24, mnemonic_to_seed};
 use crate::wallet::client;
 use crate::wallet::derivation::DerivedAccount;
@@ -11,8 +13,6 @@ use crate::wallet::password::{
     resolve_mnemonic, resolve_password, ENV_WALLET_MNEMONIC, ENV_WALLET_PASSWORD,
 };
 use crate::wallet::signing::ClearSigningDetails;
-use crate::genesis::ceremony::CanonicalCeremonyKeypairs;
-use crate::crypto::encode_address_bech32m;
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -48,7 +48,9 @@ pub fn handle_wallet_subcommand(args: &[String]) {
 
 /// Mendeteksi flag `--password-stdin` dan menghasilkan teks prompt yang benar.
 fn parse_password_flags(args: &[String]) -> (bool, String) {
-    let from_stdin = args.iter().any(|a| a == "--password-stdin" || a == "--passphrase-stdin");
+    let from_stdin = args
+        .iter()
+        .any(|a| a == "--password-stdin" || a == "--passphrase-stdin");
     let prompt = "Masukkan password wallet";
     (from_stdin, prompt.to_string())
 }
@@ -58,11 +60,15 @@ fn confirm_clear_signing(assume_yes: bool) -> Result<(), &'static str> {
         return Ok(());
     }
     if !io::stdin().is_terminal() {
-        return Err("Lingkungan non-TTY: gunakan flag --yes/-y untuk menandatangani secara non-interaktif");
+        return Err(
+            "Lingkungan non-TTY: gunakan flag --yes/-y untuk menandatangani secara non-interaktif",
+        );
     }
 
     eprint!("Continue signing? [y/N]: ");
-    io::stderr().flush().map_err(|_| "Gagal menampilkan prompt konfirmasi")?;
+    io::stderr()
+        .flush()
+        .map_err(|_| "Gagal menampilkan prompt konfirmasi")?;
     confirm_from_reader(io::stdin().lock())
 }
 
@@ -124,13 +130,14 @@ fn handle_create(args: &[String]) {
     }
     let password = password.expect("password guaranteed by earlier branch");
 
-    let keystore = match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
-        Ok(k) => k,
-        Err(e) => {
-            eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
-            return;
-        }
-    };
+    let keystore =
+        match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
+                return;
+            }
+        };
     let keystore_json = keystore.to_json_string();
     let filename = format!("{name}.keystore.json");
 
@@ -229,13 +236,14 @@ fn handle_import(args: &[String]) {
     let master_seed = mnemonic_to_seed(&mnemonic, "");
     let derived = DerivedAccount::derive_account(&master_seed, 0, 0);
 
-    let keystore = match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
-        Ok(k) => k,
-        Err(e) => {
-            eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
-            return;
-        }
-    };
+    let keystore =
+        match Keystore::encrypt(&derived.signing_key, &password, &derived.bech32m_address) {
+            Ok(k) => k,
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Gagal mengenkripsi keystore: {e}");
+                return;
+            }
+        };
     let keystore_json = keystore.to_json_string();
     let filename = format!("{name}.keystore.json");
 
@@ -271,7 +279,9 @@ fn handle_address(args: &[String]) {
             }
             Err(e) => eprintln!("[AURION WALLET ERROR] Gagal mem-parsing keystore: {e}"),
         },
-        Err(e) => eprintln!("[AURION WALLET ERROR] Tidak dapat membaca file '{keystore_path}': {e}"),
+        Err(e) => {
+            eprintln!("[AURION WALLET ERROR] Tidak dapat membaca file '{keystore_path}': {e}")
+        }
     }
 }
 
@@ -322,18 +332,23 @@ fn handle_send(args: &[String]) {
     let rpc = rpc_url(args);
 
     let (sender_address, signing_key): (String, SigningKey) = if dev_sender {
-        let creator = CanonicalCeremonyKeypairs::new_deterministic().creator;
-        let address = encode_address_bech32m(&creator.derive_address(), "aur")
-            .expect("canonical creator address encoding must succeed");
-        eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis creator treasury key for local testing only.");
-        (address, creator.to_signing_key())
-    } else if let Some(v_idx) = get_flag_value(args, "--val-sender").and_then(|v| v.parse::<usize>().ok()) {
+        let treasury = CanonicalCeremonyKeypairs::new_deterministic().master_treasury;
+        let address = encode_address_bech32m(&treasury.derive_address(), "aur")
+            .expect("canonical Master Treasury address encoding must succeed");
+        eprintln!("[AURION WALLET] WARNING: --dev-sender uses the deterministic genesis Master Treasury key for local testing only.");
+        (address, treasury.to_signing_key())
+    } else if let Some(v_idx) =
+        get_flag_value(args, "--val-sender").and_then(|v| v.parse::<usize>().ok())
+    {
         let keys = CanonicalCeremonyKeypairs::new_deterministic();
         let idx = v_idx.saturating_sub(1).min(keys.validators.len() - 1);
         let val_key = &keys.validators[idx];
         let address = encode_address_bech32m(&val_key.derive_address(), "aur")
             .expect("canonical validator address encoding must succeed");
-        eprintln!("[AURION WALLET] Using Canonical Validator {} key: {address}", idx + 1);
+        eprintln!(
+            "[AURION WALLET] Using Canonical Validator {} key: {address}",
+            idx + 1
+        );
         (address, val_key.to_signing_key())
     } else {
         let keystore_path = get_flag_value(args, "--keystore")
@@ -373,7 +388,8 @@ fn handle_send(args: &[String]) {
         };
         (keystore.address, signing_key)
     };
-    let nonce = if let Some(n) = get_flag_value(args, "--nonce").and_then(|v| v.parse::<u64>().ok()) {
+    let nonce = if let Some(n) = get_flag_value(args, "--nonce").and_then(|v| v.parse::<u64>().ok())
+    {
         n
     } else {
         match client::get_nonce(&rpc, &sender_address) {
@@ -384,20 +400,14 @@ fn handle_send(args: &[String]) {
             }
         }
     };
-    let details = match ClearSigningDetails::new(
-        &sender_address,
-        &recipient,
-        amount,
-        fee,
-        nonce,
-        "",
-    ) {
-        Ok(value) => value,
-        Err(error) => {
-            eprintln!("[AURION WALLET ERROR] Validasi transaksi gagal: {error}");
-            return;
-        }
-    };
+    let details =
+        match ClearSigningDetails::new(&sender_address, &recipient, amount, fee, nonce, "") {
+            Ok(value) => value,
+            Err(error) => {
+                eprintln!("[AURION WALLET ERROR] Validasi transaksi gagal: {error}");
+                return;
+            }
+        };
     print!("{}", details.format_clear_signing_prompt());
     if assume_yes {
         // Automation explicitly opted into signing.
@@ -520,7 +530,9 @@ fn handle_sign_tx(args: &[String]) {
     let keystore_raw = match fs::read_to_string(&keystore_path) {
         Ok(s) => s,
         Err(e) => {
-            eprintln!("[AURION WALLET ERROR] Tidak dapat membuka file keystore '{keystore_path}': {e}");
+            eprintln!(
+                "[AURION WALLET ERROR] Tidak dapat membuka file keystore '{keystore_path}': {e}"
+            );
             return;
         }
     };
@@ -552,20 +564,14 @@ fn handle_sign_tx(args: &[String]) {
         }
     }
 
-    let details = match ClearSigningDetails::new(
-        &keystore.address,
-        &to_addr,
-        amount,
-        fee,
-        nonce,
-        &memo,
-    ) {
-        Ok(d) => d,
-        Err(e) => {
-            eprintln!("[AURION WALLET ERROR] Validasi transaksi gagal: {e}");
-            return;
-        }
-    };
+    let details =
+        match ClearSigningDetails::new(&keystore.address, &to_addr, amount, fee, nonce, &memo) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("[AURION WALLET ERROR] Validasi transaksi gagal: {e}");
+                return;
+            }
+        };
 
     // Cetak Clear Signing Prompt
     print!("{}", details.format_clear_signing_prompt());
@@ -605,7 +611,9 @@ fn print_wallet_help() {
     println!("  - Opsi --password/-p PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
     println!("Keamanan mnemonic:");
     println!("  - Mnemonic dibaca dari stdin (--mnemonic-stdin), env {ENV_WALLET_MNEMONIC}, atau prompt interaktif tanpa echo.");
-    println!("  - Opsi --mnemonic \"<24 words>\" PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan).");
+    println!(
+        "  - Opsi --mnemonic \"<24 words>\" PADA ARGV TIDAK DIDUKUNG (tidak aman, diabaikan)."
+    );
 }
 
 #[cfg(test)]
@@ -614,9 +622,7 @@ mod tests {
 
     #[test]
     fn wallet_entropy_is_non_zero_and_non_deterministic() {
-        let samples: Vec<[u8; 32]> = (0..8)
-            .map(|_| *generate_wallet_entropy())
-            .collect();
+        let samples: Vec<[u8; 32]> = (0..8).map(|_| *generate_wallet_entropy()).collect();
 
         for sample in &samples {
             assert_ne!(*sample, [0u8; 32]);

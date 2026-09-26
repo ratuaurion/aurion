@@ -23,11 +23,24 @@ impl std::fmt::Display for SigningError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::ZeroAmount => write!(f, "Nilai transfer harus lebih besar dari 0 Quantum"),
-            Self::AmountExceedsSupply(a) => write!(f, "Nilai transfer {a} Q melebihi pasokan maksimum (66M AUR)"),
-            Self::FeeBelowMinimum(fee) => write!(f, "Biaya transaksi {fee} Q di bawah batas minimum (10.000 Q)"),
-            Self::ArithmeticOverflow => write!(f, "Total debet (amount + fee) mengalami overflow aritmatika"),
-            Self::SelfTransferProhibited => write!(f, "Pengiriman dana ke alamat diri sendiri dilarang"),
-            Self::PayloadTooLarge(len) => write!(f, "Ukuran payload memo ({len} B) melebihi batas kanonikal"),
+            Self::AmountExceedsSupply(a) => write!(
+                f,
+                "Nilai transfer {a} Q melebihi pasokan maksimum (66M AUR)"
+            ),
+            Self::FeeBelowMinimum(fee) => write!(
+                f,
+                "Biaya transaksi {fee} Q di bawah batas minimum (10.000 Q)"
+            ),
+            Self::ArithmeticOverflow => write!(
+                f,
+                "Total debet (amount + fee) mengalami overflow aritmatika"
+            ),
+            Self::SelfTransferProhibited => {
+                write!(f, "Pengiriman dana ke alamat diri sendiri dilarang")
+            }
+            Self::PayloadTooLarge(len) => {
+                write!(f, "Ukuran payload memo ({len} B) melebihi batas kanonikal")
+            }
             Self::InvalidAddress(e) => write!(f, "Alamat tidak valid: {e}"),
         }
     }
@@ -67,7 +80,7 @@ impl ClearSigningDetails {
             return Err(SigningError::ZeroAmount);
         }
 
-        // 2. amount <= MAX_SUPPLY_QUANTA (66_000_000 * 10^8)
+        // 2. amount <= MAX_SUPPLY_QUANTA (66_000_000 * 10^9)
         let max_supply = 66_000_000u128 * 100_000_000u128;
         if amount_quanta > max_supply {
             return Err(SigningError::AmountExceedsSupply(amount_quanta));
@@ -120,10 +133,10 @@ impl ClearSigningDetails {
     /// Format teks prompt transparan manusiawi untuk CLI atau Hardware Display.
     pub fn format_clear_signing_prompt(&self) -> String {
         let (burn, validator) = self.fee_split();
-        let amount_aur_whole = self.amount.as_u128() / 100_000_000;
-        let amount_aur_frac = self.amount.as_u128() % 100_000_000;
-        let fee_aur_whole = self.fee.as_u128() / 100_000_000;
-        let fee_aur_frac = self.fee.as_u128() % 100_000_000;
+        let amount_aur_whole = self.amount.as_u128() / crate::core::QUANTA_PER_AUR;
+        let amount_aur_frac = self.amount.as_u128() % crate::core::QUANTA_PER_AUR;
+        let fee_aur_whole = self.fee.as_u128() / crate::core::QUANTA_PER_AUR;
+        let fee_aur_frac = self.fee.as_u128() % crate::core::QUANTA_PER_AUR;
 
         format!(
             r#"================================================================================
@@ -131,8 +144,8 @@ impl ClearSigningDetails {
 ================================================================================
   Sender (From):    {}
   Recipient (To):   {}
-  Amount:           {} Quantum ({}.{:08} AUR)
-  Network Fee:      {} Quantum ({}.{:08} AUR)
+  Amount:           {} Quantum ({}.{:09} AUR)
+  Network Fee:      {} Quantum ({}.{:09} AUR)
     ├─ BFT Validator Reward (100%):   {} Quantum
     └─ Protocol Burn (0%):           {} Quantum
   Account Nonce:    {}
@@ -194,7 +207,9 @@ impl ClearSigningDetails {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crypto::{derive_address_from_pubkey, ed25519_verify_strict, encode_address_bech32m};
+    use crate::crypto::{
+        derive_address_from_pubkey, ed25519_verify_strict, encode_address_bech32m,
+    };
 
     #[test]
     fn test_clear_signing_validation_and_fee_split() {

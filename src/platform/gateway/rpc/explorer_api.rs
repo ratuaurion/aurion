@@ -54,7 +54,10 @@ fn clamp_limit(raw: Option<usize>) -> usize {
 pub fn render_network_stats(ctx: &RpcContext) -> String {
     let peers = ctx.metrics.connected_peers.load(Ordering::SeqCst) as u64;
     let height = ctx.current_height.load(Ordering::SeqCst);
-    let total_tx = ctx.metrics.transactions_processed_total.load(Ordering::SeqCst);
+    let total_tx = ctx
+        .metrics
+        .transactions_processed_total
+        .load(Ordering::SeqCst);
     let votes = height.saturating_mul(4);
 
     format!(
@@ -191,8 +194,8 @@ pub fn render_recent_transactions(ctx: &RpcContext, limit: usize) -> String {
                 .collect()
         };
         for (tx_id, tx, admitted_timestamp) in pending {
-            let sender = encode_address_bech32m(&tx.sender, "aur")
-                .unwrap_or_else(|_| tx.sender.to_hex());
+            let sender =
+                encode_address_bech32m(&tx.sender, "aur").unwrap_or_else(|_| tx.sender.to_hex());
             let recipient = encode_address_bech32m(&tx.recipient, "aur")
                 .unwrap_or_else(|_| tx.recipient.to_hex());
             txs_json.push(format!(
@@ -246,7 +249,8 @@ pub fn render_tx_contract_summary(
     tx: &Transaction,
     status: crate::gateway::contract_decode::TxStatus,
 ) -> String {
-    let interaction = crate::gateway::contract_decode::describe_contract_interaction(ctx, tx, status);
+    let interaction =
+        crate::gateway::contract_decode::describe_contract_interaction(ctx, tx, status);
     serde_json::json!({
         "kind": interaction.kind,
         "status": interaction.status,
@@ -287,15 +291,35 @@ mod tests {
     fn render_peers_includes_latency_and_traffic_values() {
         let ctx = RpcContext::new(1);
         ctx.metrics.set_connected_peers(4);
-        ctx.metrics.active_protocol_version.store(1, Ordering::SeqCst);
+        ctx.metrics
+            .active_protocol_version
+            .store(1, Ordering::SeqCst);
 
         let rendered = render_peers(&ctx);
         let peers: serde_json::Value = serde_json::from_str(&rendered).unwrap();
         let first = peers.as_array().unwrap().first().unwrap();
 
-        assert!(first.get("latency_ms").and_then(|value| value.as_u64()).unwrap_or(0) > 0);
-        assert!(first.get("traffic_in").and_then(|value| value.as_u64()).unwrap_or(0) > 0);
-        assert!(first.get("traffic_out").and_then(|value| value.as_u64()).unwrap_or(0) > 0);
+        assert!(
+            first
+                .get("latency_ms")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(0)
+                > 0
+        );
+        assert!(
+            first
+                .get("traffic_in")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(0)
+                > 0
+        );
+        assert!(
+            first
+                .get("traffic_out")
+                .and_then(|value| value.as_u64())
+                .unwrap_or(0)
+                > 0
+        );
     }
 
     #[test]

@@ -65,12 +65,18 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
     // Daftarkan dummy akun
     let dummy_key = Keypair::generate();
     let dummy_addr = derive_address_from_pubkey(&dummy_key.public_key_bytes());
-    ctx.accounts.lock().unwrap().insert(dummy_addr, Account::new(Quantum::new(50_000_000), 1));
+    ctx.accounts
+        .lock()
+        .unwrap()
+        .insert(dummy_addr, Account::new(Quantum::new(50_000_000), 1));
 
     // Siapkan Faucet
     let faucet_key = Keypair::generate();
     let faucet_addr = derive_address_from_pubkey(&faucet_key.public_key_bytes());
-    ctx.accounts.lock().unwrap().insert(faucet_addr, Account::new(Quantum::new(100_000_000_000), 0));
+    ctx.accounts
+        .lock()
+        .unwrap()
+        .insert(faucet_addr, Account::new(Quantum::new(100_000_000_000), 0));
     let dispenser = FaucetDispenser::new(faucet_key, 9999, FaucetConfig::default());
     ctx.attach_faucet(dispenser);
 
@@ -81,7 +87,8 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
     let local_addr = listener.local_addr().unwrap();
     drop(listener);
 
-    let server = RpcServer::new(ctx.clone(), pubsub, &local_addr.to_string()).with_shutdown(shutdown_rx);
+    let server =
+        RpcServer::new(ctx.clone(), pubsub, &local_addr.to_string()).with_shutdown(shutdown_rx);
     let server_handle = tokio::spawn(async move {
         let _ = server.run().await;
     });
@@ -97,9 +104,18 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
         let mut buf = [0u8; 1024];
         let n = stream.read(&mut buf).await.unwrap();
         let resp = String::from_utf8_lossy(&buf[..n]);
-        assert!(resp.contains("204 No Content"), "Must respond 204 No Content to OPTIONS");
-        assert!(resp.contains("Access-Control-Allow-Origin: *"), "Must include CORS allow origin");
-        assert!(resp.contains("Access-Control-Allow-Methods:"), "Must include CORS methods");
+        assert!(
+            resp.contains("204 No Content"),
+            "Must respond 204 No Content to OPTIONS"
+        );
+        assert!(
+            resp.contains("Access-Control-Allow-Origin: *"),
+            "Must include CORS allow origin"
+        );
+        assert!(
+            resp.contains("Access-Control-Allow-Methods:"),
+            "Must include CORS methods"
+        );
     }
 
     // 2. Verifikasi Header CORS pada Healthz GET
@@ -200,7 +216,10 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
         let n = stream.read(&mut buf).await.unwrap();
         let resp = String::from_utf8_lossy(&buf[..n]);
         assert!(resp.contains("200 OK"));
-        assert!(resp.contains(r#""result":"0x"#), "Faucet must return tx hash");
+        assert!(
+            resp.contains(r#""result":"0x"#),
+            "Faucet must return tx hash"
+        );
 
         // Ekstrak hash dari respons
         let idx = resp.find(r#""result":"0x"#).unwrap();
@@ -215,7 +234,10 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
     // 8. Verifikasi REST Explorer Tx Detail (/explorer/tx/<hash>)
     {
         let mut stream = TcpStream::connect(local_addr).await.expect("Connect TCP");
-        let get_req = format!("GET /explorer/tx/{} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n", tx_hash_str);
+        let get_req = format!(
+            "GET /explorer/tx/{} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            tx_hash_str
+        );
         stream.write_all(get_req.as_bytes()).await.unwrap();
 
         let mut buf = [0u8; 1024];
@@ -249,7 +271,10 @@ async fn test_public_gateway_cors_preflight_and_endpoints() {
         let mut buf = [0u8; 1024];
         let n = stream.read(&mut buf).await.unwrap();
         let resp = String::from_utf8_lossy(&buf[..n]);
-        assert!(resp.contains("Faucet cooldown active"), "Immediate repeated request must be rejected with cooldown active");
+        assert!(
+            resp.contains("Faucet cooldown active"),
+            "Immediate repeated request must be rejected with cooldown active"
+        );
     }
 
     // Shutdown server
@@ -342,7 +367,7 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
     // (AURION-GENESIS-SPECIFICATION.md Bagian 3.1). Akun faucet karena itu
     // lahir dengan saldo 0 dan WAJIB didanai dari Master Treasury terlebih
     // dahulu (AURION CONSTITUTION.md: Aturan Faucet).
-    let genesis = build_genesis(val_addr, faucet_addr, vec![val_entry]);
+    let genesis = build_genesis(val_addr, vec![val_entry]);
 
     let config = NodeConfig {
         chain_id: 9999,
@@ -418,7 +443,10 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
     let (faucet_tx_hash, faucet_tx) = {
         let ledger = node.ledger.lock().unwrap();
         let mut accounts_map = HashMap::new();
-        let faucet_acc = ledger.get_account(&faucet_addr).cloned().expect("faucet account");
+        let faucet_acc = ledger
+            .get_account(&faucet_addr)
+            .cloned()
+            .expect("faucet account");
         accounts_map.insert(faucet_addr, faucet_acc);
 
         let mut mempool = node.mempool.lock().unwrap();
@@ -471,12 +499,7 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
     node.mempool
         .lock()
         .unwrap()
-        .submit_transaction(
-            bob_tx,
-            &bob_key.public_key_bytes(),
-            1_773_533_400,
-            &bob_acc,
-        )
+        .submit_transaction(bob_tx, &bob_key.public_key_bytes(), 1_773_533_400, &bob_acc)
         .expect("Bob tx submitted to mempool");
 
     let block3 = commit_block(&node, &val_key, val_addr, 3, 1_773_533_500);
@@ -507,7 +530,10 @@ async fn test_end_to_end_community_faucet_and_transfer_lifecycle() {
         let mut accounts_map = HashMap::new();
         accounts_map.insert(
             faucet_addr,
-            ledger.get_account(&faucet_addr).cloned().unwrap_or_default(),
+            ledger
+                .get_account(&faucet_addr)
+                .cloned()
+                .unwrap_or_default(),
         );
         let mut mempool = node.mempool.lock().unwrap();
         let cooldown = faucet

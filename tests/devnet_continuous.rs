@@ -45,7 +45,8 @@ async fn check_healthz(addr: &str) -> bool {
     loop {
         match TcpStream::connect(addr).await {
             Ok(mut stream) => {
-                let get_req = format!("GET /healthz HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+                let get_req =
+                    format!("GET /healthz HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
                 if stream.write_all(get_req.as_bytes()).await.is_err() {
                     return false;
                 }
@@ -89,10 +90,8 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
 
     let creator_key = Keypair::generate();
     let creator_addr = derive_address_from_pubkey(&creator_key.public_key_bytes());
-    let dev_key = Keypair::generate();
-    let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(creator_addr, val_entries.clone());
 
     // 2. Initialize and start 4 Validators
     let mut val_nodes = Vec::new();
@@ -124,7 +123,8 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
 
     // 3. Initialize Sentry Node & RPC Gateway Node
     let sentry_db_path = base_path.join("sentry.redb");
-    let sentry_store = Arc::new(RedbStorageEngine::open_or_create(&sentry_db_path).expect("Open store"));
+    let sentry_store =
+        Arc::new(RedbStorageEngine::open_or_create(&sentry_db_path).expect("Open store"));
     let sentry_rpc = allocate_devnet_port();
     let sentry_p2p = allocate_devnet_port();
     let sentry_config = NodeConfig {
@@ -133,7 +133,13 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
         p2p_bind: sentry_p2p,
         ..NodeConfig::new_sentry("0.0.0.0:19405".to_string())
     };
-    let sentry_node = Arc::new(AurionNode::new_with_store(sentry_config, genesis.clone(), None, None, sentry_store));
+    let sentry_node = Arc::new(AurionNode::new_with_store(
+        sentry_config,
+        genesis.clone(),
+        None,
+        None,
+        sentry_store,
+    ));
 
     let rpc_db_path = base_path.join("rpc_gw.redb");
     let rpc_store = Arc::new(RedbStorageEngine::open_or_create(&rpc_db_path).expect("Open store"));
@@ -143,11 +149,21 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
         rpc_bind: rpc_gw_bind.clone(),
         ..Default::default()
     };
-    let rpc_gw_node = Arc::new(AurionNode::new_with_store(rpc_gw_config, genesis.clone(), None, None, rpc_store));
+    let rpc_gw_node = Arc::new(AurionNode::new_with_store(
+        rpc_gw_config,
+        genesis.clone(),
+        None,
+        None,
+        rpc_store,
+    ));
 
     // Verify all 6 nodes start at height 0
     for (i, node) in val_nodes.iter().enumerate() {
-        assert_eq!(node.ledger.lock().unwrap().latest_height(), 0, "Val {i} at height 0");
+        assert_eq!(
+            node.ledger.lock().unwrap().latest_height(),
+            0,
+            "Val {i} at height 0"
+        );
     }
     assert_eq!(sentry_node.ledger.lock().unwrap().latest_height(), 0);
     assert_eq!(rpc_gw_node.ledger.lock().unwrap().latest_height(), 0);
@@ -174,7 +190,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     // User submits tx -> RPC Gateway receives -> Sentry verifies -> Validators include in Block 1
     let alice = Keypair::generate();
     let alice_addr = derive_address_from_pubkey(&alice.public_key_bytes());
-    
+
     // Transfer from creator to alice
     let mut tx1 = Transaction {
         version: 1,
@@ -195,14 +211,24 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
 
     // Insert into all validator mempools (simulating P2P gossip from Sentry)
     for (idx, node) in val_nodes.iter().enumerate() {
-        let acct = node.ledger.lock().unwrap().get_account(&creator_addr).unwrap().clone();
+        let acct = node
+            .ledger
+            .lock()
+            .unwrap()
+            .get_account(&creator_addr)
+            .unwrap()
+            .clone();
         let res = node.mempool.lock().unwrap().submit_transaction(
             tx1.clone(),
             &creator_key.public_key_bytes(),
             1773532850,
             &acct,
         );
-        assert!(res.is_ok(), "Node {idx} mempool submission must succeed: {:?}", res);
+        assert!(
+            res.is_ok(),
+            "Node {idx} mempool submission must succeed: {:?}",
+            res
+        );
     }
 
     // 7. Execute BFT Round 1: Select Proposer
@@ -215,14 +241,7 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
         let ledger = node_p.ledger.lock().unwrap();
         let mempool = node_p.mempool.lock().unwrap();
         let bft = node_p.bft_engine.lock().unwrap();
-        bft.assemble_block_proposal(
-            &ledger,
-            &mempool,
-            0,
-            1773534000,
-            &miner_addr,
-            1024 * 1024,
-        )
+        bft.assemble_block_proposal(&ledger, &mempool, 0, 1773534000, &miner_addr, 1024 * 1024)
     };
     assert_eq!(candidate.height(), 1);
     assert_eq!(candidate.transactions.len(), 1);
@@ -265,30 +284,57 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
 
     // Apply block commit to all 4 validators and the RPC Gateway
     for (i, node) in val_nodes.iter().enumerate() {
-        let res = node.ledger.lock().unwrap().apply_block(block.clone(), &miner_addr);
+        let res = node
+            .ledger
+            .lock()
+            .unwrap()
+            .apply_block(block.clone(), &miner_addr);
         assert!(res.is_ok(), "Apply block to val {i} succeeded: {:?}", res);
         node.sync_rpc_context();
         assert_eq!(node.ledger.lock().unwrap().latest_height(), 1);
     }
-    let res_gw = rpc_gw_node.ledger.lock().unwrap().apply_block(block.clone(), &miner_addr);
+    let res_gw = rpc_gw_node
+        .ledger
+        .lock()
+        .unwrap()
+        .apply_block(block.clone(), &miner_addr);
     assert!(res_gw.is_ok(), "Apply block to rpc gateway succeeded");
     rpc_gw_node.sync_rpc_context();
 
     // 8. Assert 100% State Root Convergence across all nodes
-    let expected_state_root = val_nodes[0].ledger.lock().unwrap().latest_block().header.state_root;
+    let expected_state_root = val_nodes[0]
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .header
+        .state_root;
     for (i, node) in val_nodes.iter().enumerate() {
         let node_root = node.ledger.lock().unwrap().latest_block().header.state_root;
-        assert_eq!(node_root, expected_state_root, "Validator {i} state root converged");
+        assert_eq!(
+            node_root, expected_state_root,
+            "Validator {i} state root converged"
+        );
     }
     assert_eq!(
-        rpc_gw_node.ledger.lock().unwrap().latest_block().header.state_root,
+        rpc_gw_node
+            .ledger
+            .lock()
+            .unwrap()
+            .latest_block()
+            .header
+            .state_root,
         expected_state_root
     );
 
     // 9. Verify Alice's balance on all nodes
     for (i, node) in val_nodes.iter().enumerate() {
         let bal = node.ledger.lock().unwrap().get_balance(&alice_addr);
-        assert_eq!(bal, Quantum::new(100_000_000), "Alice balance on val {i} is 1 AUR");
+        assert_eq!(
+            bal,
+            Quantum::new(100_000_000),
+            "Alice balance on val {i} is 1 AUR"
+        );
     }
 
     // 10. Node Restart & Recovery Resilience (Simulate Continuous Deployment restart)
@@ -297,7 +343,8 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
     drop(val_3_node);
 
     let val_3_db_path = base_path.join("val_3.redb");
-    let recovered_store = Arc::new(RedbStorageEngine::open_or_create(&val_3_db_path).expect("Reopen val 3 store"));
+    let recovered_store =
+        Arc::new(RedbStorageEngine::open_or_create(&val_3_db_path).expect("Reopen val 3 store"));
     let recovered_config = NodeConfig {
         chain_id: 1001,
         rpc_bind: allocate_devnet_port(),
@@ -317,7 +364,13 @@ async fn test_devnet_cluster_continuous_deployment_and_consensus() {
         "Recovered node immediately resumes at canonical block height 1"
     );
     assert_eq!(
-        recovered_node.ledger.lock().unwrap().latest_block().header.state_root,
+        recovered_node
+            .ledger
+            .lock()
+            .unwrap()
+            .latest_block()
+            .header
+            .state_root,
         expected_state_root,
         "Recovered node state root 100% identical after continuous restart"
     );

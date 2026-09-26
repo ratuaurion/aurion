@@ -12,7 +12,7 @@ pub type DataAvailabilityRoot = [u8; 32];
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DataAvailabilityMatrix {
     pub k: usize,
-    pub size: usize, // 2k
+    pub size: usize,                      // 2k
     pub matrix_cells: Vec<Vec<[u8; 32]>>, // size x size
     pub row_roots: Vec<[u8; 32]>,
     pub col_roots: Vec<[u8; 32]>,
@@ -195,10 +195,7 @@ mod tests {
     #[test]
     fn test_da_matrix_construction_and_sampling() {
         // Matriks 2x2 data asli (k=2) -> diperluas ke 4x4 (size=4)
-        let original = vec![
-            vec![[0x01; 32], [0x02; 32]],
-            vec![[0x03; 32], [0x04; 32]],
-        ];
+        let original = vec![vec![[0x01; 32], [0x02; 32]], vec![[0x03; 32], [0x04; 32]]];
 
         let da_matrix = DataAvailabilityMatrix::build(&original).expect("Build should succeed");
         assert_eq!(da_matrix.k, 2);
@@ -221,14 +218,14 @@ mod tests {
 
     #[test]
     fn test_das_sampling_mismatched_da_root_rejected() {
-        let original = vec![
-            vec![[0xAA; 32], [0xBB; 32]],
-            vec![[0xCC; 32], [0xDD; 32]],
-        ];
+        let original = vec![vec![[0xAA; 32], [0xBB; 32]], vec![[0xCC; 32], [0xDD; 32]]];
         let da_matrix = DataAvailabilityMatrix::build(&original).unwrap();
         let sample = da_matrix.get_sample(0, 0).unwrap();
 
         let wrong_root = [0xFF; 32];
-        assert!(!DasSamplingClient::verify_sampling_session(&[sample], &wrong_root));
+        assert!(!DasSamplingClient::verify_sampling_session(
+            &[sample],
+            &wrong_root
+        ));
     }
 }

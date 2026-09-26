@@ -12,11 +12,7 @@ use std::process;
 // memberi headroom sehingga handler blocking tidak menghabiskan seluruh worker.
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let cli_args = if args.len() > 1 {
-        &args[1..]
-    } else {
-        &[]
-    };
+    let cli_args = if args.len() > 1 { &args[1..] } else { &[] };
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()

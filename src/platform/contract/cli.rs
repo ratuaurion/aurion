@@ -34,8 +34,8 @@ use super::metadata::{AbiType, AbiValue, ContractMetadata, MethodAbi};
 use super::provider::RpcProvider;
 use super::signer::{ApprovalMode, KeystoreSigner};
 use crate::contract::Provider;
-use crate::crypto::{decode_address_bech32m, encode_address_bech32m};
 use crate::core::{Address, Hash256, Quantum};
+use crate::crypto::{decode_address_bech32m, encode_address_bech32m};
 use crate::platform::cli::output::OutputFormat;
 use crate::wallet::keystore::Keystore;
 use crate::wallet::password::{resolve_password, ENV_WALLET_PASSWORD};
@@ -284,7 +284,10 @@ pub fn parse_abi_arg(ty: AbiType, raw: &str) -> Result<AbiValue, String> {
         },
         AbiType::Hash256 => {
             if trimmed.len() != 64 {
-                return Err(format!("Hash256 harus 64 hex, diterima '{}'", trimmed.len()));
+                return Err(format!(
+                    "Hash256 harus 64 hex, diterima '{}'",
+                    trimmed.len()
+                ));
             }
             let mut arr = [0u8; 32];
             hex::decode_to_slice(trimmed, &mut arr)
@@ -293,7 +296,6 @@ pub fn parse_abi_arg(ty: AbiType, raw: &str) -> Result<AbiValue, String> {
         }
     }
 }
-
 
 /// Kumpulkan argumen metode dari beberapa sumber: `--args '[..]'` (JSON array),
 /// `--args <v>` yang diulang, dan/atau argumen posisional.
@@ -394,14 +396,14 @@ pub fn load_bytecode(spec: &str) -> Result<Vec<u8>, String> {
                 .map(|&b| b as char)
                 .filter(|c| !c.is_whitespace())
                 .collect();
-            return hex::decode(&cleaned).map_err(|e| format!("Hex pada '{spec}' tidak valid: {e}"));
+            return hex::decode(&cleaned)
+                .map_err(|e| format!("Hex pada '{spec}' tidak valid: {e}"));
         }
         return Ok(raw);
     }
     let cleaned = spec.trim().trim_start_matches("0x");
-    hex::decode(cleaned).map_err(|e| {
-        format!("'{spec}' bukan berkas yang valid dan juga bukan hex bytecode: {e}")
-    })
+    hex::decode(cleaned)
+        .map_err(|e| format!("'{spec}' bukan berkas yang valid dan juga bukan hex bytecode: {e}"))
 }
 
 /// Baca metadata kontrak dari berkas JSON.
@@ -416,7 +418,8 @@ pub fn load_bytecode(spec: &str) -> Result<Vec<u8>, String> {
 /// # Errors
 /// Berkas tidak terbaca, JSON rusak, atau skema metadata tidak didukung.
 pub fn load_metadata_file(path: &str) -> Result<ContractMetadata, String> {
-    let raw = fs::read_to_string(path).map_err(|e| format!("Gagal membaca metadata '{path}': {e}"))?;
+    let raw =
+        fs::read_to_string(path).map_err(|e| format!("Gagal membaca metadata '{path}': {e}"))?;
     ContractMetadata::from_json(&raw).map_err(|e| format!("Metadata '{path}' tidak valid: {e}"))
 }
 
@@ -467,11 +470,11 @@ pub fn parse_address(raw: &str) -> Result<Address, String> {
 /// Keystore tidak terbaca/rusak, password salah, atau tidak dapat diperoleh.
 fn open_signer(args: &[String], mode: ApprovalMode) -> Result<KeystoreSigner, String> {
     let path = flag(args, "keystore").unwrap_or_else(|| "default.keystore.json".to_string());
-    let raw = fs::read_to_string(&path).map_err(|e| format!("Gagal membuka keystore '{path}': {e}"))?;
+    let raw =
+        fs::read_to_string(&path).map_err(|e| format!("Gagal membuka keystore '{path}': {e}"))?;
     // Validasi format keystore lebih awal agar pesan galat lebih informatif
     // dibanding kegagalan enkripsi yang samar.
-    Keystore::from_json_str(&raw)
-        .map_err(|e| format!("Format keystore '{path}' rusak: {e}"))?;
+    Keystore::from_json_str(&raw).map_err(|e| format!("Format keystore '{path}' rusak: {e}"))?;
     let password = resolve_password(
         has_flag(args, "password-stdin") || args.iter().any(|a| a == "--passphrase-stdin"),
         Some(ENV_WALLET_PASSWORD),
@@ -621,7 +624,6 @@ pub struct VerifyOutput {
 // Subcommand: deploy
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Subcommand: deploy / verify
 // ---------------------------------------------------------------------------
@@ -635,9 +637,11 @@ pub struct VerifyOutput {
 fn cmd_deploy(rest: &[String], format: OutputFormat) -> Result<(), String> {
     let positional = positionals(rest, &["yes", "y", "auto-approve", "verify-only"]);
     let Some(spec) = positional.first().cloned() else {
-        return Err("Bytecode wajib diisi: aurion contract deploy <file.avm|hex> \
+        return Err(
+            "Bytecode wajib diisi: aurion contract deploy <file.avm|hex> \
                     [--runtime <f>] [--name <n>] [--keystore <path>]"
-            .to_string());
+                .to_string(),
+        );
     };
 
     let constructor = load_bytecode(&spec)?;
@@ -658,7 +662,12 @@ fn cmd_deploy(rest: &[String], format: OutputFormat) -> Result<(), String> {
     let code_hash = crate::crypto::blake3_hash(&constructor);
 
     if verify_only || !wants_keystore {
-        return print_verify(&constructor, &code_hash, verified.valid_jump_dests.len(), format);
+        return print_verify(
+            &constructor,
+            &code_hash,
+            verified.valid_jump_dests.len(),
+            format,
+        );
     }
 
     let provider = RpcProvider::new(rpc_url(rest));
@@ -675,10 +684,9 @@ fn cmd_deploy(rest: &[String], format: OutputFormat) -> Result<(), String> {
         );
     }
     if let Some(f) = flag(rest, "fee") {
-        request.fee = Some(Quantum::new(
-            f.parse::<u128>()
-                .map_err(|_| format!("--fee '{f}' bukan bilangan bulat Quanta yang valid"))?,
-        ));
+        request.fee = Some(Quantum::new(f.parse::<u128>().map_err(|_| {
+            format!("--fee '{f}' bukan bilangan bulat Quanta yang valid")
+        })?));
     }
     if let Some(n) = flag(rest, "nonce") {
         request.nonce = Some(
@@ -700,10 +708,9 @@ fn cmd_deploy(rest: &[String], format: OutputFormat) -> Result<(), String> {
     banner("AURION CONTRACT DEPLOY - SIMULASI (DRY-RUN)");
     println!("  Bytecode  : {bytecode_bytes} bytes");
     println!("  Code Hash : {}", code_hash.to_hex());
-    let (outcome, _instance) = ContractInstance::<RpcProvider, KeystoreSigner>::deploy(
-        provider, signer, request,
-    )
-    .map_err(|e| format!("Deploy gagal: {e}"))?;
+    let (outcome, _instance) =
+        ContractInstance::<RpcProvider, KeystoreSigner>::deploy(provider, signer, request)
+            .map_err(|e| format!("Deploy gagal: {e}"))?;
 
     if !auto {
         println!("{}", outcome.prompt);
@@ -740,7 +747,10 @@ fn cmd_deploy(rest: &[String], format: OutputFormat) -> Result<(), String> {
             "{}",
             dim("  Simpan metadata JSON agar CLI dapat memanggil kontrak ini:")
         );
-        println!("{}", dim("    aurion contract metadata <addr> --metadata <file.json>"));
+        println!(
+            "{}",
+            dim("    aurion contract metadata <addr> --metadata <file.json>")
+        );
     });
     Ok(())
 }
@@ -811,9 +821,10 @@ fn prepare_invocation(args: &[String]) -> Result<Invocation, String> {
     // Posisional dipisah dari flag agar alamat/metode/argumen mudah dibaca.
     let positionals_in = positionals(args, &["yes", "y", "auto-approve"]);
     let rest = &positionals_in[..];
-    let addr_str = rest
-        .first()
-        .ok_or_else(|| "Alamat kontrak wajib diisi: aurion contract <call|query> <address> <method> [args...]".to_string())?;
+    let addr_str = rest.first().ok_or_else(|| {
+        "Alamat kontrak wajib diisi: aurion contract <call|query> <address> <method> [args...]"
+            .to_string()
+    })?;
     let method_name = rest
         .get(1)
         .ok_or_else(|| format!("Nama metode wajib diisi untuk kontrak {addr_str}"))?;
@@ -829,9 +840,9 @@ fn prepare_invocation(args: &[String]) -> Result<Invocation, String> {
     let account = provider
         .get_account(&address)
         .map_err(|e| format!("Gagal membaca akun kontrak dari simpul: {e}"))?;
-    let code_hash = account.code_hash.ok_or_else(|| {
-        format!("{address_bech32m} bukan kontrak on-chain (tidak ada code_hash)")
-    })?;
+    let code_hash = account
+        .code_hash
+        .ok_or_else(|| format!("{address_bech32m} bukan kontrak on-chain (tidak ada code_hash)"))?;
 
     // 2. Resolusi metadata (file lokal, lalu registry simpul).
     let metadata = resolve_metadata(args, &provider, &code_hash)?;
@@ -895,17 +906,17 @@ fn print_simulation(
         println!("  Status        : {}", bad("REVERTED"));
         println!(
             "  Reason        : {}",
-            simulation
-                .reason
-                .as_deref()
-                .unwrap_or("(tidak diberikan)")
+            simulation.reason.as_deref().unwrap_or("(tidak diberikan)")
         );
     }
     println!("  Contract     : {}", dim(address_bech32m));
     println!("  Account Hex  : {}", dim(&address.to_hex()));
     println!("  Method        : {}", method.signature);
     println!("  Gas Used      : {}", simulation.gas_used);
-    println!("  Return Data   : 0x{}", hex::encode(&simulation.return_data));
+    println!(
+        "  Return Data   : 0x{}",
+        hex::encode(&simulation.return_data)
+    );
     if let Some(d) = decoded {
         println!("  Decoded       : {d}");
     }
@@ -1223,7 +1234,10 @@ fn cmd_publish_metadata(args: &[String], format: OutputFormat) -> Result<(), Str
         println!("  Address    : {}", metadata.address);
         println!("  Methods    : {}", metadata.methods.len());
         println!();
-        println!("{}", warn("  Registry in-memory: hilang saat restart simpul."));
+        println!(
+            "{}",
+            warn("  Registry in-memory: hilang saat restart simpul.")
+        );
     });
     Ok(())
 }
@@ -1245,7 +1259,11 @@ fn cmd_inspect(args: &[String], format: OutputFormat) -> Result<(), String> {
     let db_path = flag(args, "db-path").unwrap_or_else(|| "data/aurion.redb".to_string());
     let account = crate::storage::RedbStorageEngine::open_or_create(&db_path)
         .ok()
-        .and_then(|store| crate::storage::StateStore::get_account(&store, &address).ok().flatten());
+        .and_then(|store| {
+            crate::storage::StateStore::get_account(&store, &address)
+                .ok()
+                .flatten()
+        });
 
     let (balance, nonce, code_hash, storage_root, is_contract) = match account {
         Some(acc) => (
@@ -1270,7 +1288,10 @@ fn cmd_inspect(args: &[String], format: OutputFormat) -> Result<(), String> {
     format.print(&out, || {
         println!("  Address      : {target}");
         println!("  Is Contract  : {is_contract}");
-        println!("  Code Hash    : {}", code_hash.as_deref().unwrap_or("None"));
+        println!(
+            "  Code Hash    : {}",
+            code_hash.as_deref().unwrap_or("None")
+        );
         println!(
             "  Storage Root : {}",
             storage_root.as_deref().unwrap_or("None")
@@ -1281,7 +1302,10 @@ fn cmd_inspect(args: &[String], format: OutputFormat) -> Result<(), String> {
         );
         println!("  Nonce        : {nonce}");
         println!();
-        println!("{}", dim("  Sumber: penyimpanan lokal redb (bukan on-chain)."));
+        println!(
+            "{}",
+            dim("  Sumber: penyimpanan lokal redb (bukan on-chain).")
+        );
     });
     Ok(())
 }
@@ -1299,7 +1323,9 @@ pub fn print_contract_help() {
     println!("Usage: aurion contract <subcommand> [options]");
     println!();
     println!("Subcommands:");
-    println!("  deploy            Deploy kontrak baru via Contract SDK (offline bila tanpa --keystore)");
+    println!(
+        "  deploy            Deploy kontrak baru via Contract SDK (offline bila tanpa --keystore)"
+    );
     println!("  call              Panggil metode: simulasi -> clear signing -> broadcast");
     println!("  query             Panggil metode read-only (tanpa tanda tangan / broadcast)");
     println!("  metadata          Tampilkan ABI, selector, dan code_hash kontrak");
@@ -1405,10 +1431,9 @@ fn call_options(args: &[String]) -> Result<CallOptions, String> {
         );
     }
     if let Some(f) = flag(args, "fee") {
-        opts.fee = Some(Quantum::new(
-            f.parse::<u128>()
-                .map_err(|_| format!("--fee '{f}' bukan bilangan bulat Quanta yang valid"))?,
-        ));
+        opts.fee = Some(Quantum::new(f.parse::<u128>().map_err(|_| {
+            format!("--fee '{f}' bukan bilangan bulat Quanta yang valid")
+        })?));
     }
     if let Some(n) = flag(args, "nonce") {
         opts.nonce = Some(
@@ -1506,7 +1531,12 @@ pub fn handle_contract_subcommand(args: &[String], format: OutputFormat) -> Resu
             let verified = crate::vm::verifier::BytecodeVerifier::verify(&bytecode)
                 .map_err(|e| format!("Verifikasi bytecode gagal: {e}"))?;
             let code_hash = crate::crypto::blake3_hash(&bytecode);
-            print_verify(&bytecode, &code_hash, verified.valid_jump_dests.len(), format)
+            print_verify(
+                &bytecode,
+                &code_hash,
+                verified.valid_jump_dests.len(),
+                format,
+            )
         }
         "help" | "--help" | "-h" => {
             print_contract_help();
@@ -1526,4 +1556,3 @@ pub fn handle_contract_subcommand(args: &[String], format: OutputFormat) -> Resu
     }
     result
 }
-

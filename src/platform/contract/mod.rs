@@ -48,7 +48,7 @@ pub use instance::{
 pub use intent::{ContractIntent, IntentAction};
 pub use metadata::{
     format_quanta, selector_for, AbiParam, AbiType, AbiValue, ContractMetadata, MethodAbi,
-    METADATA_SCHEMA, MAX_ABI_INPUTS,
+    MAX_ABI_INPUTS, METADATA_SCHEMA,
 };
 pub use provider::{DryRunReport, MemoryProvider, Provider, RpcProvider};
 pub use signer::{ApprovalMode, KeystoreSigner, Signer};

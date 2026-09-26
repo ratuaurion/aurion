@@ -13,8 +13,8 @@ use aurion::cli::dispatcher::dispatch;
 use aurion::cli::output::OutputFormat;
 use aurion::contract::cli::{load_bytecode, parse_abi_arg, parse_address};
 use aurion::contract::metadata::{AbiParam, AbiType, AbiValue, MethodAbi};
-use aurion::core::Quantum;
 use aurion::contract::Signer;
+use aurion::core::Quantum;
 use std::sync::Arc;
 
 // ---------------------------------------------------------------------------
@@ -229,7 +229,11 @@ async fn deploy_requires_bytecode_argument() {
 
 #[tokio::test]
 async fn metadata_without_target_is_rejected() {
-    let res = dispatch(CliCommand::Contract(vec!["metadata".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Contract(vec!["metadata".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_err(), "metadata tanpa target harus ditolak");
 }
 
@@ -251,7 +255,10 @@ fn method_abi_selector_is_derived_from_signature() {
     )
     .expect("method");
     // Selector harus turunan Blake3 signature.
-    assert_eq!(method.selector, aurion::contract::selector_for("transfer(u64)"));
+    assert_eq!(
+        method.selector,
+        aurion::contract::selector_for("transfer(u64)")
+    );
     assert_eq!(method.inputs[0].ty.label(), "U64");
     assert!(method.check_args(&[]).is_err(), "jumlah argumen salah");
     assert!(method.check_args(&[AbiValue::U64(1)]).is_ok());
@@ -280,21 +287,19 @@ fn gas_limit_constant_is_shared_with_sandbox() {
 // selalu timeout.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn query_end_to_end_against_live_rpc_server() {
-    use std::collections::HashMap;
     use aurion::core::{Address, Hash256, Quantum};
     use aurion::crypto::blake3_hash;
     use aurion::gateway::rpc::methods::RpcContext;
     use aurion::gateway::rpc::pubsub::SubscriptionManager;
     use aurion::gateway::rpc::server::RpcServer;
     use aurion::state::account::Account;
+    use std::collections::HashMap;
     use tokio::sync::watch;
 
     // 1. Kontrak Echo on-chain di state RPC.
     let ctx = Arc::new(RpcContext::new(1001));
     let contract = Address::from_bytes([0xC0; 32]);
-    let runtime = vec![
-        0x60u8, 0x2A, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xF3,
-    ];
+    let runtime = vec![0x60u8, 0x2A, 0x60, 0x00, 0x52, 0x60, 0x20, 0x60, 0x00, 0xF3];
     let code_hash = blake3_hash(&runtime);
     {
         let mut accounts = HashMap::new();
@@ -325,18 +330,19 @@ async fn query_end_to_end_against_live_rpc_server() {
         vec![MethodAbi::new("ping", "ping()", vec![], vec![], false).expect("method")],
     )
     .expect("metadata");
-    ctx.contract_metadata.register(
-        code_hash,
-        metadata.to_json().expect("metadata json"),
-    );
+    ctx.contract_metadata
+        .register(code_hash, metadata.to_json().expect("metadata json"));
 
     // 3. Jalankan server RPC nyata di port bebas.
     let pubsub = Arc::new(SubscriptionManager::new());
     let (_shutdown_tx, shutdown_rx) = watch::channel(false);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.expect("bind");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("bind");
     let addr = listener.local_addr().expect("addr");
     drop(listener);
-    let server = RpcServer::new(Arc::clone(&ctx), pubsub, &addr.to_string()).with_shutdown(shutdown_rx);
+    let server =
+        RpcServer::new(Arc::clone(&ctx), pubsub, &addr.to_string()).with_shutdown(shutdown_rx);
     let handle = tokio::spawn(async move {
         let _ = server.run().await;
     });
@@ -380,11 +386,11 @@ async fn query_end_to_end_against_live_rpc_server() {
 
 #[tokio::test]
 async fn query_rejects_metadata_bound_to_different_code_hash() {
-    use std::collections::HashMap;
     use aurion::core::{Address, Hash256, Quantum};
     use aurion::crypto::blake3_hash;
     use aurion::gateway::rpc::methods::RpcContext;
     use aurion::state::account::Account;
+    use std::collections::HashMap;
 
     // Akun kontrak dengan code_hash A, tetapi metadata yang謬asar code_hash B.
     let ctx = RpcContext::new(1001);

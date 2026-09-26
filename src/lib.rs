@@ -15,13 +15,11 @@ pub mod specialized;
 pub mod statemachine;
 
 // 2. Re-export Kanonikal Transparan untuk Kompatibilitas & Integrasi Ruang Kerja Penuh
-pub use primitives::{codec, core, crypto, genesis};
-pub use statemachine::{state, transaction, vm};
 pub use consensus::mempool;
+pub use infrastructure as l5;
+pub use interop as l4;
+pub use platform::{audit, cli, conformance, contract, gateway, runtime, storage, wallet, wire};
+pub use primitives::{codec, core, crypto, genesis};
 pub use scaling as l2;
 pub use specialized as l3;
-pub use interop as l4;
-pub use infrastructure as l5;
-pub use platform::{audit, cli, conformance, contract, gateway, runtime, storage, wallet, wire};
-
-
+pub use statemachine::{state, transaction, vm};

@@ -166,20 +166,50 @@ impl Opcode {
     pub fn base_gas_cost(&self) -> u64 {
         match self {
             Self::Stop => 0,
-            Self::Add | Self::Sub | Self::Not | Self::Lt | Self::Gt | Self::Eq | Self::IsZero
-            | Self::And | Self::Or | Self::Xor | Self::Shl | Self::Shr | Self::Pop
-            | Self::Pc | Self::MSize | Self::Gas | Self::JumpDest => 3,
+            Self::Add
+            | Self::Sub
+            | Self::Not
+            | Self::Lt
+            | Self::Gt
+            | Self::Eq
+            | Self::IsZero
+            | Self::And
+            | Self::Or
+            | Self::Xor
+            | Self::Shl
+            | Self::Shr
+            | Self::Pop
+            | Self::Pc
+            | Self::MSize
+            | Self::Gas
+            | Self::JumpDest => 3,
 
             Self::Mul | Self::Div | Self::Mod => 5,
 
-            Self::Push1 | Self::Push2 | Self::Push4 | Self::Push8 | Self::Push16 | Self::Push32
-            | Self::Dup1 | Self::Dup2 | Self::Dup3 | Self::Dup4
-            | Self::Swap1 | Self::Swap2 | Self::Swap3 | Self::Swap4 => 3,
+            Self::Push1
+            | Self::Push2
+            | Self::Push4
+            | Self::Push8
+            | Self::Push16
+            | Self::Push32
+            | Self::Dup1
+            | Self::Dup2
+            | Self::Dup3
+            | Self::Dup4
+            | Self::Swap1
+            | Self::Swap2
+            | Self::Swap3
+            | Self::Swap4 => 3,
 
             Self::MLoad | Self::MStore | Self::MStore8 => 3,
 
-            Self::Address | Self::Caller | Self::Origin | Self::CallValue | Self::GasLimit
-            | Self::BlockHeight | Self::Timestamp => 2,
+            Self::Address
+            | Self::Caller
+            | Self::Origin
+            | Self::CallValue
+            | Self::GasLimit
+            | Self::BlockHeight
+            | Self::Timestamp => 2,
 
             Self::Jump => 8,
             Self::Jumpi => 10,

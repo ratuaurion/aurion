@@ -161,9 +161,7 @@ impl ContractIntent {
         out.push_str("==================================================================\n");
         out.push_str("             AURION CLEAR SIGNING - KONTRAK AVM\n");
         out.push_str("==================================================================\n");
-        out.push_str(&format!(
-            "  Aksi             : {action}\n"
-        ));
+        out.push_str(&format!("  Aksi             : {action}\n"));
         out.push_str(&format!(
             "  Kontrak          : {} ({})\n",
             self.contract_name, self.contract_bech32m
@@ -178,10 +176,7 @@ impl ContractIntent {
                 out.push_str(&format!("  Argumen [{idx}]        : {arg}\n"));
             }
         }
-        out.push_str(&format!(
-            "  Dari (Pengirim)  : {}\n",
-            self.sender_bech32m
-        ));
+        out.push_str(&format!("  Dari (Pengirim)  : {}\n", self.sender_bech32m));
         if !self.amount.is_zero() {
             out.push_str(&format!(
                 "  Nilai (Value)    : {}\n",

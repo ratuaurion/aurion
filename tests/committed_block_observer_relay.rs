@@ -27,14 +27,9 @@ fn sample_block(height: u64) -> aurion::consensus::bft::Block {
     )
 }
 
-async fn open_peer(
-    listen: Option<&str>,
-    connect: &[&str],
-) -> zenoh::Session {
+async fn open_peer(listen: Option<&str>, connect: &[&str]) -> zenoh::Session {
     let mut config = ZenohConfig::default();
-    config
-        .insert_json5("mode", r#""peer""#)
-        .unwrap();
+    config.insert_json5("mode", r#""peer""#).unwrap();
     config
         .insert_json5("scouting/multicast/enabled", "false")
         .unwrap();
@@ -42,9 +37,7 @@ async fn open_peer(
         Some(endpoint) => config
             .insert_json5("listen/endpoints", &format!(r#"["{endpoint}"]"#))
             .unwrap(),
-        None => config
-            .insert_json5("listen/endpoints", "[]")
-            .unwrap(),
+        None => config.insert_json5("listen/endpoints", "[]").unwrap(),
     };
     if !connect.is_empty() {
         let endpoints = connect

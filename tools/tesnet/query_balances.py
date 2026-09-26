@@ -17,5 +17,5 @@ for name, addr in validators:
     with urllib.request.urlopen(req) as resp:
         res = json.loads(resp.read().decode())
         val = res.get('result', 0)
-        aur = val / 100_000_000 if isinstance(val, (int, float)) else val
+        aur = val / 1_000_000_000 if isinstance(val, (int, float)) else val
         print(f"{name} ({addr[:14]}...): {val} Quanta ({aur} AUR)")

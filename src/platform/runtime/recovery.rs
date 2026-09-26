@@ -220,7 +220,11 @@ mod tests {
 
         cb.record_round_failure("Round 3 timeout");
         assert!(cb.is_tripped);
-        assert!(cb.trip_reason.as_ref().unwrap().contains("failure threshold exceeded"));
+        assert!(cb
+            .trip_reason
+            .as_ref()
+            .unwrap()
+            .contains("failure threshold exceeded"));
 
         // Reset
         cb.reset();

@@ -278,7 +278,8 @@ impl<T: BftTransport> BftReactor<T> {
         if block.header.round > self.current_round {
             self.current_round = block.header.round;
             self.round_deadline = None;
-            self.vote_accumulator.prune_below_height(self.current_height);
+            self.vote_accumulator
+                .prune_below_height(self.current_height);
             self.pending_proposal = None;
             self.pending_proposer_index = None;
         }
@@ -419,7 +420,8 @@ impl<T: BftTransport> BftReactor<T> {
         self.current_round = round;
         self.pending_proposal = None;
         self.pending_proposer_index = None;
-        self.vote_accumulator.prune_below_height(self.current_height);
+        self.vote_accumulator
+            .prune_below_height(self.current_height);
     }
 
     fn advance_height(&mut self, new_height: u64) {

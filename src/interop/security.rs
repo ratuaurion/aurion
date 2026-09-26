@@ -65,12 +65,7 @@ impl MultiProverEngine {
     }
 
     /// Submits a verdict from a specific prover for a given cross-chain claim.
-    pub fn submit_verdict(
-        &mut self,
-        claim_id: [u8; 32],
-        prover: ProverId,
-        verdict: ProverVerdict,
-    ) {
+    pub fn submit_verdict(&mut self, claim_id: [u8; 32], prover: ProverId, verdict: ProverVerdict) {
         self.verdicts.insert((claim_id, prover), verdict);
     }
 
@@ -79,7 +74,11 @@ impl MultiProverEngine {
     /// Rule (AUR-L4-SEC-002): Requires 2-of-3 agreement to accept or reject.
     /// If < 2 provers agree on any outcome, returns `Disputed`.
     pub fn evaluate_quorum(&self, claim_id: [u8; 32]) -> MultiProverResult {
-        let provers = [ProverId::LightClient, ProverId::ZkStateProof, ProverId::OptimisticWatcher];
+        let provers = [
+            ProverId::LightClient,
+            ProverId::ZkStateProof,
+            ProverId::OptimisticWatcher,
+        ];
 
         let valid_count = provers
             .iter()
@@ -102,10 +101,14 @@ impl MultiProverEngine {
 
     /// Returns the number of provers that have submitted verdicts for a claim.
     pub fn submitted_count(&self, claim_id: &[u8; 32]) -> usize {
-        [ProverId::LightClient, ProverId::ZkStateProof, ProverId::OptimisticWatcher]
-            .iter()
-            .filter(|&&p| self.verdicts.contains_key(&(*claim_id, p)))
-            .count()
+        [
+            ProverId::LightClient,
+            ProverId::ZkStateProof,
+            ProverId::OptimisticWatcher,
+        ]
+        .iter()
+        .filter(|&&p| self.verdicts.contains_key(&(*claim_id, p)))
+        .count()
     }
 
     /// Generates a deterministic claim ID from an envelope hash and source chain.
@@ -289,7 +292,9 @@ impl BridgeCircuitBreaker {
         if tripped {
             self.circuit_states.insert(chain, CircuitStatus::Open);
         } else {
-            self.circuit_states.entry(chain).or_insert(CircuitStatus::Closed);
+            self.circuit_states
+                .entry(chain)
+                .or_insert(CircuitStatus::Closed);
         }
 
         tripped
@@ -302,7 +307,10 @@ impl BridgeCircuitBreaker {
 
     /// Returns the current circuit status for a bridge.
     pub fn status(&self, chain: ChainId) -> CircuitStatus {
-        *self.circuit_states.get(&chain).unwrap_or(&CircuitStatus::Closed)
+        *self
+            .circuit_states
+            .get(&chain)
+            .unwrap_or(&CircuitStatus::Closed)
     }
 
     /// Manually resets a halted bridge circuit (governance action only).
@@ -423,9 +431,16 @@ mod tests {
 
         engine.submit_verdict(claim_id, ProverId::LightClient, ProverVerdict::Valid);
         engine.submit_verdict(claim_id, ProverId::ZkStateProof, ProverVerdict::Valid);
-        engine.submit_verdict(claim_id, ProverId::OptimisticWatcher, ProverVerdict::Inconclusive);
+        engine.submit_verdict(
+            claim_id,
+            ProverId::OptimisticWatcher,
+            ProverVerdict::Inconclusive,
+        );
 
-        assert_eq!(engine.evaluate_quorum(claim_id), MultiProverResult::Accepted);
+        assert_eq!(
+            engine.evaluate_quorum(claim_id),
+            MultiProverResult::Accepted
+        );
     }
 
     #[test]
@@ -437,7 +452,10 @@ mod tests {
         engine.submit_verdict(claim_id, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
         engine.submit_verdict(claim_id, ProverId::OptimisticWatcher, ProverVerdict::Valid);
 
-        assert_eq!(engine.evaluate_quorum(claim_id), MultiProverResult::Rejected);
+        assert_eq!(
+            engine.evaluate_quorum(claim_id),
+            MultiProverResult::Rejected
+        );
     }
 
     #[test]
@@ -447,16 +465,26 @@ mod tests {
 
         engine.submit_verdict(claim_id, ProverId::LightClient, ProverVerdict::Valid);
         engine.submit_verdict(claim_id, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
-        engine.submit_verdict(claim_id, ProverId::OptimisticWatcher, ProverVerdict::Inconclusive);
+        engine.submit_verdict(
+            claim_id,
+            ProverId::OptimisticWatcher,
+            ProverVerdict::Inconclusive,
+        );
 
-        assert_eq!(engine.evaluate_quorum(claim_id), MultiProverResult::Disputed);
+        assert_eq!(
+            engine.evaluate_quorum(claim_id),
+            MultiProverResult::Disputed
+        );
     }
 
     #[test]
     fn test_multi_prover_quorum_disputed_no_votes() {
         let engine = MultiProverEngine::new();
         let claim_id = [0xFF; 32];
-        assert_eq!(engine.evaluate_quorum(claim_id), MultiProverResult::Disputed);
+        assert_eq!(
+            engine.evaluate_quorum(claim_id),
+            MultiProverResult::Disputed
+        );
     }
 
     #[test]
@@ -478,8 +506,12 @@ mod tests {
         let capacity = q(1_000_000); // 1M Quanta per 100 slots
         let mut limiter = FinancialRateLimiter::new(capacity, 100);
 
-        limiter.record_transfer(ChainId::Ethereum, q(400_000), 50).unwrap();
-        limiter.record_transfer(ChainId::Ethereum, q(400_000), 50).unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(400_000), 50)
+            .unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(400_000), 50)
+            .unwrap();
         assert_eq!(limiter.current_volume(ChainId::Ethereum, 50), 800_000);
     }
 
@@ -488,7 +520,9 @@ mod tests {
         let capacity = q(1_000_000);
         let mut limiter = FinancialRateLimiter::new(capacity, 100);
 
-        limiter.record_transfer(ChainId::Ethereum, q(900_000), 10).unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(900_000), 10)
+            .unwrap();
         let result = limiter.record_transfer(ChainId::Ethereum, q(200_000), 10);
         assert!(result.is_err(), "Should be rejected: exceeds window cap");
     }
@@ -498,9 +532,13 @@ mod tests {
         let capacity = q(1_000_000);
         let mut limiter = FinancialRateLimiter::new(capacity, 100);
 
-        limiter.record_transfer(ChainId::Ethereum, q(900_000), 0).unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(900_000), 0)
+            .unwrap();
         // New window starts at slot 100
-        limiter.record_transfer(ChainId::Ethereum, q(900_000), 100).unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(900_000), 100)
+            .unwrap();
         assert_eq!(limiter.current_volume(ChainId::Ethereum, 100), 900_000);
     }
 
@@ -509,9 +547,13 @@ mod tests {
         let capacity = q(1_000_000);
         let mut limiter = FinancialRateLimiter::new(capacity, 100);
 
-        limiter.record_transfer(ChainId::Ethereum, q(900_000), 1).unwrap();
+        limiter
+            .record_transfer(ChainId::Ethereum, q(900_000), 1)
+            .unwrap();
         // Bitcoin bridge has its own independent bucket
-        limiter.record_transfer(ChainId::Bitcoin, q(900_000), 1).unwrap();
+        limiter
+            .record_transfer(ChainId::Bitcoin, q(900_000), 1)
+            .unwrap();
         assert_eq!(limiter.current_volume(ChainId::Bitcoin, 1), 900_000);
     }
 
@@ -568,12 +610,15 @@ mod tests {
 
         // Wrong token is rejected
         let wrong_token = [0xFF; 32];
-        assert!(cb.governance_reset(ChainId::Ethereum, &wrong_token).is_err());
+        assert!(cb
+            .governance_reset(ChainId::Ethereum, &wrong_token)
+            .is_err());
         assert!(cb.is_halted(ChainId::Ethereum));
 
         // Correct token re-closes the circuit
         let correct_token = cb.compute_reset_token(ChainId::Ethereum);
-        cb.governance_reset(ChainId::Ethereum, &correct_token).unwrap();
+        cb.governance_reset(ChainId::Ethereum, &correct_token)
+            .unwrap();
         assert!(!cb.is_halted(ChainId::Ethereum));
     }
 
@@ -661,7 +706,8 @@ mod tests {
             .submit_verdict(claim_id, ProverId::ZkStateProof, ProverVerdict::Valid);
 
         // First transfer passes
-        gate.approve_transfer(claim_id, ChainId::Ethereum, q(400_000), 1).unwrap();
+        gate.approve_transfer(claim_id, ChainId::Ethereum, q(400_000), 1)
+            .unwrap();
         // Second transfer exceeds window capacity
         let result = gate.approve_transfer(claim_id, ChainId::Ethereum, q(200_000), 1);
         assert!(result.is_err());

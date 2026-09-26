@@ -3,10 +3,10 @@
 //! Jaringan Penyimpanan Terdistribusi Berbasis Pengalamatan Konten Blake3 (REQ-L5-03).
 //! Invariant: AUR-L5-DATA-001 (Blake3 Content Addressing), AUR-L5-PREC-001 (Zero-Float Quantum).
 
-use std::collections::BTreeMap;
-use blake3::Hasher;
 use super::types::{InfrastructureNodeId, L5_STORAGE_CHUNK_BYTES};
 use crate::primitives::core::Quantum;
+use blake3::Hasher;
+use std::collections::BTreeMap;
 
 /// Pengenal Potongan Data (Blake3 Chunk Digest).
 pub type ChunkId = [u8; 32];
@@ -124,7 +124,11 @@ impl StorageManifest {
         let mut idx = target_idx;
 
         while current_layer.len() > 1 {
-            let sibling_idx = if idx.is_multiple_of(2) { idx + 1 } else { idx - 1 };
+            let sibling_idx = if idx.is_multiple_of(2) {
+                idx + 1
+            } else {
+                idx - 1
+            };
             let sibling = if sibling_idx < current_layer.len() {
                 current_layer[sibling_idx]
             } else {
@@ -204,10 +208,7 @@ impl StorageGrid {
     }
 
     /// Menghitung tantangan acak audit untuk keeper pada slot tertentu.
-    pub fn generate_audit_challenge(
-        seed: &[u8; 32],
-        chunk_count: u32,
-    ) -> u32 {
+    pub fn generate_audit_challenge(seed: &[u8; 32], chunk_count: u32) -> u32 {
         if chunk_count == 0 {
             return 0;
         }
@@ -224,7 +225,10 @@ impl StorageGrid {
     }
 
     pub fn get_replicas(&self, chunk_id: &ChunkId) -> &[InfrastructureNodeId] {
-        self.allocations.get(chunk_id).map(|v| v.as_slice()).unwrap_or(&[])
+        self.allocations
+            .get(chunk_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
     }
 }
 
@@ -248,7 +252,9 @@ mod tests {
             let cid = compute_chunk_id(chunk);
             assert_eq!(manifest.chunk_ids[i], cid);
 
-            let proof_path = manifest.generate_merkle_proof(i).expect("Proof must be generated");
+            let proof_path = manifest
+                .generate_merkle_proof(i)
+                .expect("Proof must be generated");
             let por = ProofOfRetrievability {
                 chunk_index: i as u32,
                 chunk_id: cid,

@@ -4,7 +4,6 @@
 //! Mematuhi Dokumen Aturan Aplikasi 16 (16-SMART-CONTRACT-EXECUTION-SPECIFICATION.md)
 //! dan Invariant AUR-VM-001 s.d AUR-VM-010.
 
-use std::collections::HashMap;
 use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::blake3_hash;
 use aurion::state::account::Account;
@@ -14,6 +13,7 @@ use aurion::transaction::types::{Transaction, TxType};
 use aurion::vm::{
     AvmEngine, BytecodeVerifier, ExecutionContext, ExecutionResult, Opcode, VerifierError,
 };
+use std::collections::HashMap;
 
 #[test]
 fn test_avm_arithmetic_execution() {
@@ -27,13 +27,18 @@ fn test_avm_arithmetic_execution() {
     // PUSH1 0  (0x60 0x00)
     // RETURN   (0xF3)
     let bytecode = vec![
-        Opcode::Push1 as u8, 20,
-        Opcode::Push1 as u8, 10,
+        Opcode::Push1 as u8,
+        20,
+        Opcode::Push1 as u8,
+        10,
         Opcode::Add as u8,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        0,
         Opcode::MStore as u8,
-        Opcode::Push1 as u8, 32,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        32,
+        Opcode::Push1 as u8,
+        0,
         Opcode::Return as u8,
     ];
 
@@ -45,7 +50,11 @@ fn test_avm_arithmetic_execution() {
 
     let res = AvmEngine::execute(&verified, ctx, &storage);
     match res {
-        ExecutionResult::Success { return_data, gas_used, .. } => {
+        ExecutionResult::Success {
+            return_data,
+            gas_used,
+            ..
+        } => {
             assert_eq!(return_data.len(), 32);
             // 20 + 10 = 30 = 0x1E di byte terakhir word 32-byte
             assert_eq!(return_data[31], 30);
@@ -69,15 +78,21 @@ fn test_avm_storage_sstore_sload() {
     // PUSH1 0  (offset)
     // RETURN
     let bytecode = vec![
-        Opcode::Push1 as u8, 42,
-        Opcode::Push1 as u8, 1,
+        Opcode::Push1 as u8,
+        42,
+        Opcode::Push1 as u8,
+        1,
         Opcode::SStore as u8,
-        Opcode::Push1 as u8, 1,
+        Opcode::Push1 as u8,
+        1,
         Opcode::SLoad as u8,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        0,
         Opcode::MStore as u8,
-        Opcode::Push1 as u8, 32,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        32,
+        Opcode::Push1 as u8,
+        0,
         Opcode::Return as u8,
     ];
 
@@ -89,7 +104,11 @@ fn test_avm_storage_sstore_sload() {
 
     let res = AvmEngine::execute(&verified, ctx, &storage);
     match res {
-        ExecutionResult::Success { return_data, storage_changes, .. } => {
+        ExecutionResult::Success {
+            return_data,
+            storage_changes,
+            ..
+        } => {
             assert_eq!(return_data.len(), 32);
             assert_eq!(return_data[31], 42);
 
@@ -114,16 +133,26 @@ fn test_avm_blake3_syscall() {
     // MStore hash ke offset 0
     // Return 32 bytes
     let bytecode = vec![
-        Opcode::Push4 as u8, 0x41, 0x55, 0x52, 0x30,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push4 as u8,
+        0x41,
+        0x55,
+        0x52,
+        0x30,
+        Opcode::Push1 as u8,
+        0,
         Opcode::MStore as u8,
-        Opcode::Push1 as u8, 4,
-        Opcode::Push1 as u8, 28, // Offset 28 karena word 32 byte rata kanan
+        Opcode::Push1 as u8,
+        4,
+        Opcode::Push1 as u8,
+        28, // Offset 28 karena word 32 byte rata kanan
         Opcode::Blake3 as u8,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        0,
         Opcode::MStore as u8,
-        Opcode::Push1 as u8, 32,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        32,
+        Opcode::Push1 as u8,
+        0,
         Opcode::Return as u8,
     ];
 
@@ -146,8 +175,10 @@ fn test_avm_blake3_syscall() {
 #[test]
 fn test_avm_gas_metering_out_of_gas() {
     let bytecode = vec![
-        Opcode::Push1 as u8, 1,
-        Opcode::Push1 as u8, 2,
+        Opcode::Push1 as u8,
+        1,
+        Opcode::Push1 as u8,
+        2,
         Opcode::Add as u8,
     ];
     let verified = BytecodeVerifier::verify(&bytecode).unwrap();
@@ -165,8 +196,10 @@ fn test_avm_gas_metering_out_of_gas() {
 #[test]
 fn test_avm_revert_semantics() {
     let bytecode = vec![
-        Opcode::Push1 as u8, 0,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        0,
+        Opcode::Push1 as u8,
+        0,
         Opcode::Revert as u8,
     ];
     let verified = BytecodeVerifier::verify(&bytecode).unwrap();
@@ -185,7 +218,10 @@ fn test_avm_revert_semantics() {
 #[test]
 fn test_bytecode_verifier_rejection() {
     // 1. Empty bytecode
-    assert_eq!(BytecodeVerifier::verify(&[]), Err(VerifierError::EmptyBytecode));
+    assert_eq!(
+        BytecodeVerifier::verify(&[]),
+        Err(VerifierError::EmptyBytecode)
+    );
 
     // 2. Illegal opcode
     assert!(matches!(
@@ -210,8 +246,10 @@ fn test_contract_deployment_and_state_transition() {
     let mut monetary = MonetaryState::new(Quantum::new(1_000_000_000), Quantum::ZERO);
 
     let deploy_bytecode = vec![
-        Opcode::Push1 as u8, 100,
-        Opcode::Push1 as u8, 0,
+        Opcode::Push1 as u8,
+        100,
+        Opcode::Push1 as u8,
+        0,
         Opcode::SStore as u8,
         Opcode::Stop as u8,
     ];
@@ -238,7 +276,9 @@ fn test_contract_deployment_and_state_transition() {
     assert_eq!(receipt.deployed_contract, Some(expected_contract_addr));
 
     // Verifikasi akun kontrak ada di state
-    let contract_acct = accounts.get(&expected_contract_addr).expect("Contract account must exist");
+    let contract_acct = accounts
+        .get(&expected_contract_addr)
+        .expect("Contract account must exist");
     assert!(contract_acct.is_contract());
     assert_eq!(contract_acct.balance, Quantum::new(50_000_000));
 

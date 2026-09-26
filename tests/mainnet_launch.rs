@@ -21,17 +21,17 @@ use std::sync::Arc;
 use tempfile::tempdir;
 
 const EXPECTED_GENESIS_BLOCK_HASH: &str =
-    "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4";
+    "42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a";
 const EXPECTED_STATE_ROOT: &str =
-    "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4";
+    "ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f";
 const EXPECTED_CEREMONY_HASH: &str =
-    "8edb15019ca0f0b83396804cb8d6fdd20c1a72a71d0844e17e7413a2adbe37ba";
+    "a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880";
 
 #[test]
 fn test_mainnet_genesis_initialization_from_sealed_ceremony() {
     let keys = CanonicalCeremonyKeypairs::new_deterministic();
-    let transcript = CeremonyTranscript::build_and_seal(&keys)
-        .expect("Canonical ceremony build must succeed");
+    let transcript =
+        CeremonyTranscript::build_and_seal(&keys).expect("Canonical ceremony build must succeed");
 
     assert_eq!(transcript.ceremony_hash, EXPECTED_CEREMONY_HASH);
     assert_eq!(transcript.genesis_block_hash, EXPECTED_GENESIS_BLOCK_HASH);
@@ -39,9 +39,8 @@ fn test_mainnet_genesis_initialization_from_sealed_ceremony() {
     assert_eq!(transcript.chain_id, GENESIS_CHAIN_ID);
     assert_eq!(transcript.timestamp, GENESIS_TIMESTAMP);
     assert_eq!(transcript.hard_cap_aur, 66_000_000);
-    assert_eq!(transcript.initial_supply_aur, 23_100_000);
-    assert_eq!(transcript.creator_allocation_aur, 19_800_000);
-    assert_eq!(transcript.developer_allocation_aur, 3_300_000);
+    assert_eq!(transcript.initial_supply_aur, 66_000_000);
+    assert_eq!(transcript.master_treasury_allocation_aur, 66_000_000);
 
     let genesis = transcript
         .build_genesis_initialization()
@@ -58,19 +57,27 @@ fn test_mainnet_genesis_initialization_from_sealed_ceremony() {
         CEREMONY_TOTAL_VOTING_POWER
     );
 
-    // Master Treasury (Creator Key): 66M AUR = 66,000,000,000,000,000 Quanta (100% pasokan genesis)
-    let creator_addr = keys.creator.derive_address();
-    let creator_acc = genesis.accounts.get(&creator_addr).expect("Creator account exists");
-    assert_eq!(creator_acc.balance.as_u128(), 66_000_000_000_000_000);
+    // Single Treasury: 66M AUR = 66,000,000,000,000,000 Quanta (100% pasokan genesis)
+    let treasury_addr = keys.master_treasury.derive_address();
+    let treasury_acc = genesis
+        .accounts
+        .get(&treasury_addr)
+        .expect("Master Treasury account exists");
+    assert_eq!(treasury_acc.balance.as_u128(), 66_000_000_000_000_000);
 
-    // Developer: 0 Quanta
-    let dev_addr = keys.developer.derive_address();
-    let dev_acc = genesis.accounts.get(&dev_addr).expect("Developer account exists");
-    assert_eq!(dev_acc.balance.as_u128(), 0);
+    // Single Treasury: hanya SATU rekening yang lahir di Blok 0
+    assert_eq!(
+        genesis.accounts.len(),
+        1,
+        "Blok 0 hanya boleh memuat rekening Master Treasury"
+    );
 
     // Total initial supply: exactly 66M AUR (66,000,000,000,000,000 Quanta)
-    let total_initial = creator_acc.balance.checked_add(dev_acc.balance).unwrap();
-    assert_eq!(total_initial.as_u128(), 66_000_000_000_000_000);
+    assert_eq!(treasury_acc.balance.as_u128(), 66_000_000_000_000_000);
+    assert_eq!(
+        genesis.monetary.total_issued.as_u128(),
+        66_000_000_000_000_000
+    );
 }
 
 #[test]
@@ -110,20 +117,17 @@ fn test_mainnet_slot_0_to_block_1_bft_transition() {
         let ledger = node.ledger.lock().unwrap();
         let mempool = node.mempool.lock().unwrap();
         let bft = node.bft_engine.lock().unwrap();
-        let proposal = bft.assemble_block_proposal(
-            &ledger,
-            &mempool,
-            0,
-            timestamp_1,
-            &val0_addr,
-            1024 * 1024,
-        );
+        let proposal =
+            bft.assemble_block_proposal(&ledger, &mempool, 0, timestamp_1, &val0_addr, 1024 * 1024);
         let hash = proposal.hash();
         (proposal, hash)
     };
 
     assert_eq!(block_1.height(), 1);
-    assert_eq!(block_1.header.prev_block_hash.to_hex(), EXPECTED_GENESIS_BLOCK_HASH);
+    assert_eq!(
+        block_1.header.prev_block_hash.to_hex(),
+        EXPECTED_GENESIS_BLOCK_HASH
+    );
 
     // Bentuk CommitCertificate valid dengan suara 3 dari 4 validator (750,000 / 1,000,000 >= 666,667 quorum)
     let mut precommits = Vec::new();
@@ -166,7 +170,10 @@ fn test_mainnet_slot_0_to_block_1_bft_transition() {
         .map(|a| a.balance)
         .unwrap_or(Quantum::ZERO);
 
-    assert!(val0_balance > Quantum::ZERO, "Miner must receive block subsidy");
+    assert!(
+        val0_balance > Quantum::ZERO,
+        "Miner must receive block subsidy"
+    );
 }
 
 #[test]
@@ -193,7 +200,7 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
         store.clone(),
     );
 
-    let creator_addr = keys.creator.derive_address();
+    let creator_addr = keys.master_treasury.derive_address();
     let initial_creator_balance = node
         .ledger
         .lock()
@@ -225,7 +232,7 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
 
     // Tanda tangani dengan kunci Creator
     let preimage = tx.signing_preimage();
-    tx.signature = keys.creator.sign(&preimage);
+    tx.signature = keys.master_treasury.sign(&preimage);
 
     // Masukkan ke dalam mempool melalui submit_transaction
     let creator_acc = node
@@ -240,7 +247,7 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
         .unwrap()
         .submit_transaction(
             tx,
-            &keys.creator.public_key_bytes(),
+            &keys.master_treasury.public_key_bytes(),
             GENESIS_TIMESTAMP + 1,
             &creator_acc,
         )
@@ -254,14 +261,8 @@ fn test_mainnet_first_transaction_lifecycle_and_monetary_conservation() {
         let ledger = node.ledger.lock().unwrap();
         let mempool = node.mempool.lock().unwrap();
         let bft = node.bft_engine.lock().unwrap();
-        let proposal = bft.assemble_block_proposal(
-            &ledger,
-            &mempool,
-            0,
-            timestamp_1,
-            &val0_addr,
-            1024 * 1024,
-        );
+        let proposal =
+            bft.assemble_block_proposal(&ledger, &mempool, 0, timestamp_1, &val0_addr, 1024 * 1024);
         let hash = proposal.hash();
         (proposal, hash)
     };
@@ -344,13 +345,8 @@ fn test_mainnet_redb_persistence_crash_recovery() {
             ..NodeConfig::new_validator(Vec::new())
         };
 
-        let node = AurionNode::new_with_store(
-            config,
-            genesis,
-            Some(val0_key.clone()),
-            Some(0),
-            store,
-        );
+        let node =
+            AurionNode::new_with_store(config, genesis, Some(val0_key.clone()), Some(0), store);
 
         let timestamp_1 = GENESIS_TIMESTAMP + 1;
         let (_block_1, block_hash_1) = {
@@ -402,20 +398,12 @@ fn test_mainnet_redb_persistence_crash_recovery() {
             ..NodeConfig::new_validator(Vec::new())
         };
 
-        let recovered_node = AurionNode::new_with_store(
-            config,
-            genesis,
-            Some(val0_key),
-            Some(0),
-            store,
-        );
+        let recovered_node =
+            AurionNode::new_with_store(config, genesis, Some(val0_key), Some(0), store);
 
         let recovered_ledger = recovered_node.ledger.lock().unwrap();
         assert_eq!(recovered_ledger.latest_height(), pre_crash_height);
-        assert_eq!(
-            recovered_ledger.latest_block().hash(),
-            pre_crash_hash
-        );
+        assert_eq!(recovered_ledger.latest_block().hash(), pre_crash_hash);
         assert_eq!(
             recovered_ledger.compute_current_state_root(),
             pre_crash_state_root
@@ -441,7 +429,11 @@ async fn test_mainnet_cli_dispatchers() {
 
     // 3. aurion node status --dry-run
     let tmp = tempdir().unwrap();
-    let db_path = tmp.path().join("cli_node.redb").to_string_lossy().to_string();
+    let db_path = tmp
+        .path()
+        .join("cli_node.redb")
+        .to_string_lossy()
+        .to_string();
     let cmd = CliCommand::Node(vec![
         "status".to_string(),
         "--data-dir".to_string(),

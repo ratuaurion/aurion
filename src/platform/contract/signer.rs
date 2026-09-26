@@ -52,7 +52,11 @@ pub trait Signer {
     /// - Signer bukan pemilik `tx.sender`.
     /// - Pengguna menolak.
     /// - Validasi nir-status gagal.
-    fn sign(&self, intent: &ContractIntent, tx: &Transaction) -> Result<Transaction, ContractError> {
+    fn sign(
+        &self,
+        intent: &ContractIntent,
+        tx: &Transaction,
+    ) -> Result<Transaction, ContractError> {
         if tx.sender != self.address() {
             return Err(ContractError::SignerMismatch);
         }
@@ -101,8 +105,9 @@ impl KeystoreSigner {
         password: &str,
         mode: ApprovalMode,
     ) -> Result<Self, ContractError> {
-        let raw = std::fs::read_to_string(path)
-            .map_err(|e| ContractError::Provider(format!("Gagal membuka keystore '{path}': {e}")))?;
+        let raw = std::fs::read_to_string(path).map_err(|e| {
+            ContractError::Provider(format!("Gagal membuka keystore '{path}': {e}"))
+        })?;
         Self::from_keystore_json(&raw, password, mode)
     }
 

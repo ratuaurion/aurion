@@ -1,9 +1,9 @@
 //! Manajemen State dan Sparse Merkle Tree (SMT) 256-bit Layer-2 Aurion.
 //! Mematuhi Invariant L2-ARCH-003 (Zero-Float Quantum), L2-SETTLE-002 (State Commitment), dan AUR-ARCH-011 (#![forbid(unsafe_code)]).
 
-use std::collections::BTreeMap;
 use crate::core::{Address, Hash256, Quantum};
 use crate::state::smt::{smt_branch_hash, smt_leaf_hash};
+use std::collections::BTreeMap;
 
 /// Ukuran tetap representasi biner kanonikal L2Account: 32 + 16 + 8 + 32 = 88 byte
 pub const L2_ACCOUNT_ENCODED_SIZE: usize = 88;
@@ -155,7 +155,11 @@ impl L2StateStore {
             let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
             for chunk in current_level.chunks(2) {
                 let left = &chunk[0];
-                let right = if chunk.len() > 1 { &chunk[1] } else { &chunk[0] };
+                let right = if chunk.len() > 1 {
+                    &chunk[1]
+                } else {
+                    &chunk[0]
+                };
                 next_level.push(smt_branch_hash(left, right));
             }
             current_level = next_level;
@@ -165,7 +169,10 @@ impl L2StateStore {
     }
 
     /// Menghasilkan bukti inklusi Merkle (Membership Proof) untuk akun tertentu
-    pub fn generate_account_proof(&self, address: &Address) -> Result<L2AccountProof, &'static str> {
+    pub fn generate_account_proof(
+        &self,
+        address: &Address,
+    ) -> Result<L2AccountProof, &'static str> {
         let account = self
             .accounts
             .get(address)
@@ -203,7 +210,11 @@ impl L2StateStore {
             let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
             for chunk in current_level.chunks(2) {
                 let left = &chunk[0];
-                let right = if chunk.len() > 1 { &chunk[1] } else { &chunk[0] };
+                let right = if chunk.len() > 1 {
+                    &chunk[1]
+                } else {
+                    &chunk[0]
+                };
                 next_level.push(smt_branch_hash(left, right));
             }
             current_level = next_level;
@@ -271,7 +282,10 @@ mod tests {
 
         let decoded = L2Account::decode_canonical(&encoded).expect("Decode L2Account gagal");
         assert_eq!(decoded, account);
-        assert_eq!(decoded.compute_account_hash(), account.compute_account_hash());
+        assert_eq!(
+            decoded.compute_account_hash(),
+            account.compute_account_hash()
+        );
     }
 
     #[test]
@@ -303,7 +317,9 @@ mod tests {
         assert_ne!(root1, Hash256::ZERO);
 
         // Hasilkan bukti inklusi untuk akun B
-        let proof_b = store1.generate_account_proof(&addr_b).expect("Generate proof gagal");
+        let proof_b = store1
+            .generate_account_proof(&addr_b)
+            .expect("Generate proof gagal");
         assert_eq!(proof_b.address, addr_b);
         assert_eq!(proof_b.root, root1);
         assert!(proof_b.verify());
@@ -330,7 +346,10 @@ mod tests {
 
         // Mutasikan state
         store.set_account(L2Account::new(addr, Quantum::new(9999), 5));
-        assert_eq!(store.get_account(&addr).unwrap().balance, Quantum::new(9999));
+        assert_eq!(
+            store.get_account(&addr).unwrap().balance,
+            Quantum::new(9999)
+        );
 
         // Rollback ke snapshot
         store.rollback(snapshot);

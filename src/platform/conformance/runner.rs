@@ -6,8 +6,8 @@ use crate::consensus::certificate::{CommitCertificate, ValidatorEntry, Validator
 use crate::consensus::header::{BlockHeader, BLOCK_HEADER_BYTES};
 use crate::consensus::vote::{Vote, PHASE_PRECOMMIT, VOTE_BYTES};
 use crate::core::{
-    Address, Hash256, MonetaryError, Quantum, Signature,
-    MASTER_TREASURY_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
+    Address, Hash256, MonetaryError, Quantum, Signature, MASTER_TREASURY_ALLOCATION_QUANTA,
+    MAX_SUPPLY_QUANTA,
 };
 use crate::crypto::{
     blake3_hash, decode_address_bech32m, ed25519_verify_strict, encode_address_bech32m, Keypair,
@@ -565,17 +565,16 @@ pub fn run_pillar_7() -> PillarExecutionResult {
 
 pub fn run_pillar_8() -> PillarExecutionResult {
     let start = Instant::now();
-    let name = "Genesis State σ0 & Initial Supply Commitment (35% Hard Cap)";
+    let name = "Genesis State σ0 & Initial Supply Commitment (Single Treasury 100%)";
 
     let treasury = Address::from_bytes([0x11; 32]);
-    let developer = Address::from_bytes([0x22; 32]);
     let val_entry = ValidatorEntry {
         validator_id: Address::from_bytes([1u8; 32]),
         consensus_pubkey: [1u8; 32],
         voting_weight: 100,
     };
 
-    let genesis = build_genesis(treasury, developer, vec![val_entry]);
+    let genesis = build_genesis(treasury, vec![val_entry]);
 
     if genesis.header.height != 0 {
         return PillarExecutionResult {
@@ -606,7 +605,8 @@ pub fn run_pillar_8() -> PillarExecutionResult {
             name,
             status: TestStatus::Failed("Monetary state initialization mismatch".to_string()),
             duration_micros: start.elapsed().as_micros(),
-            detail: "Total issued must equal 66,000,000 AUR (100%) and burned must be 0".to_string(),
+            detail: "Total issued must equal 66,000,000 AUR (100%) and burned must be 0"
+                .to_string(),
         };
     }
 

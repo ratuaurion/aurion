@@ -3,10 +3,10 @@
 //! Mematuhi Invariant L2-ARCH-001 (Monolithic Execution), L2-ARCH-003 (Zero-Float Quantum),
 //! L2-EXEC-001 (Throughput Tinggi), dan AUR-ARCH-011 (#![forbid(unsafe_code)]).
 
-use thiserror::Error;
 use crate::core::{Hash256, Quantum};
 use crate::l2::state::{L2Account, L2StateStore};
 use crate::l2::types::{compute_txs_root, L2Block, L2Receipt, L2Transaction};
+use thiserror::Error;
 
 /// Biaya gas dasar untuk transfer L2 (10.000 gas, hemat 52% dari transfer L1)
 pub const L2_BASE_TRANSFER_GAS: u64 = 10_000;
@@ -36,7 +36,10 @@ pub enum L2ExecutionError {
     InvalidNonce { expected: u64, actual: u64 },
 
     #[error("Fee transaksi tidak mencukupi kebutuhan gas (dibutuhkan minimal {required_fee} quanta, disediakan {provided_fee} quanta)")]
-    InsufficientFeeForGas { required_fee: u128, provided_fee: u128 },
+    InsufficientFeeForGas {
+        required_fee: u128,
+        provided_fee: u128,
+    },
 
     #[error("Terjadi overflow atau underflow pada aritmetika Quantum")]
     ArithmeticOverflow,
@@ -152,11 +155,10 @@ impl L2ExecutionEngine {
         state.set_account(updated_sender);
 
         // 6. Tambah Saldo Penerima
-        let recipient_acc = state.get_account(&tx.recipient).cloned().unwrap_or(L2Account::new(
-            tx.recipient,
-            Quantum::ZERO,
-            0,
-        ));
+        let recipient_acc = state
+            .get_account(&tx.recipient)
+            .cloned()
+            .unwrap_or(L2Account::new(tx.recipient, Quantum::ZERO, 0));
 
         let new_recipient_balance = recipient_acc
             .balance
@@ -284,7 +286,7 @@ mod tests {
             sender,
             recipient,
             amount: Quantum::new(400_000_000), // 4 AUR
-            fee: Quantum::new(10_000),        // 0.0001 AUR
+            fee: Quantum::new(10_000),         // 0.0001 AUR
             nonce: 0,
             signature: Signature::from_bytes([0u8; 64]),
             payload: vec![],
@@ -385,15 +387,11 @@ mod tests {
         engine.execute_transaction(&mut sim_state, &tx).unwrap();
         let expected_state_root = sim_state.compute_state_root();
 
-        let block = L2Block::new(
-            1,
-            Hash256::ZERO,
-            expected_state_root,
-            1700000000,
-            vec![tx],
-        );
+        let block = L2Block::new(1, Hash256::ZERO, expected_state_root, 1700000000, vec![tx]);
 
-        let receipts = engine.execute_block(&mut state, &block).expect("Eksekusi blok gagal");
+        let receipts = engine
+            .execute_block(&mut state, &block)
+            .expect("Eksekusi blok gagal");
         assert_eq!(receipts.len(), 1);
         assert_eq!(state.compute_state_root(), expected_state_root);
     }
@@ -419,19 +417,16 @@ mod tests {
 
         // Header blok memuat state root palsu
         let fake_state_root = Hash256::from_bytes([0xEE; 32]);
-        let block = L2Block::new(
-            1,
-            Hash256::ZERO,
-            fake_state_root,
-            1700000000,
-            vec![tx],
-        );
+        let block = L2Block::new(1, Hash256::ZERO, fake_state_root, 1700000000, vec![tx]);
 
         let err = engine.execute_block(&mut state, &block).unwrap_err();
         assert!(matches!(err, L2ExecutionError::StateRootMismatch { .. }));
 
         // Buktikan saldo pengirim tidak berubah karena di-rollback
-        assert_eq!(state.get_account(&sender).unwrap().balance.as_u128(), 1_000_000_000);
+        assert_eq!(
+            state.get_account(&sender).unwrap().balance.as_u128(),
+            1_000_000_000
+        );
         assert_eq!(state.get_account(&sender).unwrap().nonce, 0);
     }
 
@@ -466,11 +461,16 @@ mod tests {
             payload: vec![],
         };
 
-        let err = engine.execute_batch_atomic(&mut state, &[tx1, tx2]).unwrap_err();
+        let err = engine
+            .execute_batch_atomic(&mut state, &[tx1, tx2])
+            .unwrap_err();
         assert_eq!(err, L2ExecutionError::InsufficientBalance);
 
         // Pastikan Tx 1 juga dibatalkan (rollback atomik)
-        assert_eq!(state.get_account(&sender).unwrap().balance.as_u128(), 1_000_000_000);
+        assert_eq!(
+            state.get_account(&sender).unwrap().balance.as_u128(),
+            1_000_000_000
+        );
         assert_eq!(state.get_account(&sender).unwrap().nonce, 0);
         assert!(state.get_account(&recipient).is_none());
     }

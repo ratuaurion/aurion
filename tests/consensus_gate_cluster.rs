@@ -121,7 +121,7 @@ fn proposal(cluster: &Cluster, height: u64) -> BlockProposalEnvelope {
         .unwrap()
         .validator_id;
     let recipient = Address([0xA5; 32]);
-    let tx = transfer(&cluster.keys.creator, recipient, height - 1);
+    let tx = transfer(&cluster.keys.master_treasury, recipient, height - 1);
     let mut accounts = ledger.accounts.clone();
     let mut monetary = ledger.monetary.clone();
     apply_transaction(&mut accounts, &mut monetary, &miner, &tx).unwrap();

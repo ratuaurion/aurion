@@ -3,11 +3,11 @@
 //! Mesin Arbitrase, Tantangan Penipuan & Pemotongan Jaminan (Slashing) L5 (REQ-L5-11).
 //! Invariant: AUR-L5-ARCH-002 (Economic Security Anchoring via Smart Contract Slashing).
 
-use std::collections::BTreeMap;
-use blake3::Hasher;
 use super::node::NodeRegistry;
 use super::types::{InfrastructureNodeId, NodeLifecycleStatus, L5_CHALLENGE_WINDOW_SLOTS};
 use crate::primitives::core::{Address, Quantum};
+use blake3::Hasher;
+use std::collections::BTreeMap;
 
 /// Jenis Pelanggaran Infrastruktur L5 yang Dapat Dikenakan Slashing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,11 +24,11 @@ impl ViolationType {
     /// Basis points penalti pemotongan jaminan (1..10,000 bps).
     pub const fn penalty_bps(self) -> u16 {
         match self {
-            Self::InvalidComputeResult => 5_000,          // 50%
-            Self::MissingStorageChunk => 2_500,           // 25%
-            Self::DataAvailabilityWithholding => 10_000,  // 100% (Pelanggaran Kritis)
-            Self::FabricatedQueryResponse => 7_500,       // 75%
-            Self::BreachedAgentMandate => 5_000,          // 50%
+            Self::InvalidComputeResult => 5_000,         // 50%
+            Self::MissingStorageChunk => 2_500,          // 25%
+            Self::DataAvailabilityWithholding => 10_000, // 100% (Pelanggaran Kritis)
+            Self::FabricatedQueryResponse => 7_500,      // 75%
+            Self::BreachedAgentMandate => 5_000,         // 50%
         }
     }
 }
@@ -153,7 +153,8 @@ impl ArbitrationEngine {
 
         if is_fraud_proven {
             let penalty_bps = challenge.violation_type.penalty_bps();
-            let (slashed_amount, _) = registry.slash_node(&challenge.accused_node_id, penalty_bps)?;
+            let (slashed_amount, _) =
+                registry.slash_node(&challenge.accused_node_id, penalty_bps)?;
 
             // 50% diberikan ke pelapor sebagai bounty, 50% dibakar (burn)
             let bounty_quanta = slashed_amount.as_u128() / 2;
@@ -209,9 +210,9 @@ impl ArbitrationEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::node::NodeRegistrationRequest;
     use super::super::types::{NodeType, L5_MIN_NODE_COLLATERAL_QUANTA};
+    use super::*;
     use ed25519_dalek::{Signer, SigningKey};
 
     fn setup_active_node(registry: &mut NodeRegistry) -> InfrastructureNodeId {
@@ -256,18 +257,35 @@ mod tests {
         );
 
         let cid = arb.file_challenge(challenge, &mut registry, 200).unwrap();
-        assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Challenged);
+        assert_eq!(
+            registry.get_node(&node_id).unwrap().status,
+            NodeLifecycleStatus::Challenged
+        );
 
         // Adjudicate: Fraud proven
-        let verdict = arb.adjudicate_challenge(&cid, true, &mut registry, 250).unwrap();
+        let verdict = arb
+            .adjudicate_challenge(&cid, true, &mut registry, 250)
+            .unwrap();
         assert!(verdict.convicted);
-        assert_eq!(verdict.slashed_quanta, Quantum::new(L5_MIN_NODE_COLLATERAL_QUANTA / 2));
-        assert_eq!(verdict.whistleblower_bounty.as_u128(), verdict.slashed_quanta.as_u128() / 2);
-        assert_eq!(verdict.burned_quanta.as_u128(), verdict.slashed_quanta.as_u128() / 2);
+        assert_eq!(
+            verdict.slashed_quanta,
+            Quantum::new(L5_MIN_NODE_COLLATERAL_QUANTA / 2)
+        );
+        assert_eq!(
+            verdict.whistleblower_bounty.as_u128(),
+            verdict.slashed_quanta.as_u128() / 2
+        );
+        assert_eq!(
+            verdict.burned_quanta.as_u128(),
+            verdict.slashed_quanta.as_u128() / 2
+        );
 
         let node = registry.get_node(&node_id).unwrap();
         assert_eq!(node.status, NodeLifecycleStatus::Slashed);
-        assert_eq!(node.collateral, Quantum::new(L5_MIN_NODE_COLLATERAL_QUANTA / 2));
+        assert_eq!(
+            node.collateral,
+            Quantum::new(L5_MIN_NODE_COLLATERAL_QUANTA / 2)
+        );
     }
 
     #[test]
@@ -285,9 +303,14 @@ mod tests {
         );
 
         let cid = arb.file_challenge(challenge, &mut registry, 300).unwrap();
-        let verdict = arb.adjudicate_challenge(&cid, false, &mut registry, 310).unwrap();
+        let verdict = arb
+            .adjudicate_challenge(&cid, false, &mut registry, 310)
+            .unwrap();
         assert!(!verdict.convicted);
         assert_eq!(verdict.slashed_quanta, Quantum::new(0));
-        assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::ActiveNode);
+        assert_eq!(
+            registry.get_node(&node_id).unwrap().status,
+            NodeLifecycleStatus::ActiveNode
+        );
     }
 }

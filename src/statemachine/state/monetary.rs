@@ -101,7 +101,9 @@ impl MonetaryState {
     /// Mengembalikan tuple (fee_burned = 0, fee_validator = fee).
     pub fn split_fee(fee: Quantum) -> Result<(Quantum, Quantum), MonetaryError> {
         let burn_amt = fee.checked_mul(FEE_BURN_PERCENTAGE)?.checked_div(100)?;
-        let validator_amt = fee.checked_mul(FEE_VALIDATOR_PERCENTAGE)?.checked_div(100)?;
+        let validator_amt = fee
+            .checked_mul(FEE_VALIDATOR_PERCENTAGE)?
+            .checked_div(100)?;
 
         let distributed = burn_amt.checked_add(validator_amt)?;
         let remainder = fee.checked_sub(distributed)?;
@@ -133,7 +135,10 @@ mod tests {
         assert_eq!(calculate_block_reward(0), Quantum::ZERO);
         assert_eq!(calculate_block_reward(1), Quantum::new(1_000_000_000));
         assert_eq!(calculate_block_reward(100), Quantum::new(1_000_000_000));
-        assert_eq!(calculate_block_reward(10_000_000), Quantum::new(1_000_000_000));
+        assert_eq!(
+            calculate_block_reward(10_000_000),
+            Quantum::new(1_000_000_000)
+        );
     }
 
     #[test]

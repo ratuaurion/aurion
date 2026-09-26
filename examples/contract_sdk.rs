@@ -36,15 +36,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Opcode::Stop as u8,
     ];
     let runtime = vec![
-        Opcode::Pop as u8,        // buang selector dari call frame
+        Opcode::Pop as u8, // buang selector dari call frame
         Opcode::Push1 as u8,
         0x00,
-        Opcode::MStore as u8,     // simpan argumen pertama ke memori
+        Opcode::MStore as u8, // simpan argumen pertama ke memori
         Opcode::Push1 as u8,
         0x20,
         Opcode::Push1 as u8,
         0x00,
-        Opcode::Return as u8,     // kembalikan 32-byte word
+        Opcode::Return as u8, // kembalikan 32-byte word
     ];
     let echo = MethodAbi::new(
         "echo",
@@ -73,11 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 5. CALL otomatis dalam SATU baris: payload ter-encode, nonce & gas diambil
     //    sendiri, dry-run STF dijalankan, intent clear-signing ditampilkan, lalu
     //    transaksi disiarkan.
-    let outcome = echo_contract.call(
-        "echo",
-        &[AbiValue::U64(42)],
-        &CallOptions::default(),
-    )?;
+    let outcome = echo_contract.call("echo", &[AbiValue::U64(42)], &CallOptions::default())?;
     let returned = outcome.decode_return(AbiType::U64)?;
     println!(
         "Call TxID     : 0x{}\nNonce otomatis: {}\nGas simulasi  : {}\nReturn data   : {:?}\n",
@@ -86,6 +82,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         outcome.gas_used,
         returned
     );
-    println!("--- Prompt clear signing yang disetujui ---\n{}", outcome.prompt);
+    println!(
+        "--- Prompt clear signing yang disetujui ---\n{}",
+        outcome.prompt
+    );
     Ok(())
 }

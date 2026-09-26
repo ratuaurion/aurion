@@ -455,106 +455,105 @@ impl AurionNode {
                 }
 
                 tokio::select! {
-                    changed = shutdown_rx.changed() => {
-                        if changed.is_err() || *shutdown_rx.borrow() {
-                            break;
-                        }
-                    }
-                    result = reactor.step() => {
-                        match result {
-                            Ok(Some(_certificate)) => {
-                                // Sinkronkan rpc_context di luar worker thread:
-                                // jalur ini mengambil lock sinkron (ledger,
-                                // accounts, headers, recent_transactions) yang
-                                // dilarang memblokir worker Tokio (AUR-ISSUE-011).
-                                let sync_node = Arc::clone(&node);
-                                let _ = tokio::task::spawn_blocking(move || {
-                                    sync_node.sync_rpc_context();
-                                })
-                                .await;
-                                let committed_block = node
-                                    .ledger
-                                    .lock()
-                                    .ok()
-                                    .map(|ledger| ledger.latest_block().clone());
-                                if let Some(block) = committed_block {
-                                    let tx_ids: Vec<crate::core::Hash256> =
-                                        block.transactions.iter().map(|tx| tx.compute_tx_id()).collect();
-                                    if !tx_ids.is_empty() {
-                                        if let Ok(mut mempool) = node.mempool.lock() {
-                                            mempool.remove_finalized(&tx_ids);
-                                        }
-                                        if let Ok(mut rpc_mempool) = node.rpc_context.mempool.lock() {
-                                            rpc_mempool.remove_finalized(&tx_ids);
+                                    changed = shutdown_rx.changed() => {
+                                        if changed.is_err() || *shutdown_rx.borrow() {
+                                            break;
                                         }
                                     }
-                                    let session = Arc::clone(&publish_session);
-                                    let chain_id = node.config.chain_id;
-                                    tokio::spawn(async move {
-                                        if let Err(error) = publish_committed_block(
-                                            &session,
-                                            chain_id,
-                                            validator_index,
-                                            &block,
-                                        )
-                                        .await
-                                        {
-                                            eprintln!(
-                                                "[AURION CONSENSUS] validator {validator_index} committed block publish failed: {error}"
-                                            );
+                                    result = reactor.step() => {
+                                        match result {
+                                            Ok(Some(_certificate)) => {
+                                                // Sinkronkan rpc_context di luar worker thread:
+                                                // jalur ini mengambil lock sinkron (ledger,
+                                                // accounts, headers, recent_transactions) yang
+                                                // dilarang memblokir worker Tokio (AUR-ISSUE-011).
+                                                let sync_node = Arc::clone(&node);
+                                                let _ = tokio::task::spawn_blocking(move || {
+                                                    sync_node.sync_rpc_context();
+                                                })
+                                                .await;
+                                                let committed_block = node
+                                                    .ledger
+                                                    .lock()
+                                                    .ok()
+                                                    .map(|ledger| ledger.latest_block().clone());
+                                                if let Some(block) = committed_block {
+                                                    let tx_ids: Vec<crate::core::Hash256> =
+                                                        block.transactions.iter().map(|tx| tx.compute_tx_id()).collect();
+                                                    if !tx_ids.is_empty() {
+                                                        if let Ok(mut mempool) = node.mempool.lock() {
+                                                            mempool.remove_finalized(&tx_ids);
+                                                        }
+                                                        if let Ok(mut rpc_mempool) = node.rpc_context.mempool.lock() {
+                                                            rpc_mempool.remove_finalized(&tx_ids);
+                                                        }
+                                                    }
+                                                    let session = Arc::clone(&publish_session);
+                                                    let chain_id = node.config.chain_id;
+                                                    tokio::spawn(async move {
+                                                        if let Err(error) = publish_committed_block(
+                                                            &session,
+                                                            chain_id,
+                                                            validator_index,
+                                                            &block,
+                                                        )
+                                                        .await
+                                                        {
+                                                            eprintln!(
+                                                                "[AURION CONSENSUS] validator {validator_index} committed block publish failed: {error}"
+                                                            );
+                                                        }
+                                                    });
+                                                }
+                                                proposed = None;
+                                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                                            }
+                                            Ok(None) => {}
+                                            Err(error) => {
+                                                eprintln!(
+                                                    "[AURION CONSENSUS] validator {validator_index} reactor warning: {error}"
+                                                );
+                                            }
                                         }
-                                    });
+                                        for (transaction, sender_pubkey) in reactor.drain_transactions() {
+                                            let account = node
+                                                .ledger
+                                                .lock()
+                                                .ok()
+                                                .and_then(|ledger| ledger.accounts.get(&transaction.sender).cloned())
+                                                .unwrap_or_default();
+                                            if let Ok(mut mempool) = node.mempool.lock() {
+                                                let _ = mempool.submit_transaction(
+                                                    transaction,
+                                                    &sender_pubkey,
+                                                    SystemTime::now()
+                                                        .duration_since(UNIX_EPOCH)
+                                                        .map(|duration| duration.as_secs())
+                                                        .unwrap_or_default(),
+                                                    &account,
+                                                );
+                }
+                                    }
                                 }
-                                proposed = None;
-                                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
                             }
-                            Ok(None) => {}
-                            Err(error) => {
-                                eprintln!(
-                                    "[AURION CONSENSUS] validator {validator_index} reactor warning: {error}"
-                                );
-                            }
-                        }
-                        for (transaction, sender_pubkey) in reactor.drain_transactions() {
-                            let account = node
-                                .ledger
-                                .lock()
-                                .ok()
-                                .and_then(|ledger| ledger.accounts.get(&transaction.sender).cloned())
-                                .unwrap_or_default();
-                            if let Ok(mut mempool) = node.mempool.lock() {
-                                let _ = mempool.submit_transaction(
-                                    transaction,
-                                    &sender_pubkey,
-                                    SystemTime::now()
-                                        .duration_since(UNIX_EPOCH)
-                                        .map(|duration| duration.as_secs())
-                                        .unwrap_or_default(),
-                                    &account,
-                                );
-}
-                    }
+                // RPC context perlu mengikuti ruling height bahkan ketika blok
+                // didapat lewat catch-up (ingest blok terkomit) di dalam reactor,
+                // tidak hanya via commit 2-phase (AUR-ISSUE-011).
+                let rpc_height = node
+                    .rpc_context
+                    .current_height
+                    .load(std::sync::atomic::Ordering::SeqCst);
+                let ledger_height = node
+                    .ledger
+                    .lock()
+                    .map(|guard| guard.latest_height())
+                    .unwrap_or_default();
+                if rpc_height != ledger_height {
+                    let sync_node = Arc::clone(&node);
+                    let _ = tokio::task::spawn_blocking(move || sync_node.sync_rpc_context()).await;
                 }
             }
-            // RPC context perlu mengikuti ruling height bahkan ketika blok
-            // didapat lewat catch-up (ingest blok terkomit) di dalam reactor,
-            // tidak hanya via commit 2-phase (AUR-ISSUE-011).
-            let rpc_height = node
-                .rpc_context
-                .current_height
-                .load(std::sync::atomic::Ordering::SeqCst);
-            let ledger_height = node
-                .ledger
-                .lock()
-                .map(|guard| guard.latest_height())
-                .unwrap_or_default();
-            if rpc_height != ledger_height {
-                let sync_node = Arc::clone(&node);
-                let _ = tokio::task::spawn_blocking(move || sync_node.sync_rpc_context())
-                    .await;
-            }
-        }
-    }))
+        }))
     }
 
     /// Produksi dan finalisasi blok berikutnya ke dalam ledger (untuk mode validator atau testing).

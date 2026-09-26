@@ -42,7 +42,10 @@ fn test_l2_full_lifecycle_end_to_end() {
     assert_eq!(deposit_nonce, 1);
     assert_eq!(relayer.bridge.vault_balance, deposit_amount);
 
-    let alice_acc = sequencer.state.get_account(&alice_l2).expect("Akun Alice di L2 tidak ditemukan");
+    let alice_acc = sequencer
+        .state
+        .get_account(&alice_l2)
+        .expect("Akun Alice di L2 tidak ditemukan");
     assert_eq!(alice_acc.balance, deposit_amount);
     assert_eq!(alice_acc.nonce, 0);
 
@@ -63,7 +66,9 @@ fn test_l2_full_lifecycle_end_to_end() {
     );
 
     // Kirim ke mempool Sequencer
-    sequencer.submit_transaction(tx.clone()).expect("Submit tx ke mempool gagal");
+    sequencer
+        .submit_transaction(tx.clone())
+        .expect("Submit tx ke mempool gagal");
     assert_eq!(sequencer.mempool.len(), 1);
 
     // Produksi blok dengan soft finality (<50ms)
@@ -83,8 +88,10 @@ fn test_l2_full_lifecycle_end_to_end() {
     let bob_post = sequencer.state.get_account(&bob_l2).cloned().unwrap();
 
     let expected_alice_bal = deposit_amount
-        .checked_sub(transfer_amount).unwrap()
-        .checked_sub(fee_amount).unwrap();
+        .checked_sub(transfer_amount)
+        .unwrap()
+        .checked_sub(fee_amount)
+        .unwrap();
     assert_eq!(alice_post.balance, expected_alice_bal);
     assert_eq!(alice_post.nonce, 1);
     assert_eq!(bob_post.balance, transfer_amount);
@@ -98,12 +105,12 @@ fn test_l2_full_lifecycle_end_to_end() {
 
     let batch_frame = L2BatchFrame::new(
         1,
-        Hash256::ZERO, // prev_root
+        Hash256::ZERO,   // prev_root
         current_l2_root, // next_root
-        1, // start_block
-        1, // end_block
-        1, // tx_count
-        0, // compression_flags
+        1,               // start_block
+        1,               // end_block
+        1,               // tx_count
+        0,               // compression_flags
         tx_bytes,
     );
     let frame_bytes = batch_frame.encode();
@@ -155,7 +162,8 @@ fn test_l2_full_lifecycle_end_to_end() {
     // Alice (59.9995 AUR) + Bob (15.0000 AUR) = 74.9995 AUR
     // Fee yang dikumpulkan sequencer: 50,000 Quanta = 0.0005 AUR
     // Total L2 = 75.0000 AUR == L1 Vault Balance (75.0000 AUR)
-    let total_l2_users = alice_post.balance.as_u128() + bob_withdrawn.balance.as_u128() + fee_amount.as_u128();
+    let total_l2_users =
+        alice_post.balance.as_u128() + bob_withdrawn.balance.as_u128() + fee_amount.as_u128();
     assert_eq!(total_l2_users, relayer.bridge.vault_balance.as_u128());
 
     // =========================================================================
@@ -179,7 +187,15 @@ fn test_l2_full_lifecycle_end_to_end() {
         .process_forced_inclusion_batch(&mut sequencer.state, 5)
         .expect("Eksekusi antrean paksa gagal");
     assert_eq!(executed.len(), 1);
-    assert_eq!(sequencer.state.get_account(&charlie_l2).unwrap().balance.as_u128(), 500_000_000);
+    assert_eq!(
+        sequencer
+            .state
+            .get_account(&charlie_l2)
+            .unwrap()
+            .balance
+            .as_u128(),
+        500_000_000
+    );
 
     // =========================================================================
     // TAHAP 7: Emergency Exit / Escape Hatch (Unilateral Claim on Freeze)
@@ -188,7 +204,10 @@ fn test_l2_full_lifecycle_end_to_end() {
     // Perbarui root bridge L1 dengan root L2 terbaru
     let latest_root = sequencer.state.compute_state_root();
     relayer.bridge.latest_state_root = latest_root;
-    let bob_proof = sequencer.state.generate_account_proof(&bob_l2).expect("SMT Proof Bob gagal");
+    let bob_proof = sequencer
+        .state
+        .generate_account_proof(&bob_l2)
+        .expect("SMT Proof Bob gagal");
 
     // Klaim gagal sebelum freeze
     let pre_err = relayer

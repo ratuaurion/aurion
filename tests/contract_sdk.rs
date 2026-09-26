@@ -10,7 +10,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use aurion::contract::{
-    AbiType, AbiValue, ApprovalMode, CallOptions, ContractError, ContractIntent, ContractInstance,
+    AbiType, AbiValue, ApprovalMode, CallOptions, ContractError, ContractInstance, ContractIntent,
     ContractMetadata, DeployRequest, DryRunReport, IntentAction, KeystoreSigner, MemoryProvider,
     MethodAbi, Provider, Signer, METADATA_SCHEMA,
 };
@@ -117,14 +117,13 @@ impl Signer for RecordingSigner {
         self.inner.approve(prompt)
     }
 
-    fn sign_raw(&self, tx: &aurion::transaction::types::Transaction) -> Result<
-        aurion::transaction::types::Transaction,
-        ContractError,
-    > {
+    fn sign_raw(
+        &self,
+        tx: &aurion::transaction::types::Transaction,
+    ) -> Result<aurion::transaction::types::Transaction, ContractError> {
         self.inner.sign_raw(tx)
     }
 }
-
 
 /// Siapkan kontrak Echo ter-deploy beserta instance-nya (fixture pipeline penuh).
 fn setup_contract(
@@ -139,7 +138,8 @@ fn setup_contract(
     let sender = signer.address();
     let provider =
         MemoryProvider::with_account(GENESIS_CHAIN_ID, &sender, Quantum::new(1_000_000_000));
-    let request = DeployRequest::new("Echo", echo_constructor(), runtime).with_method(echo_method());
+    let request =
+        DeployRequest::new("Echo", echo_constructor(), runtime).with_method(echo_method());
     let (_outcome, instance) =
         ContractInstance::<MemoryProvider, RecordingSigner>::deploy(provider, signer, request)
             .expect("deploy fixture harus berhasil");
@@ -152,8 +152,8 @@ fn test_metadata_binding_and_selector_derivation() {
     let sender = signer.address();
     let provider =
         MemoryProvider::with_account(GENESIS_CHAIN_ID, &sender, Quantum::new(1_000_000_000));
-    let request = DeployRequest::new("Echo", echo_constructor(), echo_runtime())
-        .with_method(echo_method());
+    let request =
+        DeployRequest::new("Echo", echo_constructor(), echo_runtime()).with_method(echo_method());
     let (outcome, instance) =
         ContractInstance::<MemoryProvider, KeystoreSigner>::deploy(provider, signer, request)
             .expect("deploy");
@@ -208,10 +208,7 @@ fn test_full_pipeline_deploy_and_call_automated() {
     let ledger = instance.provider().ledger();
     assert_eq!(ledger.len(), 2);
     assert_eq!(ledger[1].nonce, 1);
-    assert_eq!(
-        ledger[1].tx_type,
-        TxType::ContractCall
-    );
+    assert_eq!(ledger[1].tx_type, TxType::ContractCall);
     assert_ne!(ledger[1].signature, Signature::ZERO);
 
     // Prompt clear signing berbahasa manusia (bukan blind hash).
@@ -221,7 +218,10 @@ fn test_full_pipeline_deploy_and_call_automated() {
     let prompt = &recorded[1];
     assert!(prompt.contains("echo(u64)"), "prompt: {prompt}");
     assert!(prompt.contains("value = 42 (U64)"), "prompt: {prompt}");
-    assert!(prompt.contains("Dry-Run (STF)    : SUKSES"), "prompt: {prompt}");
+    assert!(
+        prompt.contains("Dry-Run (STF)    : SUKSES"),
+        "prompt: {prompt}"
+    );
     assert!(prompt.contains("Nonce            : 1"), "prompt: {prompt}");
     assert!(prompt.contains("Payload Blake3"), "prompt: {prompt}");
 
@@ -301,7 +301,6 @@ fn test_dry_run_gate_blocks_bad_nonce_and_invalid_args() {
     assert_eq!(instance.provider().ledger().len(), 1);
 }
 
-
 /// Bangun transaksi contoh (belum ditandatangani) untuk pengujian intent.
 fn sample_tx(sender: Address, recipient: Address) -> Transaction {
     Transaction {
@@ -360,7 +359,10 @@ fn test_clear_signing_rejects_tampered_transaction() {
     let err = signer
         .sign(&intent, &tampered_amount)
         .expect_err("tamper amount harus ditolak");
-    assert!(matches!(err, ContractError::IntentMismatch(_)), "err: {err:?}");
+    assert!(
+        matches!(err, ContractError::IntentMismatch(_)),
+        "err: {err:?}"
+    );
     assert!(signer.prompts().is_empty(), "tidak boleh ada prompt");
 
     // 3. Payload dimodifikasi (blind-sign attack) -> hash payload berbeda.
@@ -369,7 +371,10 @@ fn test_clear_signing_rejects_tampered_transaction() {
     let err = signer
         .sign(&intent, &tampered_payload)
         .expect_err("tamper payload harus ditolak");
-    assert!(matches!(err, ContractError::IntentMismatch(_)), "err: {err:?}");
+    assert!(
+        matches!(err, ContractError::IntentMismatch(_)),
+        "err: {err:?}"
+    );
     assert!(signer.prompts().is_empty());
 
     // 4. Nonce dimodifikasi -> ditolak.
@@ -378,7 +383,10 @@ fn test_clear_signing_rejects_tampered_transaction() {
     let err = signer
         .sign(&intent, &tampered_nonce)
         .expect_err("tamper nonce harus ditolak");
-    assert!(matches!(err, ContractError::IntentMismatch(_)), "err: {err:?}");
+    assert!(
+        matches!(err, ContractError::IntentMismatch(_)),
+        "err: {err:?}"
+    );
     assert!(signer.prompts().is_empty());
 }
 
@@ -395,7 +403,6 @@ fn test_signer_rejects_foreign_sender() {
     assert!(matches!(err, ContractError::SignerMismatch));
     assert!(signer.prompts().is_empty());
 }
-
 
 #[test]
 fn test_rpc_get_account_exposes_contract_binding() {
@@ -501,12 +508,12 @@ fn test_keystore_signer_unlocks_wallet_keystore() {
     let key = ed25519_dalek::SigningKey::from_bytes(&[7u8; 32]);
     let address = derive_address_from_pubkey(key.verifying_key().as_bytes());
     let bech32m = encode_address_bech32m(&address, "aur").expect("bech32m");
-    let keystore =
-        aurion::wallet::keystore::Keystore::encrypt(&key, "rahasia-tes", &bech32m).expect("encrypt");
+    let keystore = aurion::wallet::keystore::Keystore::encrypt(&key, "rahasia-tes", &bech32m)
+        .expect("encrypt");
     let json = keystore.to_json_string();
 
-    let signer =
-        KeystoreSigner::from_keystore_json(&json, "rahasia-tes", ApprovalMode::Reject).expect("unlock");
+    let signer = KeystoreSigner::from_keystore_json(&json, "rahasia-tes", ApprovalMode::Reject)
+        .expect("unlock");
     assert_eq!(signer.address(), address);
     assert_eq!(signer.public_key(), key.verifying_key().to_bytes());
     assert_eq!(signer.approval_mode(), ApprovalMode::Reject);

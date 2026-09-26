@@ -8,8 +8,8 @@
 //! - AUR-ARCH-012: Zero floating-point arithmetic (`Quantum(u128)`)
 //! - AUR-L3-SEC-002: L3 Privacy domain execution & zero-knowledge confidential settlement
 
-use std::collections::BTreeSet;
 use blake3::Hasher;
+use std::collections::BTreeSet;
 
 use crate::primitives::core::Quantum;
 use crate::specialized::types::DomainId;

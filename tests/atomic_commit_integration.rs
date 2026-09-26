@@ -26,10 +26,7 @@ fn certificate_and_block(
     let miner = validator_set.get_validator(proposer).unwrap().validator_id;
     let mut accounts = genesis.accounts.clone();
     let subsidy = calculate_block_subsidy(1);
-    accounts
-        .entry(miner)
-        .or_default()
-        .balance = accounts
+    accounts.entry(miner).or_default().balance = accounts
         .get(&miner)
         .map(|account| account.balance)
         .unwrap_or_default()

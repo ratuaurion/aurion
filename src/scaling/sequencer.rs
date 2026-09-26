@@ -7,7 +7,6 @@
 //! - L2-LIFE-001..002 (Sequencer Lifecycle & Soft Finality <50ms)
 //! - AUR-ARCH-011 (#![forbid(unsafe_code)])
 
-use thiserror::Error;
 use crate::core::{Address, Hash256};
 use crate::l2::codec::{L2BatchFrame, L2CodecError};
 use crate::l2::state::L2StateStore;
@@ -15,6 +14,7 @@ use crate::l2::types::{
     compute_txs_root, L2Batch, L2Block, L2BlockHeader, L2Transaction, L2_TX_BASE_SIZE,
 };
 use crate::l2::vm::{L2ExecutionEngine, L2ExecutionError};
+use thiserror::Error;
 
 /// Kapasitas maksimum transaksi dalam antrean mempool L2 (Anti-DoS)
 pub const MAX_L2_MEMPOOL_CAPACITY: usize = 10_000;
@@ -142,7 +142,11 @@ impl L2Mempool {
             return Err(L2SequencerError::MempoolFull(self.max_capacity));
         }
 
-        if self.queue.iter().any(|t| t.sender == tx.sender && t.nonce == tx.nonce) {
+        if self
+            .queue
+            .iter()
+            .any(|t| t.sender == tx.sender && t.nonce == tx.nonce)
+        {
             return Err(L2SequencerError::DuplicateNonce {
                 sender: tx.sender,
                 nonce: tx.nonce,
@@ -257,7 +261,9 @@ impl L2Sequencer {
         }
 
         // Eksekusi atomik seluruh transaksi via runtime L2 VM
-        let _receipts = self.engine.execute_batch_atomic(&mut self.state, &pending_txs)?;
+        let _receipts = self
+            .engine
+            .execute_batch_atomic(&mut self.state, &pending_txs)?;
 
         self.current_block += 1;
         let new_state_root = self.state.compute_state_root();
@@ -380,11 +386,9 @@ mod tests {
         let sender = Address::from_bytes([1u8; 32]);
         let recipient = Address::from_bytes([2u8; 32]);
 
-        sequencer.state.set_account(L2Account::new(
-            sender,
-            Quantum::new(500_000_000),
-            0,
-        ));
+        sequencer
+            .state
+            .set_account(L2Account::new(sender, Quantum::new(500_000_000), 0));
 
         let tx = L2Transaction {
             sender,
@@ -481,13 +485,7 @@ mod tests {
 
         assert!(mempool.insert(tx1).is_ok());
         let err = mempool.insert(tx2).unwrap_err();
-        assert_eq!(
-            err,
-            L2SequencerError::DuplicateNonce {
-                sender,
-                nonce: 7,
-            }
-        );
+        assert_eq!(err, L2SequencerError::DuplicateNonce { sender, nonce: 7 });
     }
 
     #[test]
@@ -537,7 +535,9 @@ mod tests {
     fn test_sequencer_produce_block_with_attestation() {
         let mut sequencer = L2Sequencer::new();
         let sender = Address::from_bytes([9u8; 32]);
-        sequencer.state.set_account(L2Account::new(sender, Quantum::new(1_000_000), 0));
+        sequencer
+            .state
+            .set_account(L2Account::new(sender, Quantum::new(1_000_000), 0));
 
         let tx = L2Transaction {
             sender,
@@ -567,7 +567,9 @@ mod tests {
     fn test_sequencer_batch_assembly_and_unpacking() {
         let mut sequencer = L2Sequencer::new();
         let sender = Address::from_bytes([0x11; 32]);
-        sequencer.state.set_account(L2Account::new(sender, Quantum::new(1_000_000_000), 0));
+        sequencer
+            .state
+            .set_account(L2Account::new(sender, Quantum::new(1_000_000_000), 0));
 
         // Buat 2 blok
         for i in 0..2 {
@@ -596,7 +598,10 @@ mod tests {
         assert_eq!(frame.header.start_block, 1);
         assert_eq!(frame.header.end_block, 2);
         assert_eq!(frame.header.tx_count, 2);
-        assert_eq!(frame.header.new_state_root, sequencer.state.compute_state_root());
+        assert_eq!(
+            frame.header.new_state_root,
+            sequencer.state.compute_state_root()
+        );
 
         // Dekode ulang payload calldata menjadi transaksi
         let unpacked = unpack_batch_transactions(&frame.payload).expect("Unpack gagal");
@@ -614,7 +619,9 @@ mod tests {
     fn test_submit_tx_insufficient_balance_rejected() {
         let mut sequencer = L2Sequencer::new();
         let sender = Address::from_bytes([0x33; 32]);
-        sequencer.state.set_account(L2Account::new(sender, Quantum::new(100), 0));
+        sequencer
+            .state
+            .set_account(L2Account::new(sender, Quantum::new(100), 0));
 
         let tx = L2Transaction {
             sender,
@@ -630,4 +637,3 @@ mod tests {
         assert_eq!(err, L2SequencerError::InsufficientBalance);
     }
 }
-

@@ -59,9 +59,11 @@ Developer, dan empat validator menggunakan seed tetap seperti `[0x01; 32]`,
 - `GENESIS_CEREMONY.json` terbaru **tidak lagi** memakai key deterministic
   untuk Creator dan Developer. Ceremony telah dijalankan ulang dengan wallet
   keypair nyata pada commit `d3d54a4`:
-  - Creator: `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
-  - Developer: `aur1eaj265jvs5wzgdyr9d9p2elkgckx07r0gqc9kejwcznyplw2zlqqlxdu7y`
-  - Genesis Block H=0: `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9`
+  - ~~Creator~~ → kini **Master Treasury** (satu-satunya pemegang alokasi):
+    `aur1jjtqrlqy9suehhltnzt2ml4zwsr8ukpyvvhm2gw899u0e0w22qusq0pjql`
+  - ~~Developer~~ → **dihapus total** pada model Single Treasury (alokasi
+    non-Treasury tidak lagi ada pada Blok 0).
+  - Genesis Block H=0: `42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a`
 
 **Remediasi (diterapkan):**
 

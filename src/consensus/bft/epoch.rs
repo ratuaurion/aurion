@@ -7,7 +7,9 @@
 //! - AUR-ARCH-005: Canonical Shared Types & Deterministic Validation.
 //! - AUR-CONS-*: Round-Based BFT Consensus with >2/3 Quorum Finality.
 
-use crate::consensus::bft::certificate::{CertificateError, CommitCertificate, ValidatorEntry, ValidatorSet};
+use crate::consensus::bft::certificate::{
+    CertificateError, CommitCertificate, ValidatorEntry, ValidatorSet,
+};
 use crate::core::Address;
 use thiserror::Error;
 

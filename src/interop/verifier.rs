@@ -192,7 +192,8 @@ impl HeaderSyncTracker {
 
     /// Returns the confirmed height taking safety delay into account.
     pub fn confirmed_height(&self) -> u64 {
-        self.latest_height.saturating_sub(self.confirmations_required)
+        self.latest_height
+            .saturating_sub(self.confirmations_required)
     }
 
     /// Checks if a given height has achieved safety confirmations.
@@ -231,10 +232,14 @@ mod tests {
         let parent23 = *h_parent23.finalize().as_bytes();
 
         let branch = vec![tx1, parent23];
-        assert!(BitcoinSpvVerifier::verify_merkle_branch(tx0, &branch, 0, root));
+        assert!(BitcoinSpvVerifier::verify_merkle_branch(
+            tx0, &branch, 0, root
+        ));
 
         // Tampered branch must fail
-        assert!(!BitcoinSpvVerifier::verify_merkle_branch(tx0, &branch, 1, root));
+        assert!(!BitcoinSpvVerifier::verify_merkle_branch(
+            tx0, &branch, 1, root
+        ));
     }
 
     #[test]
@@ -276,7 +281,9 @@ mod tests {
                 timestamp: 1_700_000_000 + h * 600,
             };
 
-            tracker.ingest_header(header).expect("Header ingestion should succeed");
+            tracker
+                .ingest_header(header)
+                .expect("Header ingestion should succeed");
             prev_hash = block_hash;
         }
 

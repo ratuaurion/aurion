@@ -30,13 +30,13 @@ pub use runtime::{
     L3_MIN_GAS_PRICE_QUANTA,
 };
 pub use settlement::{
-    L2SettlementClient, L3CheckpointGenerator, L3FinalityStatus, L3FinalityTier,
-    L3SettlementError,
+    L2SettlementClient, L3CheckpointGenerator, L3FinalityStatus, L3FinalityTier, L3SettlementError,
 };
-pub use state::{L3AccountProof, L3AccountState, L3State, L3StateSnapshot, L3_ACCOUNT_ENCODED_SIZE};
+pub use state::{
+    L3AccountProof, L3AccountState, L3State, L3StateSnapshot, L3_ACCOUNT_ENCODED_SIZE,
+};
 pub use types::{
     DomainId, DomainMetadata, L3Block, L3Checkpoint, L3CodecError, L3Receipt, L3SecurityModel,
     L3Transaction, DST_L3_CHECKPOINT, DST_L3_TX, L3_BLOCK_HEADER_SIZE, L3_CHECKPOINT_BASE_SIZE,
     L3_RECEIPT_BASE_SIZE, L3_TX_BASE_SIZE, MAX_L3_PROOF_SIZE, MAX_L3_TX_PAYLOAD_SIZE,
 };
-

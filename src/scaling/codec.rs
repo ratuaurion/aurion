@@ -2,9 +2,9 @@
 //! Sesuai Dokumen Spesifikasi: docs/Application-Rules-Layer/application/aurion-l2-scaling/02-L2-BATCH-CALLDATA-COMPRESSION-SPECIFICATION.md
 //! Mematuhi Invariant: L2-DA-001..002, AUR-ARCH-011 (#![forbid(unsafe_code)]), AUR-ARCH-012 (Zero-Float).
 
-use thiserror::Error;
 use crate::core::Hash256;
 use crate::crypto::blake3_hash;
+use thiserror::Error;
 
 /// Magic bytes penanda paket calldata biner Aurion L2: "AUL2"
 pub const MAGIC_AUL2: [u8; 4] = [0x41, 0x55, 0x4C, 0x32];
@@ -212,16 +212,7 @@ mod tests {
         let new_root = Hash256::from_bytes([0x22; 32]);
         let payload = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04];
 
-        let frame = L2BatchFrame::new(
-            1,
-            prev_root,
-            new_root,
-            10,
-            20,
-            2,
-            0x00,
-            payload,
-        );
+        let frame = L2BatchFrame::new(1, prev_root, new_root, 10, 20, 2, 0x00, payload);
 
         let encoded = frame.encode();
         assert_eq!(encoded.len(), BATCH_FRAME_HEADER_SIZE + 8);
@@ -237,7 +228,8 @@ mod tests {
         corrupted[0..4].copy_from_slice(b"NOPE");
         corrupted[4] = PROTOCOL_VERSION_1;
 
-        let err = L2BatchFrame::decode(&corrupted).expect_err("Harus gagal pada magic header salah");
+        let err =
+            L2BatchFrame::decode(&corrupted).expect_err("Harus gagal pada magic header salah");
         assert_eq!(err, L2CodecError::InvalidMagicHeader(*b"NOPE"));
     }
 

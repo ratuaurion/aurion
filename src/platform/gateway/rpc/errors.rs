@@ -55,4 +55,3 @@ pub fn rate_limit_exceeded(reason: impl Into<String>) -> JsonRpcError {
 pub fn internal_error(reason: impl Into<String>) -> JsonRpcError {
     JsonRpcError::new(ERR_INTERNAL_ERROR, reason, None)
 }
-

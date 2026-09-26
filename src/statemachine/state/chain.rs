@@ -76,13 +76,23 @@ impl ChainLedger {
         genesis: GenesisInitialization,
         store: std::sync::Arc<dyn crate::storage::StateStore>,
     ) -> Result<Self, ChainError> {
-        if let Some(latest_h) = store.get_latest_height().map_err(|e| ChainError::Storage(e.to_string()))? {
+        if let Some(latest_h) = store
+            .get_latest_height()
+            .map_err(|e| ChainError::Storage(e.to_string()))?
+        {
             // RECOVERY PATH: Muat state dan blok dari disk
-            let accounts = store.get_all_accounts().map_err(|e| ChainError::Storage(e.to_string()))?;
+            let accounts = store
+                .get_all_accounts()
+                .map_err(|e| ChainError::Storage(e.to_string()))?;
             let latest_block = store
                 .get_block_by_height(latest_h)
                 .map_err(|e| ChainError::Storage(e.to_string()))?
-                .ok_or_else(|| ChainError::Storage(format!("Blok pada tinggi {} hilang dari storage", latest_h)))?;
+                .ok_or_else(|| {
+                    ChainError::Storage(format!(
+                        "Blok pada tinggi {} hilang dari storage",
+                        latest_h
+                    ))
+                })?;
 
             let expected_hash = store
                 .get_metadata("latest_block_hash")
@@ -92,7 +102,9 @@ impl ChainLedger {
                 .try_into()
                 .map_err(|_| ChainError::Storage("metadata latest_block_hash invalid".into()))?;
             if crate::primitives::core::Hash256::from_bytes(expected_hash) != latest_block.hash() {
-                return Err(ChainError::Storage("metadata latest_block_hash tidak cocok".into()));
+                return Err(ChainError::Storage(
+                    "metadata latest_block_hash tidak cocok".into(),
+                ));
             }
 
             let expected_root = store
@@ -102,8 +114,12 @@ impl ChainLedger {
             let expected_root: [u8; 32] = expected_root
                 .try_into()
                 .map_err(|_| ChainError::Storage("metadata latest_state_root invalid".into()))?;
-            if crate::primitives::core::Hash256::from_bytes(expected_root) != latest_block.header.state_root {
-                return Err(ChainError::Storage("metadata latest_state_root tidak cocok".into()));
+            if crate::primitives::core::Hash256::from_bytes(expected_root)
+                != latest_block.header.state_root
+            {
+                return Err(ChainError::Storage(
+                    "metadata latest_state_root tidak cocok".into(),
+                ));
             }
 
             if latest_h > 0 {
@@ -111,11 +127,13 @@ impl ChainLedger {
                     .get_certificate(latest_h)
                     .map_err(|e| ChainError::Storage(e.to_string()))?
                     .ok_or_else(|| ChainError::Storage("sertifikat blok terakhir hilang".into()))?;
-                certificate
-                    .verify(&genesis.validator_set)
-                    .map_err(|e| ChainError::Storage(format!("sertifikat blok terakhir invalid: {}", e)))?;
+                certificate.verify(&genesis.validator_set).map_err(|e| {
+                    ChainError::Storage(format!("sertifikat blok terakhir invalid: {}", e))
+                })?;
                 if certificate.block_hash != latest_block.hash() || certificate.height != latest_h {
-                    return Err(ChainError::Storage("sertifikat tidak cocok dengan blok terakhir".into()));
+                    return Err(ChainError::Storage(
+                        "sertifikat tidak cocok dengan blok terakhir".into(),
+                    ));
                 }
             }
 
@@ -130,7 +148,10 @@ impl ChainLedger {
             let mut blocks = Vec::with_capacity((latest_h + 1) as usize);
             let mut block_by_hash = HashMap::new();
             for h in 0..=latest_h {
-                if let Some(b) = store.get_block_by_height(h).map_err(|e| ChainError::Storage(e.to_string()))? {
+                if let Some(b) = store
+                    .get_block_by_height(h)
+                    .map_err(|e| ChainError::Storage(e.to_string()))?
+                {
                     block_by_hash.insert(b.hash(), h);
                     blocks.push(b);
                 }
@@ -152,8 +173,11 @@ impl ChainLedger {
             let mut block_by_hash = HashMap::new();
             block_by_hash.insert(genesis_hash, 0);
 
-            let initial_accounts: Vec<(Address, Account)> =
-                genesis.accounts.iter().map(|(k, v)| (*k, v.clone())).collect();
+            let initial_accounts: Vec<(Address, Account)> = genesis
+                .accounts
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect();
             let dummy_cert = crate::consensus::certificate::CommitCertificate {
                 height: 0,
                 round: 0,
@@ -262,14 +286,14 @@ impl ChainLedger {
         let mut monetary = self.monetary.clone();
         let subsidy = calculate_block_subsidy(block.height());
         if !subsidy.is_zero() {
-            monetary
-                .apply_issuance(subsidy)
-                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+            monetary.apply_issuance(subsidy).map_err(|e| {
+                ChainError::StateTransition(StateTransitionError::Monetary(e.to_string()))
+            })?;
             let proposer_account = accounts.entry(*proposer).or_default();
-            proposer_account.balance = proposer_account
-                .balance
-                .checked_add(subsidy)
-                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+            proposer_account.balance =
+                proposer_account.balance.checked_add(subsidy).map_err(|e| {
+                    ChainError::StateTransition(StateTransitionError::Monetary(e.to_string()))
+                })?;
         }
         for tx in &block.transactions {
             apply_transaction(&mut accounts, &mut monetary, proposer, tx)
@@ -341,15 +365,14 @@ impl ChainLedger {
         let height = block.height();
         let subsidy = calculate_block_subsidy(height);
         if !subsidy.is_zero() {
-            monetary_clone
-                .apply_issuance(subsidy)
-                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+            monetary_clone.apply_issuance(subsidy).map_err(|e| {
+                ChainError::StateTransition(StateTransitionError::Monetary(e.to_string()))
+            })?;
 
             let proposer_acct = accounts_clone.entry(*proposer).or_default();
-            proposer_acct.balance = proposer_acct
-                .balance
-                .checked_add(subsidy)
-                .map_err(|e| ChainError::StateTransition(StateTransitionError::Monetary(e.to_string())))?;
+            proposer_acct.balance = proposer_acct.balance.checked_add(subsidy).map_err(|e| {
+                ChainError::StateTransition(StateTransitionError::Monetary(e.to_string()))
+            })?;
         }
 
         // 6b. Eksekusi transaksi di dalam blok (100% fee ke proposer)
@@ -369,8 +392,10 @@ impl ChainLedger {
 
         // 8. Komit ke persistent storage secara atomik (jika storage engine aktif)
         if let Some(store) = &self.store {
-            let updated_accounts: Vec<(Address, Account)> =
-                accounts_clone.iter().map(|(k, v)| (*k, v.clone())).collect();
+            let updated_accounts: Vec<(Address, Account)> = accounts_clone
+                .iter()
+                .map(|(k, v)| (*k, v.clone()))
+                .collect();
             store
                 .commit_block_atomic(&block, cert, &updated_accounts)
                 .map_err(|e| ChainError::Storage(e.to_string()))?;

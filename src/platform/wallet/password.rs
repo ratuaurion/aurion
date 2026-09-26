@@ -94,7 +94,8 @@ pub fn resolve_mnemonic(from_stdin: bool, prompt_text: &str) -> Result<String, P
 }
 
 /// Menghapus `\r` dan `\n` dari akhir baris yang dibaca.
-fn trim_line_endings(line: &str) -> String {    line.trim_end_matches('\n')
+fn trim_line_endings(line: &str) -> String {
+    line.trim_end_matches('\n')
         .trim_end_matches('\r')
         .to_string()
 }

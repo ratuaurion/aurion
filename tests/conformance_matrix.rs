@@ -20,14 +20,30 @@ fn test_unified_matrix_execution_54_pillars() {
     let matrix = run_unified_matrix();
 
     // 1. Overall verification
-    assert_eq!(matrix.total_pillars, 54, "Must audit exactly 54 pillars across L1..L5");
+    assert_eq!(
+        matrix.total_pillars, 54,
+        "Must audit exactly 54 pillars across L1..L5"
+    );
     assert_eq!(matrix.passed_pillars, 54, "All 54 pillars must PASS");
-    assert_eq!(matrix.failed_pillars, 0, "Zero failures allowed in conformance audit");
-    assert!(matrix.verdict.contains("100% CANONICAL CERTIFIED"), "Verdict must be CANONICAL CERTIFIED");
-    assert_eq!(matrix.overall_compliance_bps, 10_000, "Compliance rate must be exactly 100.00% (10,000 bps)");
+    assert_eq!(
+        matrix.failed_pillars, 0,
+        "Zero failures allowed in conformance audit"
+    );
+    assert!(
+        matrix.verdict.contains("100% CANONICAL CERTIFIED"),
+        "Verdict must be CANONICAL CERTIFIED"
+    );
+    assert_eq!(
+        matrix.overall_compliance_bps, 10_000,
+        "Compliance rate must be exactly 100.00% (10,000 bps)"
+    );
 
     // 2. Layer count verification
-    assert_eq!(matrix.layers.len(), 5, "Matrix must cover exactly 5 evolutionary layers");
+    assert_eq!(
+        matrix.layers.len(),
+        5,
+        "Matrix must cover exactly 5 evolutionary layers"
+    );
 
     // L1: 8 Pillars
     let l1 = &matrix.layers[0];
@@ -72,10 +88,21 @@ fn test_unified_matrix_execution_54_pillars() {
     // 3. Individual pillar verification
     assert_eq!(matrix.pillars.len(), 54);
     for pillar in &matrix.pillars {
-        assert_eq!(pillar.status, MatrixStatus::Passed, "Pillar {} must pass", pillar.requirement_id);
-        assert!(!pillar.requirement_id.is_empty(), "Requirement ID cannot be empty");
+        assert_eq!(
+            pillar.status,
+            MatrixStatus::Passed,
+            "Pillar {} must pass",
+            pillar.requirement_id
+        );
+        assert!(
+            !pillar.requirement_id.is_empty(),
+            "Requirement ID cannot be empty"
+        );
         assert!(!pillar.title.is_empty(), "Pillar title cannot be empty");
-        assert!(!pillar.invariant.is_empty(), "Invariant reference cannot be empty");
+        assert!(
+            !pillar.invariant.is_empty(),
+            "Invariant reference cannot be empty"
+        );
         assert!(!pillar.details.is_empty(), "Pillar details cannot be empty");
     }
 }

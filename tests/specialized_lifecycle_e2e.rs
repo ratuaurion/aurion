@@ -17,22 +17,16 @@ use aurion::l2::bridge::L2SettlementBridgeClient;
 use aurion::l2::relayer::L2Relayer;
 use aurion::l2::sequencer::L2Sequencer;
 use aurion::specialized::domains::{
-    GameAction, GameSession, GameSessionStatus, OrderBook, OrderSide, OrderType,
-    ShieldedNote, ShieldedPool,
+    GameAction, GameSession, GameSessionStatus, OrderBook, OrderSide, OrderType, ShieldedNote,
+    ShieldedPool,
 };
-use aurion::specialized::messaging::{
-    CrossLayerMessage, L2L3TwoWayRelayer, L3WithdrawalProof,
-};
-use aurion::specialized::runtime::{
-    L3ExecutionConfig, L3ExecutionEngine,
-};
+use aurion::specialized::messaging::{CrossLayerMessage, L2L3TwoWayRelayer, L3WithdrawalProof};
+use aurion::specialized::runtime::{L3ExecutionConfig, L3ExecutionEngine};
 use aurion::specialized::settlement::{
     L2SettlementClient, L3CheckpointGenerator, L3FinalityStatus, L3FinalityTier,
 };
 use aurion::specialized::state::L3State;
-use aurion::specialized::types::{
-    DomainId, L3Block, L3Transaction,
-};
+use aurion::specialized::types::{DomainId, L3Block, L3Transaction};
 
 #[test]
 fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
@@ -56,7 +50,11 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
         .expect("L1->L2 deposit failed");
     assert_eq!(l2_relayer.bridge.vault_balance, l1_to_l2_deposit);
     assert_eq!(
-        l2_sequencer.state.get_account(&alice).expect("alice in l2").balance,
+        l2_sequencer
+            .state
+            .get_account(&alice)
+            .expect("alice in l2")
+            .balance,
         l1_to_l2_deposit
     );
 
@@ -78,12 +76,16 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
     assert_eq!(deposit_msg.destination_domain, l3_domain);
 
     // Credit Alice in L3 State
-    l3_state.credit(&alice, l2_to_l3_deposit).expect("credit Alice in L3");
+    l3_state
+        .credit(&alice, l2_to_l3_deposit)
+        .expect("credit Alice in L3");
     assert_eq!(l3_state.get_balance(&alice), l2_to_l3_deposit);
 
     // Also credit Bob with 10 AUR for interaction
     let bob_initial = Quantum::new(1_000_000_000); // 10 AUR
-    l3_state.credit(&bob, bob_initial).expect("credit Bob in L3");
+    l3_state
+        .credit(&bob, bob_initial)
+        .expect("credit Bob in L3");
 
     // =========================================================================
     // STEP 3: L3 SPECIALIZED DOMAIN EXECUTIONS
@@ -153,7 +155,9 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
         })
         .expect("action 2");
 
-    let summary = session.finalize_session(*alice.as_bytes()).expect("finalize game");
+    let summary = session
+        .finalize_session(*alice.as_bytes())
+        .expect("finalize game");
     assert_eq!(summary.winner, *alice.as_bytes());
     assert_eq!(summary.payout, Quantum::new(200_000_000)); // 2 AUR
     assert_eq!(session.status, GameSessionStatus::Completed);
@@ -218,7 +222,9 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
         1_700_000_000,
         vec![l3_tx],
     );
-    checkpoint_gen.record_block(l3_block).expect("record L3 block");
+    checkpoint_gen
+        .record_block(l3_block)
+        .expect("record L3 block");
 
     let checkpoint = checkpoint_gen
         .create_checkpoint(&sequencer_keypair, vec![0xdd; 32])
@@ -230,7 +236,9 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
         sequencer_keypair.public_key_bytes(),
         Hash256::ZERO,
     );
-    l2_client.ingest_checkpoint(checkpoint).expect("ingest checkpoint into L2");
+    l2_client
+        .ingest_checkpoint(checkpoint)
+        .expect("ingest checkpoint into L2");
 
     // Track finality status
     let mut finality = L3FinalityStatus::new_local(l3_domain, receipt.tx_id, 1);
@@ -252,13 +260,7 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
     withdraw_payload.extend_from_slice(alice.as_bytes());
     withdraw_payload.extend_from_slice(&withdraw_amount.as_u128().to_be_bytes());
 
-    let withdraw_msg = CrossLayerMessage::new(
-        l3_domain,
-        l2_domain,
-        1,
-        withdraw_payload,
-        vec![],
-    );
+    let withdraw_msg = CrossLayerMessage::new(l3_domain, l2_domain, 1, withdraw_payload, vec![]);
 
     let (unlocked_recipient, unlocked_amount) = l2_l3_relayer
         .verify_withdrawal_and_unlock(&withdraw_msg, state_root, &withdrawal_proof)
@@ -268,9 +270,7 @@ fn test_l1_l2_l3_full_multi_layer_lifecycle_e2e() {
     assert_eq!(unlocked_amount, withdraw_amount);
 
     // Verify Asset Conservation in L2 Vault: 20 AUR initial - 5 AUR withdrawn = 15 AUR remaining in L2 Vault
-    let expected_remaining_vault = l2_to_l3_deposit
-        .checked_sub(withdraw_amount)
-        .expect("sub");
+    let expected_remaining_vault = l2_to_l3_deposit.checked_sub(withdraw_amount).expect("sub");
     assert_eq!(l2_l3_relayer.deposit_vault_l2, expected_remaining_vault);
 
     // =========================================================================

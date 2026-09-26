@@ -5,18 +5,17 @@
 //! 12 Pilar Pengujian Kepatuhan (REQ-L5-01..12) sesuai Dokumen Aturan Aplikasi 20
 //! (20-L5-GLOBAL-INFRASTRUCTURE-BLUEPRINT.md).
 
-use aurion::infrastructure::{
-    compute_node_id, AgentExecutive, AgentMandate, AntiDdosShield,
-    ArbitrationEngine, ComputeEngine, ComputeJob, DasSamplingClient,
-    DataAvailabilityMatrix, DdosFilterDecision, DelegatedAction, EdgeRelayMesh, FraudChallenge,
-    IndexingMesh, IndexingQuery, M2MClearingHouse, M2MContract, MeteredUsageReceipt,
-    NodeLifecycleStatus, NodeRegistrationRequest, NodeRegistry, OffChainBalanceProof,
-    ProofOfRetrievability, QueryAttestation, RelayPeer, ReputationEngine, ServiceMetric,
-    SovereignDid, StorageGrid, StorageManifest, StreamingPaymentEngine, VerifiableCredential,
-    ViolationType, ZkComputeAttestation, L5_CHALLENGE_WINDOW_SLOTS, L5_MIN_NODE_COLLATERAL_QUANTA,
-    L5_STORAGE_CHUNK_BYTES, L5_UNBONDING_DELAY_SLOTS,
-};
 use aurion::infrastructure::types::NodeType;
+use aurion::infrastructure::{
+    compute_node_id, AgentExecutive, AgentMandate, AntiDdosShield, ArbitrationEngine,
+    ComputeEngine, ComputeJob, DasSamplingClient, DataAvailabilityMatrix, DdosFilterDecision,
+    DelegatedAction, EdgeRelayMesh, FraudChallenge, IndexingMesh, IndexingQuery, M2MClearingHouse,
+    M2MContract, MeteredUsageReceipt, NodeLifecycleStatus, NodeRegistrationRequest, NodeRegistry,
+    OffChainBalanceProof, ProofOfRetrievability, QueryAttestation, RelayPeer, ReputationEngine,
+    ServiceMetric, SovereignDid, StorageGrid, StorageManifest, StreamingPaymentEngine,
+    VerifiableCredential, ViolationType, ZkComputeAttestation, L5_CHALLENGE_WINDOW_SLOTS,
+    L5_MIN_NODE_COLLATERAL_QUANTA, L5_STORAGE_CHUNK_BYTES, L5_UNBONDING_DELAY_SLOTS,
+};
 use aurion::primitives::core::{Address, Quantum};
 use blake3::Hasher;
 use ed25519_dalek::{Signer, SigningKey};
@@ -52,7 +51,9 @@ fn register_test_worker(registry: &mut NodeRegistry, slot: u64, seed: u8) -> [u8
         signature,
     };
 
-    registry.register_node(req, slot).expect("Registration must succeed")
+    registry
+        .register_node(req, slot)
+        .expect("Registration must succeed")
 }
 
 // -----------------------------------------------------------------------------
@@ -81,13 +82,17 @@ fn req_l5_01_node_registry_staking_and_unbonding() {
         signature,
     };
 
-    let node_id = registry.register_node(req, 1_000).expect("REQ-L5-01: Registration must succeed");
+    let node_id = registry
+        .register_node(req, 1_000)
+        .expect("REQ-L5-01: Registration must succeed");
     let node = registry.get_node(&node_id).expect("Node must be indexed");
     assert_eq!(node.status, NodeLifecycleStatus::ActiveNode);
     assert_eq!(node.collateral, collateral);
 
     // Request unbonding
-    registry.initiate_unbonding(&node_id, 1_050).expect("Unbonding initiation must succeed");
+    registry
+        .initiate_unbonding(&node_id, 1_050)
+        .expect("Unbonding initiation must succeed");
     assert_eq!(
         registry.get_node(&node_id).unwrap().status,
         NodeLifecycleStatus::Unbonding
@@ -95,7 +100,9 @@ fn req_l5_01_node_registry_staking_and_unbonding() {
 
     // Premature withdrawal must fail
     assert!(
-        registry.complete_unbonding(&node_id, 1_050 + L5_UNBONDING_DELAY_SLOTS - 1).is_err(),
+        registry
+            .complete_unbonding(&node_id, 1_050 + L5_UNBONDING_DELAY_SLOTS - 1)
+            .is_err(),
         "REQ-L5-01: Premature withdrawal must fail"
     );
 
@@ -173,7 +180,9 @@ fn req_l5_03_content_addressed_storage_grid_and_por() {
     assert_eq!(grid.get_replicas(&manifest.chunk_ids[0]), &[keeper_id]);
 
     // Host node generates and verifies Proof of Retrievability (PoR)
-    let proof_path = manifest.generate_merkle_proof(0).expect("Proof generation must succeed");
+    let proof_path = manifest
+        .generate_merkle_proof(0)
+        .expect("Proof generation must succeed");
     let por = ProofOfRetrievability {
         chunk_index: 0,
         chunk_id: manifest.chunk_ids[0],
@@ -192,10 +201,7 @@ fn req_l5_03_content_addressed_storage_grid_and_por() {
 #[test]
 fn req_l5_04_data_availability_sampling_and_erasure_coding() {
     // 2x2 original cells (k=2) -> expanded to 4x4 (size=4)
-    let original = vec![
-        vec![[0x01; 32], [0x02; 32]],
-        vec![[0x03; 32], [0x04; 32]],
-    ];
+    let original = vec![vec![[0x01; 32], [0x02; 32]], vec![[0x03; 32], [0x04; 32]]];
     let matrix = DataAvailabilityMatrix::build(&original)
         .expect("REQ-L5-04: 2D DA matrix encoding must succeed");
 
@@ -206,7 +212,9 @@ fn req_l5_04_data_availability_sampling_and_erasure_coding() {
     assert_ne!(da_root, [0u8; 32]);
 
     // Sample coordinates
-    let sample = matrix.get_sample(1, 3).expect("Valid coordinate must sample");
+    let sample = matrix
+        .get_sample(1, 3)
+        .expect("Valid coordinate must sample");
     assert_eq!(sample.row, 1);
     assert_eq!(sample.col, 3);
 
@@ -466,7 +474,9 @@ fn req_l5_09_agent_executive_mandate_and_spending_caps() {
         principal_signature: principal_sig,
     };
 
-    let mid = exec.register_mandate(mandate).expect("Mandate registration must succeed");
+    let mid = exec
+        .register_mandate(mandate)
+        .expect("Mandate registration must succeed");
 
     // Execute permitted action within budget
     let cost1 = q(50_000);
@@ -508,19 +518,15 @@ fn req_l5_09_agent_executive_mandate_and_spending_caps() {
     };
 
     assert!(
-        exec.execute_delegated_action(&action_excess, 660_000).is_err(),
+        exec.execute_delegated_action(&action_excess, 660_000)
+            .is_err(),
         "REQ-L5-09: Spending cap violation must be rejected"
     );
 
     // Unauthorized action must fail
     let cost_unauth = q(1_000);
-    let action_unauth_digest = DelegatedAction::compute_action_digest(
-        &mid,
-        "DRAIN_FUNDS",
-        b"",
-        cost_unauth,
-        3,
-    );
+    let action_unauth_digest =
+        DelegatedAction::compute_action_digest(&mid, "DRAIN_FUNDS", b"", cost_unauth, 3);
     let action_unauth = DelegatedAction {
         mandate_id: mid,
         operation: "DRAIN_FUNDS".to_string(),
@@ -531,7 +537,8 @@ fn req_l5_09_agent_executive_mandate_and_spending_caps() {
     };
 
     assert!(
-        exec.execute_delegated_action(&action_unauth, 670_000).is_err(),
+        exec.execute_delegated_action(&action_unauth, 670_000)
+            .is_err(),
         "REQ-L5-09: Unauthorized action must be rejected"
     );
 }
@@ -559,17 +566,26 @@ fn req_l5_10_anti_ddos_shield_and_edge_relay_mesh() {
 
     // 5 requests allowed
     for _ in 0..5 {
-        assert_eq!(shield.inspect_traffic(&client_ip, 100), DdosFilterDecision::Allow);
+        assert_eq!(
+            shield.inspect_traffic(&client_ip, 100),
+            DdosFilterDecision::Allow
+        );
     }
 
     // 6th request triggers rate limit violation
-    assert_eq!(shield.inspect_traffic(&client_ip, 100), DdosFilterDecision::RateLimited);
+    assert_eq!(
+        shield.inspect_traffic(&client_ip, 100),
+        DdosFilterDecision::RateLimited
+    );
 
     // Repeated violations trigger temporary ban
     for _ in 0..5 {
         let _ = shield.inspect_traffic(&client_ip, 100);
     }
-    assert_eq!(shield.inspect_traffic(&client_ip, 100), DdosFilterDecision::Blacklisted);
+    assert_eq!(
+        shield.inspect_traffic(&client_ip, 100),
+        DdosFilterDecision::Blacklisted
+    );
 }
 
 // -----------------------------------------------------------------------------
@@ -592,7 +608,8 @@ fn req_l5_11_fraud_challenge_arbitration_and_slashing() {
         800_100,
     );
 
-    let cid = arb.file_challenge(challenge, &mut registry, 800_100)
+    let cid = arb
+        .file_challenge(challenge, &mut registry, 800_100)
         .expect("REQ-L5-11: Filing fraud challenge must succeed");
 
     assert_eq!(
@@ -600,13 +617,20 @@ fn req_l5_11_fraud_challenge_arbitration_and_slashing() {
         NodeLifecycleStatus::Challenged
     );
 
-    let verdict = arb.adjudicate_challenge(&cid, true, &mut registry, 800_200)
+    let verdict = arb
+        .adjudicate_challenge(&cid, true, &mut registry, 800_200)
         .expect("Arbitration adjudication must succeed");
 
     assert!(verdict.convicted);
     assert_eq!(verdict.slashed_quanta, q(L5_MIN_NODE_COLLATERAL_QUANTA / 2));
-    assert_eq!(verdict.whistleblower_bounty.as_u128(), verdict.slashed_quanta.as_u128() / 2);
-    assert_eq!(verdict.burned_quanta.as_u128(), verdict.slashed_quanta.as_u128() / 2);
+    assert_eq!(
+        verdict.whistleblower_bounty.as_u128(),
+        verdict.slashed_quanta.as_u128() / 2
+    );
+    assert_eq!(
+        verdict.burned_quanta.as_u128(),
+        verdict.slashed_quanta.as_u128() / 2
+    );
     assert_eq!(
         registry.get_node(&worker_node_id).unwrap().status,
         NodeLifecycleStatus::Slashed
@@ -648,5 +672,8 @@ fn req_l5_12_architectural_invariants_enforcement() {
         b"data",
         10_000,
     );
-    assert_eq!(challenge.challenge_deadline_slot, 10_000 + L5_CHALLENGE_WINDOW_SLOTS);
+    assert_eq!(
+        challenge.challenge_deadline_slot,
+        10_000 + L5_CHALLENGE_WINDOW_SLOTS
+    );
 }

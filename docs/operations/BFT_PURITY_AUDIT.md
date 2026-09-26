@@ -89,10 +89,10 @@ pub fn new_deterministic() -> Self {
 
 Verifikasi melalui penghitungan address:
 
-| Sumber | Address Creator / Treasury |
+| Sumber | Address Master Treasury |
 | :--- | :--- |
 | `Keypair::from_seed(&[0x01; 32])` | `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad` |
-| `GENESIS_CEREMONY.json` → `creator_address_hex` | `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad` |
+| `GENESIS_CEREMONY.json` → `master_treasury_address_hex` | `cb095697ccc5acbf23e176ee4f05e7e77ddfe54236bfe8c8b42e78c3d5a95aad` |
 
 **Keduanya identik.** Private key Master Treasury dapat dihitung siapa pun yang
 memiliki salinan source.
@@ -107,18 +107,22 @@ milik pemilik, yang tidak boleh ada di repositori publik.
 
 ---
 
-## 5. Temuan 6 — Tiga Angka Alokasi Treasury (TERBUKA)
+## 5. Temuan 6 — Tiga Angka Alokasi Treasury (SELESAI / RESOLVED)
 
-| Sumber | Angka |
-| :--- | :--- |
-| `AURION CONSTITUTION.md` | 66.000.000 AUR |
-| `GENESIS_CEREMONY.json` → `initial_supply_aur` | 23.100.000 AUR |
-| `GENESIS_CEREMONY.json` → `creator_allocation_aur` | 19.800.000 AUR |
-| `conformance/vectors.rs` → `genesis_allocation_quanta` | 2.310.000.000.000.000 Q |
+Model alokasi Genesis Aurion telah diformalkan menjadi **Single Treasury**:
+100% pasokan Genesis (66.000.000 AUR) dialokasikan eksklusif ke satu akun
+Master Treasury. Skema alokasi pecahan telah dihapus total.
 
-Governance Specification §1 melarang tata kelola mengubah alokasi Blok 0. Karena
-itu, angka yang benar harus ditetapkan **sebelum mainnet**, saat belum ada blok
-yang mengikat siapa pun.
+| Sumber | Angka | Status |
+| :--- | :--- | --- |
+| `AURION CONSTITUTION.md` | 66.000.000 AUR | kanonik |
+| `GENESIS_CEREMONY.json` → `initial_supply_aur` | 66.000.000 AUR | selaras |
+| `GENESIS_CEREMONY.json` → `master_treasury_allocation_aur` | 66.000.000 AUR (100%) | selaras |
+| `conformance/vectors.rs` → `master_treasury_allocation_quanta` | 66.000.000.000.000.000 Q | selaras |
+| `quantum.rs` → `MASTER_TREASURY_ALLOCATION_QUANTA` | 66.000.000.000.000.000 Q | selaras |
+
+Tidak ada lagi rekening non-Treasury yang lahir di Blok 0. `CeremonyRole::Developer`
+dan seluruh field `*_allocation` pecahan telah dihapus dari protokol.
 
 ---
 

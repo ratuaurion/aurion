@@ -4,10 +4,10 @@
 //! Mematuhi Invariant AUR-ARCH-011 (#![forbid(unsafe_code)]), AUR-ARCH-012 (Zero-Float Quantum u128),
 //! AUR-L3-ARCH-002 (Domain Modular STF), dan AUR-L3-SEC-001 (Domain Fault Isolation).
 
-use thiserror::Error;
 use crate::core::{Hash256, Quantum};
 use crate::specialized::state::L3State;
 use crate::specialized::types::{DomainId, L3Block, L3Receipt, L3Transaction};
+use thiserror::Error;
 
 /// Biaya gas dasar untuk eksekusi transaksi di domain L3 (5.000 gas, ultra-ringan)
 pub const L3_BASE_TX_GAS: u64 = 5_000;
@@ -31,7 +31,10 @@ pub const L3_DEFAULT_MAX_GAS_PER_BLOCK: u64 = 10_000_000;
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum L3ExecutionError {
     #[error("Domain ID tidak cocok: diharapkan {expected}, aktual {actual}")]
-    DomainMismatch { expected: DomainId, actual: DomainId },
+    DomainMismatch {
+        expected: DomainId,
+        actual: DomainId,
+    },
 
     #[error("Pengirim akun L3 tidak ditemukan atau saldo tidak terdaftar")]
     SenderNotFound,
@@ -172,7 +175,8 @@ impl L3ExecutionEngine {
 
         // 4. Verifikasi Kecukupan Saldo Pengirim (Amount + Fee)
         let sender_balance = state.get_balance(&tx.sender);
-        let total_cost = tx.amount
+        let total_cost = tx
+            .amount
             .checked_add(tx.fee)
             .map_err(|_| L3ExecutionError::ArithmeticOverflow)?;
 
@@ -236,7 +240,8 @@ impl L3ExecutionEngine {
 
         // 2. Verifikasi Pohon Transaksi Blok
         let computed_txs_root = L3Block::compute_transactions_root(&block.transactions);
-        if block.transactions_root != Hash256::ZERO && block.transactions_root != computed_txs_root {
+        if block.transactions_root != Hash256::ZERO && block.transactions_root != computed_txs_root
+        {
             return Err(L3ExecutionError::TransactionsRootMismatch);
         }
 
@@ -313,7 +318,9 @@ mod tests {
             vec![1, 2, 3],
         );
 
-        let receipt = engine.execute_transaction(&mut state, &tx).expect("Eksekusi L3 harus berhasil");
+        let receipt = engine
+            .execute_transaction(&mut state, &tx)
+            .expect("Eksekusi L3 harus berhasil");
         assert!(receipt.success);
         assert_eq!(receipt.fee_paid, Quantum::new(10_000));
 
@@ -345,7 +352,10 @@ mod tests {
         );
 
         let result = engine.execute_transaction(&mut state, &tx);
-        assert!(matches!(result, Err(L3ExecutionError::InsufficientBalance { .. })));
+        assert!(matches!(
+            result,
+            Err(L3ExecutionError::InsufficientBalance { .. })
+        ));
         assert_eq!(state.get_balance(&alice), Quantum::new(50_000)); // Saldo utuh
     }
 
@@ -372,7 +382,10 @@ mod tests {
         );
 
         let result = engine.execute_transaction(&mut state, &tx);
-        assert!(matches!(result, Err(L3ExecutionError::DomainMismatch { .. })));
+        assert!(matches!(
+            result,
+            Err(L3ExecutionError::DomainMismatch { .. })
+        ));
     }
 
     #[test]

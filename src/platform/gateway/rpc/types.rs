@@ -66,10 +66,7 @@ impl JsonRpcError {
                 self.code, self.message, d
             )
         } else {
-            format!(
-                r#"{{"code":{},"message":"{}"}}"#,
-                self.code, self.message
-            )
+            format!(r#"{{"code":{},"message":"{}"}}"#, self.code, self.message)
         }
     }
 }
@@ -96,16 +93,21 @@ impl JsonRpcRequest {
     pub fn parse(raw_json: &str) -> Result<Self, JsonRpcError> {
         let trimmed = raw_json.trim();
         if !trimmed.starts_with('{') || !trimmed.ends_with('}') {
-            return Err(JsonRpcError::new(-32700, "Parse error: Invalid JSON object", None));
+            return Err(JsonRpcError::new(
+                -32700,
+                "Parse error: Invalid JSON object",
+                None,
+            ));
         }
 
         // Ekstraksi field method
-        let method = extract_json_string_field(trimmed, "method")
-            .ok_or_else(|| JsonRpcError::new(-32600, "Invalid Request: Missing 'method' field", None))?;
+        let method = extract_json_string_field(trimmed, "method").ok_or_else(|| {
+            JsonRpcError::new(-32600, "Invalid Request: Missing 'method' field", None)
+        })?;
 
         // Ekstraksi jsonrpc version
-        let jsonrpc = extract_json_string_field(trimmed, "jsonrpc")
-            .unwrap_or_else(|| "2.0".to_string());
+        let jsonrpc =
+            extract_json_string_field(trimmed, "jsonrpc").unwrap_or_else(|| "2.0".to_string());
         if jsonrpc != "2.0" {
             return Err(JsonRpcError::new(
                 -32600,
@@ -166,10 +168,7 @@ impl JsonRpcResponse {
             )
         } else {
             let res = self.result.as_deref().unwrap_or("null");
-            format!(
-                r#"{{"jsonrpc":"2.0","id":{},"result":{}}}"#,
-                self.id, res
-            )
+            format!(r#"{{"jsonrpc":"2.0","id":{},"result":{}}}"#, self.id, res)
         }
     }
 }
@@ -203,10 +202,7 @@ fn extract_json_id_field(json: &str) -> RpcId {
             } else if val_str.starts_with("null") {
                 return RpcId::Null;
             } else {
-                let num_str: String = val_str
-                    .chars()
-                    .take_while(|c| c.is_ascii_digit())
-                    .collect();
+                let num_str: String = val_str.chars().take_while(|c| c.is_ascii_digit()).collect();
                 if let Ok(n) = num_str.parse::<u64>() {
                     return RpcId::Number(n);
                 }

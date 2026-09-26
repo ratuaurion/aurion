@@ -131,7 +131,11 @@ async fn test_devnet_multinode_rpc_fault_recovery_and_teardown() {
         shutdowns.push(shutdown_tx);
     }
 
-    for (index, (session, shutdown_rx)) in sessions.into_iter().zip(rx_channels.into_iter()).enumerate() {
+    for (index, (session, shutdown_rx)) in sessions
+        .into_iter()
+        .zip(rx_channels.into_iter())
+        .enumerate()
+    {
         let consensus_task = nodes[index]
             .clone()
             .spawn_consensus_engine_with_shutdown(
@@ -186,9 +190,9 @@ async fn test_devnet_multinode_rpc_fault_recovery_and_teardown() {
 
     let transaction_height = nodes[0].rpc_context.current_height.load(Ordering::SeqCst);
     let recipient = Address([0xD4; 32]);
-    let tx = signed_transfer(&keys.creator, recipient);
+    let tx = signed_transfer(&keys.master_treasury, recipient);
     let raw = hex::encode(tx.to_canonical_bytes());
-    let pubkey = hex::encode(keys.creator.public_key_bytes());
+    let pubkey = hex::encode(keys.master_treasury.public_key_bytes());
     let request = format!(
         r#"{{"jsonrpc":"2.0","id":1,"method":"aur_sendRawTransaction","params":["{raw}","{pubkey}"]}}"#
     );

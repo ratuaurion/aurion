@@ -63,17 +63,18 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
         });
         val_addrs.push(addr);
         val_keys.push(key);
-        println!("[TESTNET] Region {reg}: Validator ID {addr} (WAN latency: {}ms)", latencies_ms[i]);
+        println!(
+            "[TESTNET] Region {reg}: Validator ID {addr} (WAN latency: {}ms)",
+            latencies_ms[i]
+        );
     }
     let validator_set = ValidatorSet::new(val_entries.clone());
     assert_eq!(validator_set.total_voting_power(), 100);
 
     let creator_key = Keypair::generate();
     let creator_addr = derive_address_from_pubkey(&creator_key.public_key_bytes());
-    let dev_key = Keypair::generate();
-    let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(creator_addr, val_entries.clone());
 
     // 2. Setup 4 Node Validator di 4 Region
     let mut region_nodes = Vec::new();
@@ -124,13 +125,23 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
 
     // Kirim transaksi ke mempool seluruh simpul lintas-benua
     for node in &region_nodes {
-        let acct = node.ledger.lock().unwrap().get_account(&creator_addr).unwrap().clone();
-        node.mempool.lock().unwrap().submit_transaction(
-            tx1.clone(),
-            &creator_key.public_key_bytes(),
-            1773532850,
-            &acct,
-        ).expect("Tx submission");
+        let acct = node
+            .ledger
+            .lock()
+            .unwrap()
+            .get_account(&creator_addr)
+            .unwrap()
+            .clone();
+        node.mempool
+            .lock()
+            .unwrap()
+            .submit_transaction(
+                tx1.clone(),
+                &creator_key.public_key_bytes(),
+                1773532850,
+                &acct,
+            )
+            .expect("Tx submission");
     }
 
     // Proposer merakit blok H=1 di Region 0 (AP)
@@ -151,8 +162,18 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
         // Latensi WAN simulative delay (skala mikroskopik test)
         tokio::time::sleep(tokio::time::Duration::from_millis(latencies_ms[i] / 10)).await;
 
-        let prevote = node.bft_engine.lock().unwrap().produce_prevote(block_hash, 1, 0).unwrap();
-        let precommit = node.bft_engine.lock().unwrap().produce_precommit(block_hash, 1, 0).unwrap();
+        let prevote = node
+            .bft_engine
+            .lock()
+            .unwrap()
+            .produce_prevote(block_hash, 1, 0)
+            .unwrap();
+        let precommit = node
+            .bft_engine
+            .lock()
+            .unwrap()
+            .produce_precommit(block_hash, 1, 0)
+            .unwrap();
         prevotes.push(prevote);
         precommits.push(precommit);
     }
@@ -170,11 +191,21 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
 
     // Komit Blok 1 pada seluruh simpul multi-region
     for node in &region_nodes {
-        node.ledger.lock().unwrap().apply_block(block1.clone(), &miner).expect("Apply block");
+        node.ledger
+            .lock()
+            .unwrap()
+            .apply_block(block1.clone(), &miner)
+            .expect("Apply block");
         node.sync_rpc_context();
     }
 
-    let h1_state_root = region_nodes[0].ledger.lock().unwrap().latest_block().header.state_root;
+    let h1_state_root = region_nodes[0]
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .header
+        .state_root;
     for (i, node) in region_nodes.iter().enumerate() {
         assert_eq!(
             node.ledger.lock().unwrap().latest_block().header.state_root,
@@ -204,11 +235,18 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
 
     // Rotasi: mengeluarkan Validator 3 (South America) dan memasukkan Validator Baru
     let leaving_val = vec![val_addrs[3]];
-    let rotated_set = rotate_validator_set(&validator_set, vec![new_val_entry.clone()], &leaving_val)
-        .expect("Rotate validator set");
+    let rotated_set =
+        rotate_validator_set(&validator_set, vec![new_val_entry.clone()], &leaving_val)
+            .expect("Rotate validator set");
     assert_eq!(rotated_set.validators.len(), 4);
-    assert!(rotated_set.validators.iter().any(|v| v.validator_id == new_val_addr));
-    assert!(!rotated_set.validators.iter().any(|v| v.validator_id == val_addrs[3]));
+    assert!(rotated_set
+        .validators
+        .iter()
+        .any(|v| v.validator_id == new_val_addr));
+    assert!(!rotated_set
+        .validators
+        .iter()
+        .any(|v| v.validator_id == val_addrs[3]));
 
     // Buat dan verifikasi EpochTransition
     let transition = EpochTransition::create_and_verify(
@@ -219,19 +257,16 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
         vec![new_val_entry],
         &leaving_val,
         cert.clone(),
-    ).expect("Epoch transition verified");
+    )
+    .expect("Epoch transition verified");
     assert_eq!(transition.from_epoch, 0);
     assert_eq!(transition.to_epoch, 1);
     assert_eq!(transition.new_validator_set, rotated_set);
 
     // 5. Pengujian State Snapshot & Fast-Sync Onboarding (NET-011)
     // Ekspor snapshot dari Node 0 pada H=1
-    let snapshot = StateSnapshot::create_from_store(
-        node_stores[0].as_ref(),
-        1,
-        9999,
-        0,
-    ).expect("Create state snapshot from store");
+    let snapshot = StateSnapshot::create_from_store(node_stores[0].as_ref(), 1, 9999, 0)
+        .expect("Create state snapshot from store");
 
     assert_eq!(snapshot.magic, SNAPSHOT_MAGIC);
     assert_eq!(snapshot.version, SNAPSHOT_VERSION);
@@ -241,30 +276,46 @@ async fn test_multi_region_testnet_wan_latency_and_fast_sync() {
 
     // Simpan snapshot ke file disk fisik
     let snapshot_file = base_path.join("aurion_testnet_h1.auss");
-    snapshot.write_to_file(&snapshot_file).expect("Write snapshot to file");
+    snapshot
+        .write_to_file(&snapshot_file)
+        .expect("Write snapshot to file");
     assert!(snapshot_file.exists());
 
     // Baca dan verifikasi snapshot dari disk
-    let loaded_snapshot = StateSnapshot::read_from_file(&snapshot_file).expect("Read snapshot from file");
-    assert_eq!(loaded_snapshot.compute_checksum(), snapshot.compute_checksum());
+    let loaded_snapshot =
+        StateSnapshot::read_from_file(&snapshot_file).expect("Read snapshot from file");
+    assert_eq!(
+        loaded_snapshot.compute_checksum(),
+        snapshot.compute_checksum()
+    );
     assert_eq!(loaded_snapshot.height, 1);
 
     // 6. Fast-Sync Simpul Baru Menggunakan State Snapshot
     // Buat simpul baru ke-5 (Region Fast-Sync) dengan database kosong
     let fast_sync_db = base_path.join("node_fast_sync.redb");
-    let fast_sync_store = Arc::new(RedbStorageEngine::open_or_create(&fast_sync_db).expect("Create fast sync store"));
+    let fast_sync_store =
+        Arc::new(RedbStorageEngine::open_or_create(&fast_sync_db).expect("Create fast sync store"));
 
     // Terapkan snapshot langsung ke storage simpul baru tanpa memutar transaksi dari genesis
-    loaded_snapshot.apply_to_store(fast_sync_store.as_ref()).expect("Apply snapshot to store");
+    loaded_snapshot
+        .apply_to_store(fast_sync_store.as_ref())
+        .expect("Apply snapshot to store");
 
     // Verifikasi saldo Alice dan integritas akun pada simpul baru
-    let alice_acc = fast_sync_store.get_account(&alice_addr).unwrap().expect("Alice account exists");
+    let alice_acc = fast_sync_store
+        .get_account(&alice_addr)
+        .unwrap()
+        .expect("Alice account exists");
     assert_eq!(alice_acc.balance, Quantum::new(50_000_000));
 
     // Verifikasi state root pada database baru identik dengan cluster
     let accounts_all = fast_sync_store.get_all_accounts().unwrap();
-    let fast_sync_root = aurion::statemachine::state::smt::compute_accounts_state_root(&accounts_all);
-    assert_eq!(fast_sync_root, h1_state_root, "Fast-sync node reached 100% identical state root");
+    let fast_sync_root =
+        aurion::statemachine::state::smt::compute_accounts_state_root(&accounts_all);
+    assert_eq!(
+        fast_sync_root, h1_state_root,
+        "Fast-sync node reached 100% identical state root"
+    );
 
     println!("[SUCCESS] Multi-region WAN consensus, Epoch rotation, and Snapshot fast-sync 100% verified!");
 }

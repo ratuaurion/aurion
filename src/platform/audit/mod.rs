@@ -118,11 +118,22 @@ impl AuditReport {
         let mut md = String::new();
         let pass_pct = (self.passed_checks * 100) / self.total_checks.max(1);
         md.push_str(&format!("# {}\n", self.title));
-        md.push_str(&format!("> **Versi Biner:** {} | **Waktu Evaluasi:** {} | **Hasil:** **{}**\n\n", self.version, self.timestamp, self.readiness_verdict));
+        md.push_str(&format!(
+            "> **Versi Biner:** {} | **Waktu Evaluasi:** {} | **Hasil:** **{}**\n\n",
+            self.version, self.timestamp, self.readiness_verdict
+        ));
         md.push_str(&format!("* **Total Pengujian:** {}\n", self.total_checks));
-        md.push_str(&format!("* **Pengujian Lolos:** {} ({}%)\n", self.passed_checks, pass_pct));
-        md.push_str(&format!("* **Pengujian Gagal:** {}\n\n", self.failed_checks));
-        md.push_str("| ID | Kategori | Tingkat Keparahan | Invariant | Status | Nama Pengujian |\n");
+        md.push_str(&format!(
+            "* **Pengujian Lolos:** {} ({}%)\n",
+            self.passed_checks, pass_pct
+        ));
+        md.push_str(&format!(
+            "* **Pengujian Gagal:** {}\n\n",
+            self.failed_checks
+        ));
+        md.push_str(
+            "| ID | Kategori | Tingkat Keparahan | Invariant | Status | Nama Pengujian |\n",
+        );
         md.push_str("| :--- | :--- | :---: | :--- | :---: | :--- |\n");
 
         for res in &self.results {

@@ -3,10 +3,10 @@
 //! Jaringan Pengindeksan Terdistribusi & Atestasi Kueri Bebas-Fabrikasi (REQ-L5-05).
 //! Invariant: AUR-L5-DATA-002 (Zero-Fabrication Data Provenance Terikat State Root L1).
 
-use std::collections::BTreeMap;
+use super::types::InfrastructureNodeId;
 use blake3::Hasher;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use super::types::InfrastructureNodeId;
+use std::collections::BTreeMap;
 
 /// Pengenal Unik Kueri Data L5.
 pub type QueryId = [u8; 32];
@@ -153,12 +153,7 @@ mod tests {
         let pubkey = signing_key.verifying_key().to_bytes();
         let indexer_id = [0x77; 32];
 
-        let query = IndexingQuery::new(
-            "AccountBalance".to_string(),
-            [0x01; 32],
-            1_000,
-            [0x02; 32],
-        );
+        let query = IndexingQuery::new("AccountBalance".to_string(), [0x01; 32], 1_000, [0x02; 32]);
 
         let result_payload = b"Account: aur1qqq... Balance: 500000000".to_vec();
         let leaf = QueryAttestation::compute_leaf_hash(&result_payload);

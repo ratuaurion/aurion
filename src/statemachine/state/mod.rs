@@ -18,4 +18,3 @@ pub use sandbox::{
 pub use smt::{compute_accounts_state_root, smt_branch_hash, smt_leaf_hash};
 pub use snapshot::{SnapshotError, StateSnapshot, SNAPSHOT_MAGIC, SNAPSHOT_VERSION};
 pub use stf::{apply_transaction, StateTransitionError};
-

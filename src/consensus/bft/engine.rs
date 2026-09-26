@@ -107,7 +107,9 @@ impl BftEngine {
         let mut valid_txs = Vec::with_capacity(candidates.len());
 
         for tx in candidates {
-            if apply_transaction(&mut dry_run_accounts, &mut dry_run_monetary, proposer, &tx).is_ok() {
+            if apply_transaction(&mut dry_run_accounts, &mut dry_run_monetary, proposer, &tx)
+                .is_ok()
+            {
                 valid_txs.push(tx);
             }
         }
@@ -194,7 +196,11 @@ impl BftEngine {
         ledger.apply_block(block.clone(), proposer)?;
 
         // Bersihkan transaksi yang difinalisasi dari mempool
-        let tx_ids: Vec<Hash256> = block.transactions.iter().map(|tx| tx.compute_tx_id()).collect();
+        let tx_ids: Vec<Hash256> = block
+            .transactions
+            .iter()
+            .map(|tx| tx.compute_tx_id())
+            .collect();
         mempool.remove_finalized(&tx_ids);
 
         Ok(())

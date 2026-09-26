@@ -60,7 +60,7 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
 
     let validator_set = ValidatorSet::new(validator_entries.clone());
 
-    let genesis = build_genesis(creator_addr, recipient_addr, validator_entries);
+    let genesis = build_genesis(creator_addr, validator_entries);
     let block1_hash;
     let expected_state_root_h1;
     let expected_creator_balance;
@@ -126,11 +126,15 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
         for (idx, key) in val_keys.iter().enumerate().take(3) {
             let prevote = Vote::new_signed(key, PHASE_PREVOTE, 1, 0, block_hash, idx as u32)
                 .expect("Prevote failed");
-            prevote.verify(&validator_set).expect("Prevote verify failed");
+            prevote
+                .verify(&validator_set)
+                .expect("Prevote verify failed");
 
             let precommit = Vote::new_signed(key, PHASE_PRECOMMIT, 1, 0, block_hash, idx as u32)
                 .expect("Precommit failed");
-            precommit.verify(&validator_set).expect("Precommit verify failed");
+            precommit
+                .verify(&validator_set)
+                .expect("Precommit verify failed");
             precommits.push(precommit);
         }
 
@@ -138,7 +142,11 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
             .create_commit_certificate(&validator_set, block_hash, 1, 0, precommits)
             .expect("Certificate should reach quorum > 2/3");
 
-        let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
+        let block = Block::new(
+            candidate_block.header,
+            candidate_block.transactions,
+            Some(cert),
+        );
         block1_hash = block.hash();
         expected_state_root_h1 = block.header.state_root;
 
@@ -160,8 +168,8 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
     // --- SESI 2: SIMULASI RESTART NODE DARI DISK ---
     {
         // Buka kembali database redb dari disk fisik yang sama
-        let redb_engine = RedbStorageEngine::open_or_create(&db_path)
-            .expect("Failed to re-open redb database");
+        let redb_engine =
+            RedbStorageEngine::open_or_create(&db_path).expect("Failed to re-open redb database");
         let store: Arc<dyn StateStore> = Arc::new(redb_engine);
 
         // Inisialisasi ChainLedger baru mengarah ke redb yang sama
@@ -171,7 +179,11 @@ fn test_redb_atomic_commit_and_crash_recovery_deterministic() {
             .expect("Ledger recovery from disk must succeed seamlessly");
 
         // Verifikasi hasil pemulihan (Crash Recovery Verification)
-        assert_eq!(recovered_ledger.latest_height(), 1, "Height harus pulih ke 1");
+        assert_eq!(
+            recovered_ledger.latest_height(),
+            1,
+            "Height harus pulih ke 1"
+        );
         assert_eq!(
             recovered_ledger.latest_block().hash(),
             block1_hash,

@@ -142,7 +142,9 @@ impl L2Transaction {
         let payload_len = usize::try_from(u32::from_be_bytes(payload_len_bytes)).unwrap_or(0);
 
         if payload_len > MAX_L2_TX_PAYLOAD_SIZE {
-            return Err(L2CodecError::CorruptedPayload("Ukuran payload melebihi batas 64 KB"));
+            return Err(L2CodecError::CorruptedPayload(
+                "Ukuran payload melebihi batas 64 KB",
+            ));
         }
 
         if bytes.len() != L2_TX_BASE_SIZE + payload_len {
@@ -248,7 +250,11 @@ pub fn compute_txs_root(txs: &[L2Transaction]) -> Hash256 {
         let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
         for chunk in current_level.chunks(2) {
             let left = &chunk[0];
-            let right = if chunk.len() > 1 { &chunk[1] } else { &chunk[0] };
+            let right = if chunk.len() > 1 {
+                &chunk[1]
+            } else {
+                &chunk[0]
+            };
             let mut combined = [0u8; 64];
             combined[0..32].copy_from_slice(left.as_bytes());
             combined[32..64].copy_from_slice(right.as_bytes());
@@ -294,7 +300,9 @@ impl L2Block {
     /// Mengodekan blok penuh ke format biner kanonikal
     #[must_use]
     pub fn encode_canonical(&self) -> Vec<u8> {
-        let mut buf = Vec::with_capacity(L2_BLOCK_HEADER_SIZE + 4 + self.transactions.len() * L2_TX_BASE_SIZE);
+        let mut buf = Vec::with_capacity(
+            L2_BLOCK_HEADER_SIZE + 4 + self.transactions.len() * L2_TX_BASE_SIZE,
+        );
         buf.extend_from_slice(&self.header.encode_canonical());
         let tx_count = u32::try_from(self.transactions.len()).unwrap_or(u32::MAX);
         buf.extend_from_slice(&tx_count.to_be_bytes());
@@ -327,7 +335,9 @@ impl L2Block {
 
         for _ in 0..tx_count {
             if cursor + 4 > bytes.len() {
-                return Err(L2CodecError::CorruptedPayload("Calldata terpotong saat membaca panjang tx"));
+                return Err(L2CodecError::CorruptedPayload(
+                    "Calldata terpotong saat membaca panjang tx",
+                ));
             }
             let mut tx_len_bytes = [0u8; 4];
             tx_len_bytes.copy_from_slice(&bytes[cursor..cursor + 4]);
@@ -335,7 +345,9 @@ impl L2Block {
             cursor += 4;
 
             if cursor + tx_len > bytes.len() {
-                return Err(L2CodecError::CorruptedPayload("Calldata terpotong saat membaca isi tx"));
+                return Err(L2CodecError::CorruptedPayload(
+                    "Calldata terpotong saat membaca isi tx",
+                ));
             }
 
             let tx = L2Transaction::decode_canonical(&bytes[cursor..cursor + tx_len])?;
@@ -458,7 +470,8 @@ mod tests {
         let encoded = tx.encode_canonical();
         assert_eq!(encoded.len(), L2_TX_BASE_SIZE + 4);
 
-        let decoded = L2Transaction::decode_canonical(&encoded).expect("Decode L2Tx harus berhasil");
+        let decoded =
+            L2Transaction::decode_canonical(&encoded).expect("Decode L2Tx harus berhasil");
         assert_eq!(decoded, tx);
     }
 
@@ -505,7 +518,8 @@ mod tests {
         let encoded = header.encode_canonical();
         assert_eq!(encoded.len(), L2_BLOCK_HEADER_SIZE);
 
-        let decoded = L2BlockHeader::decode_canonical(&encoded).expect("Decode header harus berhasil");
+        let decoded =
+            L2BlockHeader::decode_canonical(&encoded).expect("Decode header harus berhasil");
         assert_eq!(decoded, header);
         assert_eq!(decoded.compute_hash(), header.compute_hash());
     }

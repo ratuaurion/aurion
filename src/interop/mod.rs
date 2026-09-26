@@ -31,12 +31,10 @@ pub use security::{
     L4SecurityGate, MultiProverEngine, MultiProverResult, ProverId, ProverVerdict,
 };
 pub use types::{
-    BridgeStatus, ChainId, CrossChainMessage, CrossChainMessageParams, MAX_L4_PAYLOAD_BYTES,
-    ProofPayload, ProtocolId, RouteDescriptor,
+    BridgeStatus, ChainId, CrossChainMessage, CrossChainMessageParams, ProofPayload, ProtocolId,
+    RouteDescriptor, MAX_L4_PAYLOAD_BYTES,
 };
-pub use vault::{
-    CrossChainAssetVault, ThresholdCustodyAdapter, VaultActionType, VaultRecord,
-};
+pub use vault::{CrossChainAssetVault, ThresholdCustodyAdapter, VaultActionType, VaultRecord};
 pub use verifier::{
     BitcoinSpvVerifier, EvmStateVerifier, ExternalHeaderEntry, HeaderSyncTracker,
     ZkStateProofVerifier,

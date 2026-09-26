@@ -7,10 +7,19 @@ use aurion::cli::{dispatch, run_cli, CliCommand, OutputFormat};
 
 #[test]
 fn test_cli_command_parser_taxonomy() {
-    let args = vec!["node".to_string(), "start".to_string(), "--rpc-bind".to_string(), "127.0.0.1:9000".to_string()];
+    let args = vec![
+        "node".to_string(),
+        "start".to_string(),
+        "--rpc-bind".to_string(),
+        "127.0.0.1:9000".to_string(),
+    ];
     assert_eq!(
         CliCommand::parse(&args),
-        CliCommand::Node(vec!["start".to_string(), "--rpc-bind".to_string(), "127.0.0.1:9000".to_string()])
+        CliCommand::Node(vec![
+            "start".to_string(),
+            "--rpc-bind".to_string(),
+            "127.0.0.1:9000".to_string()
+        ])
     );
 
     let args = vec!["validator".to_string(), "status".to_string()];
@@ -19,10 +28,19 @@ fn test_cli_command_parser_taxonomy() {
         CliCommand::Validator(vec!["status".to_string()])
     );
 
-    let args = vec!["wallet".to_string(), "create".to_string(), "--name".to_string(), "alice".to_string()];
+    let args = vec![
+        "wallet".to_string(),
+        "create".to_string(),
+        "--name".to_string(),
+        "alice".to_string(),
+    ];
     assert_eq!(
         CliCommand::parse(&args),
-        CliCommand::Wallet(vec!["create".to_string(), "--name".to_string(), "alice".to_string()])
+        CliCommand::Wallet(vec![
+            "create".to_string(),
+            "--name".to_string(),
+            "alice".to_string()
+        ])
     );
 
     let args = vec!["storage".to_string(), "status".to_string()];
@@ -58,7 +76,12 @@ fn test_cli_command_parser_taxonomy() {
 
 #[test]
 fn test_output_format_parser() {
-    let args = vec!["genesis".to_string(), "inspect".to_string(), "--output".to_string(), "json".to_string()];
+    let args = vec![
+        "genesis".to_string(),
+        "inspect".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ];
     let (fmt, filtered) = OutputFormat::parse_and_strip(&args);
     assert_eq!(fmt, OutputFormat::Json);
     assert_eq!(filtered, vec!["genesis".to_string(), "inspect".to_string()]);
@@ -68,7 +91,11 @@ fn test_output_format_parser() {
     assert_eq!(fmt, OutputFormat::Json);
     assert_eq!(filtered, vec!["version".to_string()]);
 
-    let args = vec!["storage".to_string(), "status".to_string(), "--format=json".to_string()];
+    let args = vec![
+        "storage".to_string(),
+        "status".to_string(),
+        "--format=json".to_string(),
+    ];
     let (fmt, filtered) = OutputFormat::parse_and_strip(&args);
     assert_eq!(fmt, OutputFormat::Json);
     assert_eq!(filtered, vec!["storage".to_string(), "status".to_string()]);
@@ -93,42 +120,71 @@ async fn test_cli_dispatch_version_text_and_json() {
 #[tokio::test]
 async fn test_cli_dispatch_genesis_inspect_and_hash() {
     // Text inspect
-    let res = dispatch(CliCommand::Genesis(vec!["inspect".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Genesis(vec!["inspect".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // JSON inspect
-    let res = dispatch(CliCommand::Genesis(vec!["inspect".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Genesis(vec!["inspect".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // Hash text
-    let res = dispatch(CliCommand::Genesis(vec!["hash".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Genesis(vec!["hash".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // Hash JSON
-    let res = dispatch(CliCommand::Genesis(vec!["hash".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Genesis(vec!["hash".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_storage_status() {
-    let res = dispatch(CliCommand::Storage(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Storage(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
-    let res = dispatch(CliCommand::Storage(vec!["status".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Storage(vec!["status".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_account_validation() {
     // Missing address
-    let res = dispatch(CliCommand::Account(vec!["balance".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Account(vec!["balance".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_err());
 
     // Invalid address
     let res = dispatch(
         CliCommand::Account(vec!["balance".to_string(), "invalid_address".to_string()]),
         OutputFormat::Text,
-    ).await;
+    )
+    .await;
     assert!(res.is_err());
 
     // Valid 64-hex address
@@ -136,13 +192,18 @@ async fn test_cli_dispatch_account_validation() {
     let res = dispatch(
         CliCommand::Account(vec!["balance".to_string(), hex_addr]),
         OutputFormat::Json,
-    ).await;
+    )
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_run_cli_entrypoint() {
-    let args = vec!["version".to_string(), "--output".to_string(), "json".to_string()];
+    let args = vec![
+        "version".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ];
     let res = run_cli(&args).await;
     assert!(res.is_ok());
 
@@ -158,7 +219,8 @@ async fn test_cli_dispatch_contract_deploy_and_inspect() {
     let res = dispatch(
         CliCommand::Contract(vec!["deploy".to_string(), bytecode_hex]),
         OutputFormat::Json,
-    ).await;
+    )
+    .await;
     assert!(res.is_ok());
 
     // Inspect dummy contract address
@@ -166,7 +228,8 @@ async fn test_cli_dispatch_contract_deploy_and_inspect() {
     let res = dispatch(
         CliCommand::Contract(vec!["inspect".to_string(), hex_addr]),
         OutputFormat::Json,
-    ).await;
+    )
+    .await;
     assert!(res.is_ok());
 }
 
@@ -179,15 +242,31 @@ async fn test_cli_dispatch_l2_subcommands_text_and_json() {
     assert!(res.is_ok());
 
     // 2. L2 Sequencer (Text & JSON)
-    let res = dispatch(CliCommand::L2(vec!["sequencer".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L2(vec!["sequencer".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L2(vec!["sequencer".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L2(vec!["sequencer".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. L2 Bridge (Text & JSON)
-    let res = dispatch(CliCommand::L2(vec!["bridge".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L2(vec!["bridge".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L2(vec!["bridge".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L2(vec!["bridge".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 4. L2 Tx Simulation (Text & JSON)
@@ -202,7 +281,8 @@ async fn test_cli_dispatch_l2_subcommands_text_and_json() {
             "500000000".to_string(),
         ]),
         OutputFormat::Text,
-    ).await;
+    )
+    .await;
     assert!(res.is_ok());
 
     let res = dispatch(
@@ -216,7 +296,8 @@ async fn test_cli_dispatch_l2_subcommands_text_and_json() {
             "500000000".to_string(),
         ]),
         OutputFormat::Json,
-    ).await;
+    )
+    .await;
     assert!(res.is_ok());
 
     // 5. L2 Help
@@ -229,40 +310,81 @@ async fn test_cli_dispatch_l2_subcommands_text_and_json() {
         "node".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_l4_subcommands_text_and_json() {
     // 1. L4 Relay (Text & JSON)
-    let res = dispatch(CliCommand::L4(vec!["relay".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["relay".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L4(vec!["relay".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["relay".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 2. L4 Bridge (Text & JSON)
-    let res = dispatch(CliCommand::L4(vec!["bridge".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["bridge".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L4(vec!["bridge".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["bridge".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. L4 Verify (Text & JSON)
-    let res = dispatch(CliCommand::L4(vec!["verify".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["verify".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L4(vec!["verify".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["verify".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 4. L4 Circuit (Text & JSON)
-    let res = dispatch(CliCommand::L4(vec!["circuit".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["circuit".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L4(vec!["circuit".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["circuit".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 5. L4 Status (Text & JSON)
-    let res = dispatch(CliCommand::L4(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L4(vec!["status".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L4(vec!["status".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 6. L4 Help
@@ -275,13 +397,11 @@ async fn test_cli_dispatch_l4_subcommands_text_and_json() {
         "status".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 
-    let res = run_cli(&[
-        "interop".to_string(),
-        "relay".to_string(),
-    ]).await;
+    let res = run_cli(&["interop".to_string(), "relay".to_string()]).await;
     assert!(res.is_ok());
 }
 
@@ -294,15 +414,31 @@ async fn test_cli_dispatch_l5_subcommands_text_and_json() {
     assert!(res.is_ok());
 
     // 2. L5 Compute (Text & JSON)
-    let res = dispatch(CliCommand::L5(vec!["compute".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["compute".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L5(vec!["compute".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["compute".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. L5 Storage (Text & JSON)
-    let res = dispatch(CliCommand::L5(vec!["storage".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["storage".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L5(vec!["storage".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["storage".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 4. L5 DA (Text & JSON)
@@ -318,15 +454,31 @@ async fn test_cli_dispatch_l5_subcommands_text_and_json() {
     assert!(res.is_ok());
 
     // 6. L5 Agent (Text & JSON)
-    let res = dispatch(CliCommand::L5(vec!["agent".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["agent".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L5(vec!["agent".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["agent".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 7. L5 Status (Text & JSON)
-    let res = dispatch(CliCommand::L5(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::L5(vec!["status".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::L5(vec!["status".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 8. L5 Help
@@ -339,32 +491,50 @@ async fn test_cli_dispatch_l5_subcommands_text_and_json() {
         "status".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 
-    let res = run_cli(&[
-        "infra".to_string(),
-        "node".to_string(),
-    ]).await;
+    let res = run_cli(&["infra".to_string(), "node".to_string()]).await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_devnet_subcommands_text_and_json() {
     // 1. Devnet Init (Text & JSON)
-    let res = dispatch(CliCommand::Devnet(vec!["init".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Devnet(vec!["init".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Devnet(vec!["init".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Devnet(vec!["init".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 2. Devnet Status (Text & JSON)
-    let res = dispatch(CliCommand::Devnet(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Devnet(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Devnet(vec!["status".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Devnet(vec!["status".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. Devnet Help
-    let res = dispatch(CliCommand::Devnet(vec!["help".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Devnet(vec!["help".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 4. CLI entrypoint parsing for devnet
@@ -378,28 +548,53 @@ async fn test_cli_dispatch_devnet_subcommands_text_and_json() {
         "status".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_testnet_and_snapshot_subcommands() {
     // 1. Testnet Init & Status (Text & JSON)
-    let res = dispatch(CliCommand::Testnet(vec!["init".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Testnet(vec!["init".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Testnet(vec!["init".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Testnet(vec!["init".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
-    let res = dispatch(CliCommand::Testnet(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Testnet(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Testnet(vec!["status".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Testnet(vec!["status".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
-    let res = dispatch(CliCommand::Testnet(vec!["help".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Testnet(vec!["help".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 2. Snapshot Help
-    let res = dispatch(CliCommand::Snapshot(vec!["help".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Snapshot(vec!["help".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. CLI parsing
@@ -417,7 +612,8 @@ async fn test_cli_dispatch_testnet_and_snapshot_subcommands() {
         "status".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 }
 
@@ -430,7 +626,11 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
     // jaringan, sehingga test ini selalu hijau. Implementasi produksi nyata
     // sekarang membutuhkan kredensial, jadi test disesuaikan dengan perilaku
     // jujur tersebut: tanpa keystore HARUS gagal, bukan berpura-pura sukses.
-    let res = dispatch(CliCommand::Faucet(vec!["status".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Faucet(vec!["status".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(
         res.is_err(),
         "faucet status tanpa keystore harus menolak, bukan mengarang data"
@@ -443,14 +643,14 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
     // Dengan seed dev eksplisit, status harus benar-benar terbaca dari state.
     for fmt in [OutputFormat::Text, OutputFormat::Json] {
         let res = dispatch(
-            CliCommand::Faucet(vec![
-                "status".to_string(),
-                "--faucet-dev-seed".to_string(),
-            ]),
+            CliCommand::Faucet(vec!["status".to_string(), "--faucet-dev-seed".to_string()]),
             fmt,
         )
         .await;
-        assert!(res.is_ok(), "faucet status --faucet-dev-seed harus berhasil");
+        assert!(
+            res.is_ok(),
+            "faucet status --faucet-dev-seed harus berhasil"
+        );
     }
 
     // `claim` ke rekening yang belum didanai harus ditolak dengan jelas.
@@ -481,12 +681,24 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
     assert!(res.is_err(), "alamat tidak valid harus ditolak");
 
     // 2. Explorer Summary & Serve (Text & JSON)
-    let res = dispatch(CliCommand::Explorer(vec!["summary".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Explorer(vec!["summary".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Explorer(vec!["summary".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Explorer(vec!["summary".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
-    let res = dispatch(CliCommand::Explorer(vec!["serve".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Explorer(vec!["serve".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. Command parser
@@ -514,22 +726,39 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
         "summary".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_cli_dispatch_audit_subcommands() {
     // 1. Audit Run (Text & JSON)
-    let res = dispatch(CliCommand::Audit(vec!["run".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Audit(vec!["run".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Audit(vec!["run".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Audit(vec!["run".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 2. Audit Summary (Text & JSON)
-    let res = dispatch(CliCommand::Audit(vec!["summary".to_string()]), OutputFormat::Text).await;
+    let res = dispatch(
+        CliCommand::Audit(vec!["summary".to_string()]),
+        OutputFormat::Text,
+    )
+    .await;
     assert!(res.is_ok());
-    let res = dispatch(CliCommand::Audit(vec!["summary".to_string()]), OutputFormat::Json).await;
+    let res = dispatch(
+        CliCommand::Audit(vec!["summary".to_string()]),
+        OutputFormat::Json,
+    )
+    .await;
     assert!(res.is_ok());
 
     // 3. Command parser
@@ -544,8 +773,7 @@ async fn test_cli_dispatch_audit_subcommands() {
         "summary".to_string(),
         "--output".to_string(),
         "json".to_string(),
-    ]).await;
+    ])
+    .await;
     assert!(res.is_ok());
 }
-
-

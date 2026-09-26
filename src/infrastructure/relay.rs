@@ -3,8 +3,8 @@
 //! Jaringan Relay Tepi (Edge Mesh) Zenoh & Perisai Proteksi Anti-DDoS L5 (REQ-L5-10).
 //! Invariant: AUR-L5-ARCH-001 (Edge Decoupling from Consensus), AUR-L5-SEC-001 (Byzantine Resiliency).
 
-use std::collections::BTreeMap;
 use super::types::InfrastructureNodeId;
+use std::collections::BTreeMap;
 
 /// Metadata Peer Relay Tepi.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,11 +108,14 @@ impl AntiDdosShield {
         // 2. Dapatkan atau inisialisasi token bucket
         let capacity = self.bucket_capacity;
         let refill_rate = self.refill_rate_per_slot;
-        let bucket = self.client_buckets.entry(*source_id).or_insert(TokenBucket {
-            tokens: capacity,
-            last_refill_slot: current_slot,
-            violations: 0,
-        });
+        let bucket = self
+            .client_buckets
+            .entry(*source_id)
+            .or_insert(TokenBucket {
+                tokens: capacity,
+                last_refill_slot: current_slot,
+                violations: 0,
+            });
 
         // 3. Refill token berdasarkan slot yang telah berlalu
         let slots_elapsed = current_slot.saturating_sub(bucket.last_refill_slot);
@@ -130,7 +133,8 @@ impl AntiDdosShield {
             bucket.violations = bucket.violations.saturating_add(1);
             if bucket.violations >= self.max_violations_before_ban {
                 let ban_duration = 100; // Ban selama 100 slot
-                self.blacklist.insert(*source_id, current_slot + ban_duration);
+                self.blacklist
+                    .insert(*source_id, current_slot + ban_duration);
                 DdosFilterDecision::Blacklisted
             } else {
                 DdosFilterDecision::RateLimited
@@ -182,15 +186,30 @@ mod tests {
         let client = [0x99; 32];
 
         // 3 request pertama di slot 10: Allow
-        assert_eq!(shield.inspect_traffic(&client, 10), DdosFilterDecision::Allow);
-        assert_eq!(shield.inspect_traffic(&client, 10), DdosFilterDecision::Allow);
-        assert_eq!(shield.inspect_traffic(&client, 10), DdosFilterDecision::Allow);
+        assert_eq!(
+            shield.inspect_traffic(&client, 10),
+            DdosFilterDecision::Allow
+        );
+        assert_eq!(
+            shield.inspect_traffic(&client, 10),
+            DdosFilterDecision::Allow
+        );
+        assert_eq!(
+            shield.inspect_traffic(&client, 10),
+            DdosFilterDecision::Allow
+        );
 
         // Request ke-4: RateLimited (Pelanggaran 1)
-        assert_eq!(shield.inspect_traffic(&client, 10), DdosFilterDecision::RateLimited);
+        assert_eq!(
+            shield.inspect_traffic(&client, 10),
+            DdosFilterDecision::RateLimited
+        );
 
         // Request ke-5: Blacklisted (Pelanggaran 2 -> Ban)
-        assert_eq!(shield.inspect_traffic(&client, 10), DdosFilterDecision::Blacklisted);
+        assert_eq!(
+            shield.inspect_traffic(&client, 10),
+            DdosFilterDecision::Blacklisted
+        );
         assert!(shield.is_blacklisted(&client, 10));
     }
 }

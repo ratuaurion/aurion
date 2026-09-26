@@ -9,13 +9,13 @@
 //!   Vault Burn-and-Unlock (Siklus Selesai)
 
 use aurion::interop::{
-    AnomalyEvent, AnomalySeverity, BridgeCircuitBreaker, BridgeStatus, ChainId,
-    CrossChainAssetVault, CrossChainMessage, CrossChainMessageParams, CrossDomainIdentityBinding,
-    DecentralizedStateReadRelay, EvmStateVerifier, ExternalHeaderEntry, FinancialRateLimiter,
-    HeaderSyncTracker, L4SecurityGate, MultiProverEngine, ProofPayload, ProtocolId, ProverId,
-    ProverVerdict, SovereignIdentityResolver, StateReadQuery, ThresholdCustodyAdapter,
-    TrustMinimizedRelayer, UniversalNullifierRegistry, ZkStateProofVerifier,
-    decode_envelope, encode_envelope,
+    decode_envelope, encode_envelope, AnomalyEvent, AnomalySeverity, BridgeCircuitBreaker,
+    BridgeStatus, ChainId, CrossChainAssetVault, CrossChainMessage, CrossChainMessageParams,
+    CrossDomainIdentityBinding, DecentralizedStateReadRelay, EvmStateVerifier, ExternalHeaderEntry,
+    FinancialRateLimiter, HeaderSyncTracker, L4SecurityGate, MultiProverEngine, ProofPayload,
+    ProtocolId, ProverId, ProverVerdict, SovereignIdentityResolver, StateReadQuery,
+    ThresholdCustodyAdapter, TrustMinimizedRelayer, UniversalNullifierRegistry,
+    ZkStateProofVerifier,
 };
 use aurion::primitives::core::Quantum;
 use blake3::Hasher;
@@ -25,7 +25,12 @@ fn q(v: u128) -> Quantum {
 }
 
 /// Builds a state root compatible with EvmStateVerifier::verify_account_state.
-fn build_evm_state_root(target: [u8; 32], slot: [u8; 32], value: [u8; 32], node: [u8; 32]) -> [u8; 32] {
+fn build_evm_state_root(
+    target: [u8; 32],
+    slot: [u8; 32],
+    value: [u8; 32],
+    node: [u8; 32],
+) -> [u8; 32] {
     let mut h = Hasher::new();
     h.update(b"AURION-EVM-STATE-V1");
     h.update(&target);
@@ -36,7 +41,12 @@ fn build_evm_state_root(target: [u8; 32], slot: [u8; 32], value: [u8; 32], node:
 }
 
 /// Builds a HeaderSyncTracker with `n_headers` headers ingested, using given state_root.
-fn build_tracker(chain: ChainId, confirmations: u64, n_headers: u64, state_root: [u8; 32]) -> HeaderSyncTracker {
+fn build_tracker(
+    chain: ChainId,
+    confirmations: u64,
+    n_headers: u64,
+    state_root: [u8; 32],
+) -> HeaderSyncTracker {
     let mut tracker = HeaderSyncTracker::new(chain, confirmations);
     let mut prev = [0u8; 32];
     for height in 0..=n_headers {
@@ -78,8 +88,12 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
 
     let msg = CrossChainMessage::new(params).expect("Fase 1: message creation must succeed");
     let encoded = encode_envelope(&msg, BridgeStatus::Active).expect("Fase 1: encode must succeed");
-    let (decoded, _decoded_status) = decode_envelope(&encoded).expect("Fase 1: decode must succeed");
-    assert_eq!(msg.packet_id, decoded.packet_id, "Fase 1: packet_id must survive roundtrip");
+    let (decoded, _decoded_status) =
+        decode_envelope(&encoded).expect("Fase 1: decode must succeed");
+    assert_eq!(
+        msg.packet_id, decoded.packet_id,
+        "Fase 1: packet_id must survive roundtrip"
+    );
     assert!(msg.verify_integrity(), "Fase 1: Blake3 integrity must pass");
 
     // ─── Fase 2: Header Sync & Finality ───────────────────────────────────────
@@ -90,13 +104,25 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
     let state_root = build_evm_state_root(target_address, storage_slot, storage_value, proof_node);
 
     let tracker = build_tracker(ChainId::Ethereum, 3, 8, state_root);
-    assert_eq!(tracker.latest_height(), 8, "Fase 2: latest height must be 8");
-    assert_eq!(tracker.confirmed_height(), 5, "Fase 2: confirmed = 8 - 3 = 5");
+    assert_eq!(
+        tracker.latest_height(),
+        8,
+        "Fase 2: latest height must be 8"
+    );
+    assert_eq!(
+        tracker.confirmed_height(),
+        5,
+        "Fase 2: confirmed = 8 - 3 = 5"
+    );
 
     // ─── Fase 3: EVM State Proof ───────────────────────────────────────────────
     assert!(
         EvmStateVerifier::verify_account_state(
-            target_address, storage_slot, storage_value, &[proof_node], state_root
+            target_address,
+            storage_slot,
+            storage_value,
+            &[proof_node],
+            state_root
         ),
         "Fase 3: EVM state proof must verify"
     );
@@ -121,7 +147,10 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
         aurion::interop::RelayVerificationResult::Verified { .. }
             | aurion::interop::RelayVerificationResult::PendingFinality { .. }
     );
-    assert!(is_valid_relay, "Fase 5: relay result must be Verified or PendingFinality");
+    assert!(
+        is_valid_relay,
+        "Fase 5: relay result must be Verified or PendingFinality"
+    );
 
     // ─── Fase 6: Multi-Prover 2-of-3 Quorum ──────────────────────────────────
     let mut prover_engine = MultiProverEngine::new();
@@ -129,7 +158,11 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
 
     prover_engine.submit_verdict(claim_id, ProverId::LightClient, ProverVerdict::Valid);
     prover_engine.submit_verdict(claim_id, ProverId::ZkStateProof, ProverVerdict::Valid);
-    prover_engine.submit_verdict(claim_id, ProverId::OptimisticWatcher, ProverVerdict::Inconclusive);
+    prover_engine.submit_verdict(
+        claim_id,
+        ProverId::OptimisticWatcher,
+        ProverVerdict::Inconclusive,
+    );
 
     assert_eq!(
         prover_engine.evaluate_quorum(claim_id),
@@ -144,7 +177,10 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
         .expect("Fase 7: transfer within limits must succeed");
 
     let volume = rate_limiter.current_volume(ChainId::Ethereum, 10);
-    assert_eq!(volume, 1_000_000, "Fase 7: volume must equal transferred amount");
+    assert_eq!(
+        volume, 1_000_000,
+        "Fase 7: volume must equal transferred amount"
+    );
 
     // ─── Fase 8: Vault Lock-and-Mint ─────────────────────────────────────────
     let custody = ThresholdCustodyAdapter::new(vec![[0x11; 32], [0x22; 32], [0x33; 32]])
@@ -156,15 +192,22 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
         .expect("Fase 8: lock-and-mint must succeed");
     assert_ne!(mint_id, [0u8; 32]);
 
-    assert!(vault.audit_conservation().unwrap(), "Fase 8: value conservation must hold");
+    assert!(
+        vault.audit_conservation().unwrap(),
+        "Fase 8: value conservation must hold"
+    );
     assert_eq!(vault.net_active_wrapped_supply(), q(1_000_000));
 
     // ─── Fase 9: Oracle-Free State Read Relay ─────────────────────────────────
     let read_tracker = build_tracker(ChainId::Ethereum, 3, 8, state_root);
     let query = StateReadQuery::new(ChainId::Ethereum, target_address, storage_slot, 4);
-    let read_resp =
-        DecentralizedStateReadRelay::verify_state_read(&query, storage_value, &[proof_node], &read_tracker)
-            .expect("Fase 9: oracle-free state read must succeed");
+    let read_resp = DecentralizedStateReadRelay::verify_state_read(
+        &query,
+        storage_value,
+        &[proof_node],
+        &read_tracker,
+    )
+    .expect("Fase 9: oracle-free state read must succeed");
     assert!(read_resp.verified, "Fase 9: state read must be verified");
 
     // ─── Fase 10: Cross-Domain Identity Resolution ───────────────────────────
@@ -187,7 +230,11 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
         .expect("Fase 10: identity binding must succeed");
 
     let resolved = resolver.resolve_foreign_address(ChainId::Ethereum, &target_address);
-    assert_eq!(resolved, Some(&aurion_key), "Fase 10: identity must resolve correctly");
+    assert_eq!(
+        resolved,
+        Some(&aurion_key),
+        "Fase 10: identity must resolve correctly"
+    );
 
     // ─── Fase 11: Anti-Replay Nullifier ──────────────────────────────────────
     let mut nullifier_reg = UniversalNullifierRegistry::new();
@@ -216,19 +263,36 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
     });
 
     assert!(tripped, "Fase 12: Critical anomaly must trip circuit");
-    assert!(circuit_breaker.is_halted(ChainId::Ethereum), "Fase 12: Ethereum must be halted");
-    assert!(!circuit_breaker.is_halted(ChainId::AurionL1), "Fase 12: AurionL1 must NOT be halted");
-    assert!(!circuit_breaker.is_halted(ChainId::Bitcoin), "Fase 12: Bitcoin must NOT be halted");
+    assert!(
+        circuit_breaker.is_halted(ChainId::Ethereum),
+        "Fase 12: Ethereum must be halted"
+    );
+    assert!(
+        !circuit_breaker.is_halted(ChainId::AurionL1),
+        "Fase 12: AurionL1 must NOT be halted"
+    );
+    assert!(
+        !circuit_breaker.is_halted(ChainId::Bitcoin),
+        "Fase 12: Bitcoin must NOT be halted"
+    );
 
     let gov_token = circuit_breaker.compute_reset_token(ChainId::Ethereum);
     circuit_breaker
         .governance_reset(ChainId::Ethereum, &gov_token)
         .expect("Fase 12: governance reset must succeed");
-    assert!(!circuit_breaker.is_halted(ChainId::Ethereum), "Fase 12: bridge must resume");
+    assert!(
+        !circuit_breaker.is_halted(ChainId::Ethereum),
+        "Fase 12: bridge must resume"
+    );
 
     // ─── Final: Burn-and-Unlock (Siklus Lengkap) ────────────────────────────
     let burn_id = vault
-        .process_burn_for_external_unlock(q(1_000_000), ChainId::Ethereum, [0x01; 32], 1_700_100_000)
+        .process_burn_for_external_unlock(
+            q(1_000_000),
+            ChainId::Ethereum,
+            [0x01; 32],
+            1_700_100_000,
+        )
         .expect("Final: burn-for-unlock must succeed");
 
     let k1 = [0x11; 32];
@@ -247,7 +311,10 @@ fn l4_lifecycle_e2e_cross_chain_simulation() {
         q(0),
         "Final: wrapped supply must be zero after full cycle"
     );
-    assert!(vault.audit_conservation().unwrap(), "Final: conservation invariant must hold");
+    assert!(
+        vault.audit_conservation().unwrap(),
+        "Final: conservation invariant must hold"
+    );
 }
 
 /// Adversarial: 2-of-3 Fraudulent provers block transfer via L4SecurityGate.
@@ -256,12 +323,18 @@ fn l4_lifecycle_e2e_adversarial_fraud_blocked() {
     let mut gate = L4SecurityGate::new(q(10_000_000), 1000);
     let claim = MultiProverEngine::compute_claim_id(&[0xFF; 32], ChainId::Bitcoin);
 
-    gate.multi_prover.submit_verdict(claim, ProverId::LightClient, ProverVerdict::Fraudulent);
-    gate.multi_prover.submit_verdict(claim, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
-    gate.multi_prover.submit_verdict(claim, ProverId::OptimisticWatcher, ProverVerdict::Valid);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::LightClient, ProverVerdict::Fraudulent);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::OptimisticWatcher, ProverVerdict::Valid);
 
     let result = gate.approve_transfer(claim, ChainId::Bitcoin, q(1_000_000), 1);
-    assert!(result.is_err(), "Adversarial: fraudulent claim must be blocked");
+    assert!(
+        result.is_err(),
+        "Adversarial: fraudulent claim must be blocked"
+    );
     assert!(
         result.unwrap_err().contains("Fraudulent"),
         "Adversarial: error must indicate Fraudulent verdict"
@@ -273,7 +346,9 @@ fn l4_lifecycle_e2e_adversarial_fraud_blocked() {
 fn l4_lifecycle_e2e_adversarial_rate_limit_exceeded() {
     let mut limiter = FinancialRateLimiter::new(q(1_000_000), 100);
 
-    limiter.record_transfer(ChainId::Ethereum, q(700_000), 1).expect("first: must succeed");
+    limiter
+        .record_transfer(ChainId::Ethereum, q(700_000), 1)
+        .expect("first: must succeed");
 
     let over = limiter.record_transfer(ChainId::Ethereum, q(400_000), 50);
     assert!(over.is_err(), "Adversarial: exceeding rate limit must fail");
@@ -286,8 +361,12 @@ fn l4_lifecycle_e2e_adversarial_burn_overflow_rejected() {
     let mut vault = CrossChainAssetVault::new(ChainId::Ethereum, *b"wETH0000", custody);
 
     // No minted supply → burn must fail
-    let result = vault.process_burn_for_external_unlock(q(1_000_000), ChainId::Ethereum, [0; 32], 1_000);
-    assert!(result.is_err(), "Adversarial: burn without supply must be rejected");
+    let result =
+        vault.process_burn_for_external_unlock(q(1_000_000), ChainId::Ethereum, [0; 32], 1_000);
+    assert!(
+        result.is_err(),
+        "Adversarial: burn without supply must be rejected"
+    );
 }
 
 /// Adversarial: invalid governance token must NOT re-open circuit.
@@ -302,10 +381,19 @@ fn l4_lifecycle_e2e_adversarial_invalid_governance_token() {
         detected_at_slot: 999,
     });
 
-    assert!(cb.is_halted(ChainId::Solana), "Adversarial: Solana must be halted");
+    assert!(
+        cb.is_halted(ChainId::Solana),
+        "Adversarial: Solana must be halted"
+    );
 
     let bad_token = [0xDE; 32];
     let result = cb.governance_reset(ChainId::Solana, &bad_token);
-    assert!(result.is_err(), "Adversarial: invalid token must NOT reset circuit");
-    assert!(cb.is_halted(ChainId::Solana), "Adversarial: Solana must remain halted");
+    assert!(
+        result.is_err(),
+        "Adversarial: invalid token must NOT reset circuit"
+    );
+    assert!(
+        cb.is_halted(ChainId::Solana),
+        "Adversarial: Solana must remain halted"
+    );
 }

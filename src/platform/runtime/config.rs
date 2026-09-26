@@ -3,8 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::genesis::builder::GENESIS_CHAIN_ID;
 use crate::consensus::bft::resolve_epoch_blocks;
+use crate::genesis::builder::GENESIS_CHAIN_ID;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum NodeRole {
@@ -94,27 +94,32 @@ impl NodeConfig {
             MainnetBootstrapPeer {
                 name: "Official Sovereign Bootnode (VPS)".to_string(),
                 endpoint: "116.212.72.89:7447".to_string(),
-                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737".to_string(),
+                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+                    .to_string(),
             },
             MainnetBootstrapPeer {
                 name: "Genesis Validator 1 (Bootnode Alpha)".to_string(),
                 endpoint: "seed1.aurion.network:9000".to_string(),
-                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737".to_string(),
+                public_key_hex: "d04ab232742bb4ab3a1368bd4615e4e6d0224ab71a016baf8520a332c9778737"
+                    .to_string(),
             },
             MainnetBootstrapPeer {
                 name: "Genesis Validator 2 (Bootnode Beta)".to_string(),
                 endpoint: "seed2.aurion.network:9000".to_string(),
-                public_key_hex: "204040e364c10f2bec9c1fe500a1cd4c247c89d650a01ed7e82caba867877c21".to_string(),
+                public_key_hex: "204040e364c10f2bec9c1fe500a1cd4c247c89d650a01ed7e82caba867877c21"
+                    .to_string(),
             },
             MainnetBootstrapPeer {
                 name: "Genesis Validator 3 (Bootnode Gamma)".to_string(),
                 endpoint: "seed3.aurion.network:9000".to_string(),
-                public_key_hex: "66cd608b928b88e50e0efeaa33faf1c43cefe07294b0b87e9fe0aba6a3cf7633".to_string(),
+                public_key_hex: "66cd608b928b88e50e0efeaa33faf1c43cefe07294b0b87e9fe0aba6a3cf7633"
+                    .to_string(),
             },
             MainnetBootstrapPeer {
                 name: "Genesis Validator 4 (Bootnode Delta)".to_string(),
                 endpoint: "seed4.aurion.network:9000".to_string(),
-                public_key_hex: "20828bf5c5bdcacb684863336c202fb5599da48be5596615742170705beca9f7".to_string(),
+                public_key_hex: "20828bf5c5bdcacb684863336c202fb5599da48be5596615742170705beca9f7"
+                    .to_string(),
             },
         ]
     }

@@ -222,7 +222,9 @@ impl RpcContext {
                 hex::encode(header.prev_block_hash.as_bytes())
             ))
         } else {
-            Err(resource_not_found(format!("Block at height {height} not found")))
+            Err(resource_not_found(format!(
+                "Block at height {height} not found"
+            )))
         }
     }
 
@@ -241,7 +243,9 @@ impl RpcContext {
                 ));
             }
         }
-        Err(resource_not_found(format!("Block with hash {hash_hex} not found")))
+        Err(resource_not_found(format!(
+            "Block with hash {hash_hex} not found"
+        )))
     }
 
     fn handle_get_commit_certificate(&self, params: &[String]) -> Result<String, JsonRpcError> {
@@ -337,8 +341,7 @@ impl RpcContext {
             tx.tx_type,
             crate::transaction::types::TxType::ContractDeploy
                 | crate::transaction::types::TxType::ContractCall
-        )
-            && crate::vm::verifier::BytecodeVerifier::verify(&tx.payload).is_err()
+        ) && crate::vm::verifier::BytecodeVerifier::verify(&tx.payload).is_err()
         {
             return Err(tx_rejected(
                 "Bytecode kontrak gagal verifikasi statis (AUR-VM-005)",
@@ -378,8 +381,8 @@ impl RpcContext {
             return Err(invalid_params("Missing tx_id parameter"));
         }
         let tx_id_hex = &params[0];
-        let tx_id_bytes = hex::decode(tx_id_hex)
-            .map_err(|_| invalid_params("Invalid tx_id hex string"))?;
+        let tx_id_bytes =
+            hex::decode(tx_id_hex).map_err(|_| invalid_params("Invalid tx_id hex string"))?;
         if tx_id_bytes.len() != 32 {
             return Err(invalid_params("TxID must be exactly 32 bytes"));
         }
@@ -464,7 +467,9 @@ impl RpcContext {
                 return Ok(Address(arr));
             }
         }
-        Err(invalid_params(format!("Invalid Aurion address: '{trimmed}'")))
+        Err(invalid_params(format!(
+            "Invalid Aurion address: '{trimmed}'"
+        )))
     }
 
     fn handle_get_balance(&self, params: &[String]) -> Result<String, JsonRpcError> {
@@ -547,7 +552,13 @@ impl RpcContext {
 
         Ok(format!(
             r#"{{"chain_id":{},"current_height":{},"finalized_height":{},"mempool_size":{},"accounts_count":{},"headers_count":{},"faucet_active":{}}}"#,
-            self.chain_id, height, finalized, mempool_size, accounts_count, headers_count, faucet_active
+            self.chain_id,
+            height,
+            finalized,
+            mempool_size,
+            accounts_count,
+            headers_count,
+            faucet_active
         ))
     }
 

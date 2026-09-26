@@ -32,9 +32,7 @@ impl From<SandboxError> for ContractError {
         match e {
             SandboxError::Verification(m) => Self::Verification(m),
             SandboxError::Revert(m) | SandboxError::Execution(m) => Self::SimulationFailed(m),
-            SandboxError::OutOfGas => {
-                Self::SimulationFailed("kontrak kehabisan gas".to_string())
-            }
+            SandboxError::OutOfGas => Self::SimulationFailed("kontrak kehabisan gas".to_string()),
         }
     }
 }
@@ -85,7 +83,6 @@ pub trait Provider {
     /// # Errors
     /// Ditolak mempool / transport gagal.
     fn broadcast(&self, raw_hex: &str, sender_pubkey_hex: &str) -> Result<Hash256, ContractError>;
-
 
     /// Simulasi read-only terhadap `tx` memakai **sandbox STF kanonik**
     /// (`state::sandbox::dry_run`) pada salinan akun berukuran konstan.
@@ -347,7 +344,11 @@ impl MemoryProvider {
     /// Snapshot akun untuk asersi pengujian.
     #[must_use]
     pub fn account(&self, address: &Address) -> Option<Account> {
-        self.accounts.lock().expect("accounts lock").get(address).cloned()
+        self.accounts
+            .lock()
+            .expect("accounts lock")
+            .get(address)
+            .cloned()
     }
 
     /// Daftar transaksi yang pernah di-broadcast (urutan penerimaan).
@@ -390,9 +391,7 @@ impl Provider for MemoryProvider {
         let pubkey = hex::decode(sender_pubkey_hex)
             .map_err(|e| ContractError::Broadcast(format!("pubkey hex tidak valid: {e}")))?;
         if pubkey.len() != 32 {
-            return Err(ContractError::Broadcast(
-                "pubkey harus 32 byte".to_string(),
-            ));
+            return Err(ContractError::Broadcast("pubkey harus 32 byte".to_string()));
         }
         let mut sender_pubkey = [0u8; 32];
         sender_pubkey.copy_from_slice(&pubkey);

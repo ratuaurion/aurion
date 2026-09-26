@@ -67,23 +67,19 @@ async fn rpc_call(addr: &str, method: &str, params: serde_json::Value) -> serde_
                     .expect("Write HTTP POST request");
 
                 let mut buf = [0u8; 4096];
-                let n = stream
-                    .read(&mut buf)
-                    .await
-                    .expect("Read HTTP response");
+                let n = stream.read(&mut buf).await.expect("Read HTTP response");
 
                 let resp_str = String::from_utf8_lossy(&buf[..n]);
-                let body = resp_str
-                    .split("\r\n\r\n")
-                    .nth(1)
-                    .unwrap_or("");
+                let body = resp_str.split("\r\n\r\n").nth(1).unwrap_or("");
 
                 return serde_json::from_str(body).unwrap_or(serde_json::Value::Null);
             }
             Err(e) => {
                 attempts += 1;
                 if attempts > 40 {
-                    panic!("Failed to connect to node RPC at {addr} after {attempts} attempts: {e}");
+                    panic!(
+                        "Failed to connect to node RPC at {addr} after {attempts} attempts: {e}"
+                    );
                 }
                 tokio::time::sleep(tokio::time::Duration::from_millis(25)).await;
             }
@@ -97,17 +93,15 @@ async fn rpc_healthz(addr: &str) -> String {
     loop {
         match TcpStream::connect(addr).await {
             Ok(mut stream) => {
-                let get_req = format!("GET /healthz HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
+                let get_req =
+                    format!("GET /healthz HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n");
                 stream
                     .write_all(get_req.as_bytes())
                     .await
                     .expect("Write HTTP GET request");
 
                 let mut buf = [0u8; 2048];
-                let n = stream
-                    .read(&mut buf)
-                    .await
-                    .expect("Read HTTP response");
+                let n = stream.read(&mut buf).await.expect("Read HTTP response");
 
                 return String::from_utf8_lossy(&buf[..n]).to_string();
             }
@@ -141,7 +135,10 @@ struct MultiNodeClusterFixture {
 
 impl MultiNodeClusterFixture {
     async fn start(node_count: usize) -> Self {
-        assert_eq!(node_count, 4, "Canonical cluster requires 4 validator nodes");
+        assert_eq!(
+            node_count, 4,
+            "Canonical cluster requires 4 validator nodes"
+        );
 
         let val_keys: Vec<Keypair> = (0..node_count).map(|_| Keypair::generate()).collect();
         let val_addrs: Vec<Address> = val_keys
@@ -169,7 +166,7 @@ impl MultiNodeClusterFixture {
         let dev_key = Keypair::generate();
         let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-        let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+        let genesis = build_genesis(creator_addr, val_entries.clone());
 
         let mut temp_dirs = Vec::with_capacity(node_count);
         let mut db_paths = Vec::with_capacity(node_count);
@@ -189,8 +186,7 @@ impl MultiNodeClusterFixture {
             };
 
             let store: Arc<dyn StateStore> = Arc::new(
-                RedbStorageEngine::open_or_create(&db_path)
-                    .expect("Storage engine open/create"),
+                RedbStorageEngine::open_or_create(&db_path).expect("Storage engine open/create"),
             );
 
             let node = Arc::new(AurionNode::new_with_store(
@@ -204,7 +200,10 @@ impl MultiNodeClusterFixture {
             let node_for_server = Arc::clone(&node);
             let handle = tokio::spawn(async move {
                 if let Err(e) = node_for_server.run_rpc_server(None).await {
-                    eprintln!("RPC server error on {}: {e}", node_for_server.config.rpc_bind);
+                    eprintln!(
+                        "RPC server error on {}: {e}",
+                        node_for_server.config.rpc_bind
+                    );
                 }
             });
 
@@ -331,7 +330,13 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
     // Kirim transaksi ke mempool seluruh simpul
     for idx in 0..4 {
         let node = cluster.get_node(idx);
-        let acct = node.ledger.lock().unwrap().get_account(&cluster.creator_addr).unwrap().clone();
+        let acct = node
+            .ledger
+            .lock()
+            .unwrap()
+            .get_account(&cluster.creator_addr)
+            .unwrap()
+            .clone();
         node.mempool
             .lock()
             .unwrap()
@@ -345,8 +350,15 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
     }
 
     // 2. Pilih Proposer Deterministik untuk H=1, R=0
-    let prev_hash = cluster.get_node(0).ledger.lock().unwrap().latest_block().hash();
-    let proposer_idx = BftEngine::select_proposer(&cluster.validator_set, 1, 0, &prev_hash) as usize;
+    let prev_hash = cluster
+        .get_node(0)
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .hash();
+    let proposer_idx =
+        BftEngine::select_proposer(&cluster.validator_set, 1, 0, &prev_hash) as usize;
     let miner_addr = cluster.val_addrs[proposer_idx];
 
     // Proposer merakit proposal blok H=1
@@ -366,12 +378,15 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
     let mut prevotes = Vec::new();
     for idx in 0..4 {
         let node = cluster.get_node(idx);
-        let prevote = node.bft_engine
+        let prevote = node
+            .bft_engine
             .lock()
             .unwrap()
             .produce_prevote(block_hash, 1, 0)
             .unwrap_or_else(|e| panic!("Node {idx} prevote failed: {e:?}"));
-        prevote.verify(&cluster.validator_set).expect("Prevote verify");
+        prevote
+            .verify(&cluster.validator_set)
+            .expect("Prevote verify");
         prevotes.push(prevote);
     }
     assert_eq!(prevotes.len(), 4);
@@ -380,17 +395,21 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
     let mut precommits = Vec::new();
     for idx in 0..4 {
         let node = cluster.get_node(idx);
-        let precommit = node.bft_engine
+        let precommit = node
+            .bft_engine
             .lock()
             .unwrap()
             .produce_precommit(block_hash, 1, 0)
             .unwrap_or_else(|e| panic!("Node {idx} precommit failed: {e:?}"));
-        precommit.verify(&cluster.validator_set).expect("Precommit verify");
+        precommit
+            .verify(&cluster.validator_set)
+            .expect("Precommit verify");
         precommits.push(precommit);
     }
 
     // 5. Agregasi CommitCertificate
-    let cert = cluster.get_node(proposer_idx)
+    let cert = cluster
+        .get_node(proposer_idx)
         .bft_engine
         .lock()
         .unwrap()
@@ -411,7 +430,14 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
     }
 
     // 7. VERIFIKASI IDENTITAS KONSENSUS: Seluruh 4 simpul memiliki State Root 100% identik
-    let expected_state_root = cluster.get_node(0).ledger.lock().unwrap().latest_block().header.state_root;
+    let expected_state_root = cluster
+        .get_node(0)
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .header
+        .state_root;
     let expected_block_hash = finalized_block.hash();
 
     for idx in 0..4 {
@@ -441,7 +467,10 @@ async fn test_multi_node_bft_consensus_and_state_root_convergence() {
 
         let dev_addr_str = hex::encode(cluster.dev_addr.as_bytes());
         let bal_resp = rpc_call(addr, "aur_getBalance", serde_json::json!([dev_addr_str])).await;
-        let bal_hex = bal_resp.get("result").and_then(|v| v.as_str()).unwrap_or("");
+        let bal_hex = bal_resp
+            .get("result")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
         assert!(
             !bal_hex.is_empty(),
             "Node {idx} RPC getBalance must return valid balance"
@@ -460,8 +489,16 @@ async fn test_multi_node_proposer_rotation_multi_block() {
 
     // Produksi 3 blok berturut-turut dengan rotasi proposer
     for target_height in 1..=3 {
-        let prev_hash = cluster.get_node(0).ledger.lock().unwrap().latest_block().hash();
-        let proposer_idx = BftEngine::select_proposer(&cluster.validator_set, target_height, 0, &prev_hash) as usize;
+        let prev_hash = cluster
+            .get_node(0)
+            .ledger
+            .lock()
+            .unwrap()
+            .latest_block()
+            .hash();
+        let proposer_idx =
+            BftEngine::select_proposer(&cluster.validator_set, target_height, 0, &prev_hash)
+                as usize;
         let miner = cluster.val_addrs[proposer_idx];
 
         // 1. Proposer merakit blok
@@ -485,7 +522,8 @@ async fn test_multi_node_proposer_rotation_multi_block() {
         let mut precommits = Vec::new();
         for idx in 0..4 {
             let node = cluster.get_node(idx);
-            let precommit = node.bft_engine
+            let precommit = node
+                .bft_engine
                 .lock()
                 .unwrap()
                 .produce_precommit(block_hash, target_height, 0)
@@ -494,11 +532,18 @@ async fn test_multi_node_proposer_rotation_multi_block() {
         }
 
         // 3. Buat sertifikat
-        let cert = cluster.get_node(proposer_idx)
+        let cert = cluster
+            .get_node(proposer_idx)
             .bft_engine
             .lock()
             .unwrap()
-            .create_commit_certificate(&cluster.validator_set, block_hash, target_height, 0, precommits)
+            .create_commit_certificate(
+                &cluster.validator_set,
+                block_hash,
+                target_height,
+                0,
+                precommits,
+            )
             .unwrap();
 
         let block = Block::new(candidate.header, candidate.transactions, Some(cert));
@@ -506,18 +551,33 @@ async fn test_multi_node_proposer_rotation_multi_block() {
         // 4. Komit pada seluruh simpul
         for idx in 0..4 {
             let node = cluster.get_node(idx);
-            node.ledger.lock().unwrap().apply_block(block.clone(), &miner).unwrap();
+            node.ledger
+                .lock()
+                .unwrap()
+                .apply_block(block.clone(), &miner)
+                .unwrap();
             node.sync_rpc_context();
         }
     }
 
     // Seluruh 4 simpul berada di H=3 dengan state root identik
-    let ref_root = cluster.get_node(0).ledger.lock().unwrap().latest_block().header.state_root;
+    let ref_root = cluster
+        .get_node(0)
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .header
+        .state_root;
     for idx in 0..4 {
         let node = cluster.get_node(idx);
         let ledger = node.ledger.lock().unwrap();
         assert_eq!(ledger.latest_height(), 3);
-        assert_eq!(ledger.latest_block().header.state_root, ref_root, "Node {idx} desynchronized at H=3");
+        assert_eq!(
+            ledger.latest_block().header.state_root,
+            ref_root,
+            "Node {idx} desynchronized at H=3"
+        );
     }
 
     cluster.shutdown_all().await;
@@ -531,7 +591,13 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
     let mut cluster = MultiNodeClusterFixture::start(4).await;
 
     // Produksi Blok 1 secara normal
-    let prev_hash_0 = cluster.get_node(0).ledger.lock().unwrap().latest_block().hash();
+    let prev_hash_0 = cluster
+        .get_node(0)
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .hash();
     let p1 = BftEngine::select_proposer(&cluster.validator_set, 1, 0, &prev_hash_0) as usize;
     let miner1 = cluster.val_addrs[p1];
 
@@ -544,9 +610,18 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
     };
     let mut votes1 = Vec::new();
     for idx in 0..4 {
-        votes1.push(cluster.get_node(idx).bft_engine.lock().unwrap().produce_precommit(cand1.hash(), 1, 0).unwrap());
+        votes1.push(
+            cluster
+                .get_node(idx)
+                .bft_engine
+                .lock()
+                .unwrap()
+                .produce_precommit(cand1.hash(), 1, 0)
+                .unwrap(),
+        );
     }
-    let cert1 = cluster.get_node(p1)
+    let cert1 = cluster
+        .get_node(p1)
         .bft_engine
         .lock()
         .unwrap()
@@ -556,7 +631,11 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
 
     for idx in 0..4 {
         let n = cluster.get_node(idx);
-        n.ledger.lock().unwrap().apply_block(b1.clone(), &miner1).unwrap();
+        n.ledger
+            .lock()
+            .unwrap()
+            .apply_block(b1.clone(), &miner1)
+            .unwrap();
         n.sync_rpc_context();
     }
 
@@ -565,9 +644,16 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
     cluster.crash_node(3).await;
 
     // Node 0, 1, 2 tetap melanjutkan rantai ke Blok 2 (Bobot: 3 * 25 = 75 >= 67 Kuorum)
-    let prev_hash_1 = cluster.get_node(0).ledger.lock().unwrap().latest_block().hash();
+    let prev_hash_1 = cluster
+        .get_node(0)
+        .ledger
+        .lock()
+        .unwrap()
+        .latest_block()
+        .hash();
     let mut round = 0;
-    let mut p2 = BftEngine::select_proposer(&cluster.validator_set, 2, round, &prev_hash_1) as usize;
+    let mut p2 =
+        BftEngine::select_proposer(&cluster.validator_set, 2, round, &prev_hash_1) as usize;
     // Jika proposer terpilih adalah Node 3 yang sedang mati, naikkan round
     while p2 == 3 {
         round += 1;
@@ -585,9 +671,18 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
     // Suara hanya dari simpul online (0, 1, 2)
     let mut votes2 = Vec::new();
     for &idx in &[0usize, 1usize, 2usize] {
-        votes2.push(cluster.get_node(idx).bft_engine.lock().unwrap().produce_precommit(cand2.hash(), 2, round).unwrap());
+        votes2.push(
+            cluster
+                .get_node(idx)
+                .bft_engine
+                .lock()
+                .unwrap()
+                .produce_precommit(cand2.hash(), 2, round)
+                .unwrap(),
+        );
     }
-    let cert2 = cluster.get_node(p2)
+    let cert2 = cluster
+        .get_node(p2)
         .bft_engine
         .lock()
         .unwrap()
@@ -597,11 +692,18 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
 
     for &idx in &[0usize, 1usize, 2usize] {
         let n = cluster.get_node(idx);
-        n.ledger.lock().unwrap().apply_block(b2.clone(), &miner2).unwrap();
+        n.ledger
+            .lock()
+            .unwrap()
+            .apply_block(b2.clone(), &miner2)
+            .unwrap();
         n.sync_rpc_context();
     }
 
-    assert_eq!(cluster.get_node(0).ledger.lock().unwrap().latest_height(), 2);
+    assert_eq!(
+        cluster.get_node(0).ledger.lock().unwrap().latest_height(),
+        2
+    );
     assert!(cluster.nodes[3].is_none(), "Node 3 is offline");
 
     // PEMULIHAN (RECOVERY): Buka kembali storage Node 3 dari disk dan lakukan catchup
@@ -609,21 +711,32 @@ async fn test_multi_node_crash_tolerance_and_catchup_recovery() {
         let store_recovered: Arc<dyn StateStore> = Arc::new(
             RedbStorageEngine::open_or_create(&node3_db_path).expect("Reopen node 3 redb"),
         );
-        let mut recovered_ledger = ChainLedger::from_genesis_with_store(
-            cluster.genesis.clone(),
-            store_recovered,
-        ).expect("Recover node 3 ledger");
+        let mut recovered_ledger =
+            ChainLedger::from_genesis_with_store(cluster.genesis.clone(), store_recovered)
+                .expect("Recover node 3 ledger");
 
         // Verifikasi bahwa Node 3 pulih pada tinggi H=1 dengan state root persisten yang utuh
         assert_eq!(recovered_ledger.latest_height(), 1);
 
         // Lakukan catchup Blok 2 dari peer
-        recovered_ledger.apply_block(b2.clone(), &miner2).expect("Catchup block 2 apply");
+        recovered_ledger
+            .apply_block(b2.clone(), &miner2)
+            .expect("Catchup block 2 apply");
         assert_eq!(recovered_ledger.latest_height(), 2);
 
         // State root Node 3 setelah catchup 100% cocok dengan Node 0
-        let expected_h2_root = cluster.get_node(0).ledger.lock().unwrap().latest_block().header.state_root;
-        assert_eq!(recovered_ledger.latest_block().header.state_root, expected_h2_root);
+        let expected_h2_root = cluster
+            .get_node(0)
+            .ledger
+            .lock()
+            .unwrap()
+            .latest_block()
+            .header
+            .state_root;
+        assert_eq!(
+            recovered_ledger.latest_block().header.state_root,
+            expected_h2_root
+        );
     }
 
     cluster.shutdown_all().await;
@@ -659,8 +772,14 @@ fn test_multi_node_real_binary_cli_execution() {
     assert!(output_json.status.success());
     let parsed_ver: serde_json::Value = serde_json::from_slice(&output_json.stdout)
         .expect("Valid JSON output from version command");
-    assert_eq!(parsed_ver.get("version").and_then(|v| v.as_str()), Some(expected_ver));
-    assert_eq!(parsed_ver.get("application").and_then(|v| v.as_str()), Some("aurion"));
+    assert_eq!(
+        parsed_ver.get("version").and_then(|v| v.as_str()),
+        Some(expected_ver)
+    );
+    assert_eq!(
+        parsed_ver.get("application").and_then(|v| v.as_str()),
+        Some("aurion")
+    );
 
     // 3. Eksekusi /bin/aurion genesis inspect --output json
     let output_genesis = Command::new(bin_path)
@@ -671,7 +790,10 @@ fn test_multi_node_real_binary_cli_execution() {
     assert!(output_genesis.status.success());
     let parsed_gen: serde_json::Value = serde_json::from_slice(&output_genesis.stdout)
         .expect("Valid JSON output from genesis command");
-    assert_eq!(parsed_gen.get("chain_id").and_then(|v| v.as_u64()), Some(1001));
+    assert_eq!(
+        parsed_gen.get("chain_id").and_then(|v| v.as_u64()),
+        Some(1001)
+    );
     assert!(parsed_gen.get("genesis_block_hash").is_some());
 
     // 4. Eksekusi /bin/aurion block latest pada database persisten terpisah
@@ -682,20 +804,26 @@ fn test_multi_node_real_binary_cli_execution() {
     // Buat database dengan blok genesis menggunakan RedbStorageEngine
     {
         let store = RedbStorageEngine::open_or_create(&db_path).expect("Create db");
-        let creator = Address::from_bytes([9u8; 32]);
-        let dev = Address::from_bytes([8u8; 32]);
-        let genesis = build_genesis(creator, dev, Vec::new());
+        let treasury = Address::from_bytes([9u8; 32]);
+        let genesis = build_genesis(treasury, Vec::new());
         let _ = ChainLedger::from_genesis_with_store(genesis, Arc::new(store)).unwrap();
     }
 
     let output_block = Command::new(bin_path)
-        .args(["block", "latest", "--db-path", &db_path_str, "--output", "json"])
+        .args([
+            "block",
+            "latest",
+            "--db-path",
+            &db_path_str,
+            "--output",
+            "json",
+        ])
         .output()
         .expect("Failed to execute /bin/aurion block latest");
 
     assert!(output_block.status.success());
-    let parsed_block: serde_json::Value = serde_json::from_slice(&output_block.stdout)
-        .expect("Valid JSON output from block command");
+    let parsed_block: serde_json::Value =
+        serde_json::from_slice(&output_block.stdout).expect("Valid JSON output from block command");
     assert_eq!(parsed_block.get("height").and_then(|v| v.as_u64()), Some(0));
     assert!(parsed_block.get("hash").is_some());
     assert!(parsed_block.get("state_root").is_some());

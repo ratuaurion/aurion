@@ -20,7 +20,7 @@ Upacara ini mengunci secara kriptografis:
    - 4 Genesis Validators masing-masing mengendalikan bobot voting $250.000$ (total $1.000.000$).
    - Ambang batas kuorum finalitas $>\frac{2}{3}$: **$666.667$ Suara**.
 3. **Atestasi Multi-Pihak RFC 8032:**
-   - Seluruh 6 pihak menandatangani digest pesan upacara dengan tanda tangan Ed25519 berstandar kepatuhan ketat RFC 8032 (*anti-malleability*).
+   - Seluruh 5 pihak menandatangani digest pesan upacara dengan tanda tangan Ed25519 berstandar kepatuhan ketat RFC 8032 (*anti-malleability*): 1 Master Treasury + 4 Genesis Validators.
 
 ---
 
@@ -30,9 +30,9 @@ Berikut adalah ringkasan hasil upacara kanonikal yang disegel secara permanen:
 
 | Parameter Kriptografis | Nilai Hexadesimal / Angka | Keterangan |
 | :--- | :--- | :--- |
-| **Ceremony Transcript Hash** | `f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380` | Blake3 digest seluruh dokumen transkrip |
-| **Genesis Block Hash ($H=0$)** | `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9` | Blake3 ID Header Blok Nol ("AURION-BLOCK-ID-V1") |
-| **Initial State Root ($\sigma_0$)** | `61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850` | Blake3 SMT Root dari 2 Vault Terbit Awal |
+| **Ceremony Transcript Hash** | `a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880` | Blake3 digest seluruh dokumen transkrip (Single Treasury) |
+| **Genesis Block Hash ($H=0$)** | `42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a` | Blake3 ID Header Blok Nol ("AURION-BLOCK-ID-V1") |
+| **Initial State Root ($\sigma_0$)** | `ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f` | Blake3 SMT Root dari 1 Vault Terbit Awal (Master Treasury) |
 | **Network Chain ID** | `1001` | Aurion Mainnet Protocol ID |
 | **Genesis Timestamp** | `1773532800` | 15 Maret 2026 00:00:00 UTC |
 | **Total Validator Power** | `1.000.000` | $4 \times 250.000$ bobot voting |
@@ -45,16 +45,15 @@ Berikut adalah ringkasan hasil upacara kanonikal yang disegel secara permanen:
 Pesan kanonikal 32-byte yang ditandatangani dihitung melalui:
 $$\text{Msg} = \text{Blake3}\Big(\text{"AURION-GENESIS-CEREMONY-V1"} \mathbin{\Vert} \text{chain\_id} \mathbin{\Vert} \text{timestamp} \mathbin{\Vert} \text{block\_hash} \mathbin{\Vert} \text{state\_root}\Big)$$
 
-### Rincian 6 Penandatangan:
+### Rincian 5 Penandatangan (Single Treasury: 1 Master Treasury + 4 Validator):
 
 | Entitas / Peran | Kunci Publik Ed25519 (Hex) | Alamat Akun (Hex) | Bobot | Tanda Tangan Digital RFC 8032 (Hex Prefix) |
 | :--- | :--- | :--- | ---:| :--- |
-| **Creator Sovereign Vault** | `8a88e3dd7409f195...` | `cb095697ccc5acbf...` | $0$ | `0430cbb9d4e92c59...` |
-| **Developer Core Vault** | `8139770ea87d175f...` | `708ab607c168ebfe...` | $0$ | `f5451947d0c65376...` |
-| **Genesis Val 1 (Alpha)** | `d04ab232742bb4ab...` | `d7964072865ad2ef...` | $250.000$ | `b3adbf3b66970ece...` |
-| **Genesis Val 2 (Beta)** | `204040e364c10f2b...` | `b97243b506752b4a...` | $250.000$ | `8b9b950c713e88c9...` |
-| **Genesis Val 3 (Gamma)** | `66cd608b928b88e5...` | `0c74846bba5614f8...` | $250.000$ | `2a600841d537542e...` |
-| **Genesis Val 4 (Delta)** | `20828bf5c5bdcacb...` | `459dcf2383f92dce...` | $250.000$ | `a093f79bd5398123...` |
+| **Master Treasury Sovereign Vault** | `8a88e3dd7409f195...` | `cb095697ccc5acbf...` | $0$ | `2e75baf212680607...` |
+| **Genesis Val 1 (Alpha)** | `d04ab232742bb4ab...` | `d7964072865ad2ef...` | $250.000$ | `4decd8c80ee2313a...` |
+| **Genesis Val 2 (Beta)** | `204040e364c10f2b...` | `b97243b506752b4a...` | $250.000$ | `29b38c31c9cd6777...` |
+| **Genesis Val 3 (Gamma)** | `66cd608b928b88e5...` | `0c74846bba5614f8...` | $250.000$ | `8c77ed5705e3eae9...` |
+| **Genesis Val 4 (Delta)** | `20828bf5c5bdcacb...` | `459dcf2383f92dce...` | $250.000$ | `f38ee6b8c0e27116...` |
 
 ---
 
@@ -90,16 +89,16 @@ Contoh keluaran sukses:
 ```json
 {
   "overall_status": "VERIFIED_CANONICAL",
-  "ceremony_hash": "f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380",
-  "genesis_block_hash": "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9",
-  "state_root": "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850",
+  "ceremony_hash": "a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880",
+  "genesis_block_hash": "42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a",
+  "state_root": "ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f",
   "chain_id": 1001,
   "genesis_timestamp": 1773532800,
   "total_attestations": 6,
   "attested_validator_power": 1000000,
   "quorum_threshold": 666667,
   "quorum_status": "PASSED (1000000/1000000 >= 666667)",
-  "monetary_audit_status": "PASSED (100% Invariant Compliant: 35% Genesis, Zero-Float)",
+  "monetary_audit_status": "PASSED (100% Invariant Compliant: 100% Master Treasury Genesis, Zero-Float)",
   "verified_at": 1773532800
 }
 ```
@@ -119,7 +118,7 @@ Untuk memulai simpul validator atau full node baru:
    ```bash
    aurion node --config node_config.json
    ```
-3. Runtime secara otomatis menginisialisasi database `redb` (`data/storage/aurion.redb`), mengkomit Blok 0 secara atomik, dan mengunci State Root $\sigma_0$ (`61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850`).
+3. Runtime secara otomatis menginisialisasi database `redb` (`data/storage/aurion.redb`), mengkomit Blok 0 secara atomik, dan mengunci State Root $\sigma_0$ (`ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f`).
 4. Jaringan siap memproses blok pertama $H=1$ setelah BFT validator online dan bertukar proposal.
 
 ---

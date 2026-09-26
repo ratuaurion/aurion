@@ -7,9 +7,7 @@
 
 use super::{AuditCategory, AuditCheckResult, AuditReport, AuditSeverity, AuditStatus};
 use crate::consensus::mempool::MempoolEngine;
-use crate::core::{
-    Address, Quantum, Signature, FEE_BURN_PERCENTAGE, FEE_VALIDATOR_PERCENTAGE,
-};
+use crate::core::{Address, Quantum, Signature, FEE_BURN_PERCENTAGE, FEE_VALIDATOR_PERCENTAGE};
 use crate::crypto::{ed25519_verify_strict, Keypair};
 use crate::vm::context::ExecutionContext;
 use crate::vm::engine::{AvmEngine, ExecutionResult};
@@ -47,7 +45,10 @@ impl SecurityAuditRunner {
         ];
 
         let total_checks = results.len();
-        let passed_checks = results.iter().filter(|r| r.status == AuditStatus::Passed || r.status == AuditStatus::Mitigated).count();
+        let passed_checks = results
+            .iter()
+            .filter(|r| r.status == AuditStatus::Passed || r.status == AuditStatus::Mitigated)
+            .count();
         let failed_checks = total_checks - passed_checks;
 
         let verdict = if failed_checks == 0 {
@@ -114,8 +115,14 @@ impl SecurityAuditRunner {
             category: AuditCategory::Cryptography,
             severity: AuditSeverity::Critical,
             invariant: "AUR-ARCH-005, AUR-CRYPTO-001".to_string(),
-            status: if pass { AuditStatus::Passed } else { AuditStatus::Failed },
-            details: "Tanda tangan valid terverifikasi; seluruh mutasi scalar/bit ditolak deterministik.".to_string(),
+            status: if pass {
+                AuditStatus::Passed
+            } else {
+                AuditStatus::Failed
+            },
+            details:
+                "Tanda tangan valid terverifikasi; seluruh mutasi scalar/bit ditolak deterministik."
+                    .to_string(),
         }
     }
 
@@ -138,8 +145,14 @@ impl SecurityAuditRunner {
             category: AuditCategory::Cryptography,
             severity: AuditSeverity::High,
             invariant: "AUR-ARCH-005, AUR-APP-05".to_string(),
-            status: if pass { AuditStatus::Passed } else { AuditStatus::Failed },
-            details: "Pohon Merkle Blake3 256-bit menghasilkan komitmen deterministik kebal pre-image.".to_string(),
+            status: if pass {
+                AuditStatus::Passed
+            } else {
+                AuditStatus::Failed
+            },
+            details:
+                "Pohon Merkle Blake3 256-bit menghasilkan komitmen deterministik kebal pre-image."
+                    .to_string(),
         }
     }
 
@@ -162,7 +175,11 @@ impl SecurityAuditRunner {
             category: AuditCategory::StateMachine,
             severity: AuditSeverity::Critical,
             invariant: "AUR-ARCH-012, AUR-MON-001".to_string(),
-            status: if conserved { AuditStatus::Passed } else { AuditStatus::Failed },
+            status: if conserved {
+                AuditStatus::Passed
+            } else {
+                AuditStatus::Failed
+            },
             details: format!(
                 "Konservasi biaya transfer terverifikasi: {burn} burn / {validator} validator BFT \
                  (kanonik {FEE_BURN_PERCENTAGE}% burn / {FEE_VALIDATOR_PERCENTAGE}% validator)."
@@ -199,7 +216,10 @@ impl SecurityAuditRunner {
         let block_hash_b = [2u8; 32];
 
         recorded_proposals.insert((height, round), block_hash_a);
-        let is_equivocation = recorded_proposals.get(&(height, round)).map(|h| *h != block_hash_b).unwrap_or(false);
+        let is_equivocation = recorded_proposals
+            .get(&(height, round))
+            .map(|h| *h != block_hash_b)
+            .unwrap_or(false);
 
         AuditCheckResult {
             id: "SEC-CHK-06".to_string(),
@@ -224,8 +244,13 @@ impl SecurityAuditRunner {
             category: AuditCategory::Networking,
             severity: AuditSeverity::High,
             invariant: "AUR-APP-12, AUR-ARCH-009".to_string(),
-            status: if rejected { AuditStatus::Passed } else { AuditStatus::Failed },
-            details: "Frame jaringan melebihi batas 8 MB ditolak seketika sebelum diproses parser.".to_string(),
+            status: if rejected {
+                AuditStatus::Passed
+            } else {
+                AuditStatus::Failed
+            },
+            details: "Frame jaringan melebihi batas 8 MB ditolak seketika sebelum diproses parser."
+                .to_string(),
         }
     }
 
@@ -265,8 +290,10 @@ impl SecurityAuditRunner {
         );
 
         let bytecode = vec![
-            Opcode::Push1 as u8, 0x05,
-            Opcode::Push1 as u8, 0x0a,
+            Opcode::Push1 as u8,
+            0x05,
+            Opcode::Push1 as u8,
+            0x0a,
             Opcode::Add as u8,
             Opcode::Blake3 as u8, // Biaya gas blake3 = 30 > 10 sisa gas
         ];
@@ -274,7 +301,10 @@ impl SecurityAuditRunner {
         let verified = BytecodeVerifier::verify(&bytecode).expect("Valid bytecode");
         let initial_storage = HashMap::new();
         let result = AvmEngine::execute(&verified, ctx, &initial_storage);
-        let out_of_gas_reverted = matches!(result, ExecutionResult::OutOfGas | ExecutionResult::Revert { .. });
+        let out_of_gas_reverted = matches!(
+            result,
+            ExecutionResult::OutOfGas | ExecutionResult::Revert { .. }
+        );
 
         AuditCheckResult {
             id: "SEC-CHK-09".to_string(),
@@ -282,8 +312,14 @@ impl SecurityAuditRunner {
             category: AuditCategory::VirtualMachine,
             severity: AuditSeverity::Critical,
             invariant: "AUR-VM-001, AUR-VM-004".to_string(),
-            status: if out_of_gas_reverted { AuditStatus::Passed } else { AuditStatus::Failed },
-            details: "Eksekusi AVM revert secara deterministik saat konsumsi gas melampaui batas kuota.".to_string(),
+            status: if out_of_gas_reverted {
+                AuditStatus::Passed
+            } else {
+                AuditStatus::Failed
+            },
+            details:
+                "Eksekusi AVM revert secara deterministik saat konsumsi gas melampaui batas kuota."
+                    .to_string(),
         }
     }
 

@@ -44,7 +44,10 @@ pub enum ConsensusMessage {
     /// Sinyal liveness view-change: validator meminta semua peer maju ke
     /// (height, round) karena proposer terpilih tidak menghasilkan proposal
     /// dalam batas waktu (AUR-ISSUE-011, round-advance yang direlay).
-    RoundAdvance { height: u64, round: u64 },
+    RoundAdvance {
+        height: u64,
+        round: u64,
+    },
     /// Blok terkomit yang disiarkan observer/validator; dipakai untuk
     /// catch-up near-tip tanpa menunggu kuorum 2-phase (AUR-ISSUE-011).
     CommittedBlock(Block),
@@ -62,8 +65,7 @@ pub trait BftTransport: Send + Sync {
         transaction: Transaction,
         sender_pubkey: [u8; 32],
     ) -> Result<(), TransportError>;
-    async fn broadcast_round_advance(&self, height: u64, round: u64)
-        -> Result<(), TransportError>;
+    async fn broadcast_round_advance(&self, height: u64, round: u64) -> Result<(), TransportError>;
     async fn recv(&mut self) -> Result<ConsensusMessage, TransportError>;
 }
 
@@ -162,11 +164,7 @@ impl BftTransport for InMemoryBftTransport {
             .map_err(|error| TransportError::ChannelClosed(error.to_string()))
     }
 
-    async fn broadcast_round_advance(
-        &self,
-        height: u64,
-        round: u64,
-    ) -> Result<(), TransportError> {
+    async fn broadcast_round_advance(&self, height: u64, round: u64) -> Result<(), TransportError> {
         self.sender
             .send((
                 self.validator_index,
@@ -240,8 +238,14 @@ mod tests {
         .expect("deterministic vote");
 
         node0.broadcast_vote(vote.clone()).await.unwrap();
-        assert_eq!(node1.recv().await.unwrap(), ConsensusMessage::Vote(vote.clone()));
-        assert_eq!(node2.recv().await.unwrap(), ConsensusMessage::Vote(vote.clone()));
+        assert_eq!(
+            node1.recv().await.unwrap(),
+            ConsensusMessage::Vote(vote.clone())
+        );
+        assert_eq!(
+            node2.recv().await.unwrap(),
+            ConsensusMessage::Vote(vote.clone())
+        );
         assert_eq!(node3.recv().await.unwrap(), ConsensusMessage::Vote(vote));
 
         tokio::select! {

@@ -351,7 +351,8 @@ mod tests {
     fn accepts_matching_chain_and_future_expiry() {
         let (tx, pubkey) = test_transaction(1001, 2_000);
         let mut mempool = MempoolEngine::with_chain_id(10, 3_600, 1001);
-        let result = mempool.submit_transaction(tx, &pubkey, 1_000, &Account::new(Quantum::new(20_000), 0));
+        let result =
+            mempool.submit_transaction(tx, &pubkey, 1_000, &Account::new(Quantum::new(20_000), 0));
 
         assert!(result.is_ok());
         assert_eq!(mempool.len(), 1);

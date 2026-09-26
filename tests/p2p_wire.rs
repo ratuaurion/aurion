@@ -25,7 +25,10 @@ fn test_canonical_handshake_mutual_success() {
 
     // Node B memvalidasi HandshakeHello
     let validation_result = validate_handshake_hello(&hello, chain_id, &genesis_hash, current_time);
-    assert!(validation_result.is_ok(), "HandshakeHello valid wajib diterima");
+    assert!(
+        validation_result.is_ok(),
+        "HandshakeHello valid wajib diterima"
+    );
 
     // Node B membalas dengan HandshakeAck
     let ack = HandshakeAck::new(105, current_time, &node_b_key);
@@ -59,7 +62,10 @@ fn test_handshake_rejection_on_clock_drift_exceeded() {
     let hello = HandshakeHello::new(1, genesis_hash, 10, drift_time, &node_key);
 
     let res = validate_handshake_hello(&hello, 1, &genesis_hash, local_time);
-    assert!(matches!(res, Err(HandshakeError::ClockDriftExceeded { .. })));
+    assert!(matches!(
+        res,
+        Err(HandshakeError::ClockDriftExceeded { .. })
+    ));
 }
 
 #[test]
@@ -88,13 +94,21 @@ fn test_peer_reputation_scoring_and_penalties() {
     // Penalti 1: Checksum Blake3 tidak cocok (-50 poin)
     peer.apply_penalty(PeerViolation::ChecksumMismatch, current_time);
     assert_eq!(peer.score, 50);
-    assert_eq!(peer.state, PeerState::Throttled, "Skor <= 50 wajib masuk Throttled");
+    assert_eq!(
+        peer.state,
+        PeerState::Throttled,
+        "Skor <= 50 wajib masuk Throttled"
+    );
 
     // Penalti 2: Magic bytes salah (-100 poin)
     peer.apply_penalty(PeerViolation::InvalidMagic, current_time);
     assert_eq!(peer.score, -50);
     assert!(peer.score <= 0);
-    assert_eq!(peer.state, PeerState::Banned, "Skor <= 0 wajib di-Ban 24 jam");
+    assert_eq!(
+        peer.state,
+        PeerState::Banned,
+        "Skor <= 0 wajib di-Ban 24 jam"
+    );
     assert!(peer.is_banned(current_time + 3600));
 }
 
@@ -102,16 +116,37 @@ fn test_peer_reputation_scoring_and_penalties() {
 fn test_zenoh_key_expressions_routing() {
     let keys = AurionKeyExpressions::new(1);
 
-    assert_eq!(keys.key_for_message_type(MSG_TX_GOSSIP), "aurion/net/1/mempool/tx");
-    assert_eq!(keys.key_for_message_type(MSG_BFT_PROPOSAL), "aurion/net/1/bft/proposal");
-    assert_eq!(keys.key_for_message_type(MSG_BFT_PREVOTE), "aurion/net/1/bft/votes");
-    assert_eq!(keys.key_for_message_type(MSG_BFT_PRECOMMIT), "aurion/net/1/bft/votes");
-    assert_eq!(keys.key_for_message_type(MSG_BFT_COMMIT_CERT), "aurion/net/1/bft/cert");
-    assert_eq!(keys.key_for_message_type(MSG_HANDSHAKE_HELLO), "aurion/net/1/handshake/hello");
+    assert_eq!(
+        keys.key_for_message_type(MSG_TX_GOSSIP),
+        "aurion/net/1/mempool/tx"
+    );
+    assert_eq!(
+        keys.key_for_message_type(MSG_BFT_PROPOSAL),
+        "aurion/net/1/bft/proposal"
+    );
+    assert_eq!(
+        keys.key_for_message_type(MSG_BFT_PREVOTE),
+        "aurion/net/1/bft/votes"
+    );
+    assert_eq!(
+        keys.key_for_message_type(MSG_BFT_PRECOMMIT),
+        "aurion/net/1/bft/votes"
+    );
+    assert_eq!(
+        keys.key_for_message_type(MSG_BFT_COMMIT_CERT),
+        "aurion/net/1/bft/cert"
+    );
+    assert_eq!(
+        keys.key_for_message_type(MSG_HANDSHAKE_HELLO),
+        "aurion/net/1/handshake/hello"
+    );
     assert_eq!(keys.pex_announce, "aurion/net/1/pex/announce");
     assert_eq!(keys.pex_query, "aurion/net/1/pex/query");
     assert_eq!(keys.pex_response, "aurion/net/1/pex/response");
-    assert_eq!(keys.key_for_message_type(MSG_PEERS_ADDR), "aurion/net/1/pex/announce");
+    assert_eq!(
+        keys.key_for_message_type(MSG_PEERS_ADDR),
+        "aurion/net/1/pex/announce"
+    );
 }
 
 #[test]
@@ -120,7 +155,10 @@ fn test_persistent_identity_is_stable_across_reloads() {
     let key_path = tmp.path().join("node.key");
 
     let first = load_or_create_identity(&key_path).unwrap();
-    assert!(key_path.exists(), "identity key wajib dibuat saat pertama kali");
+    assert!(
+        key_path.exists(),
+        "identity key wajib dibuat saat pertama kali"
+    );
 
     let second = load_or_create_identity(&key_path).unwrap();
     assert_eq!(

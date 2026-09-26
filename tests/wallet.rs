@@ -132,7 +132,10 @@ fn test_clear_signing_mandate_fee_split_and_validation() {
     // Prompt harus jujur: tidak boleh menampilkan skema yang sudah dicabut.
     assert!(prompt.contains("BFT Validator Reward (100%):   50000 Quantum"));
     assert!(prompt.contains("Protocol Burn (0%):           0 Quantum"));
-    assert!(!prompt.contains("Miner"), "prompt tidak boleh memakai istilah miner");
+    assert!(
+        !prompt.contains("Miner"),
+        "prompt tidak boleh memakai istilah miner"
+    );
 
     // Penandatanganan
     let (tx, raw_hex) = details.sign(&key_sender, 1, 999_999);

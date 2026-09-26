@@ -3,10 +3,10 @@
 //! Mesin Mandat Kriptografis & Pendelegasian Otonom Agen AI (REQ-L5-09).
 //! Invariant: AUR-L5-SEC-002 (Cryptographic Agent Mandate with Spending Cap & Expiry).
 
-use std::collections::BTreeMap;
+use crate::primitives::core::{Address, Quantum};
 use blake3::Hasher;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use crate::primitives::core::{Address, Quantum};
+use std::collections::BTreeMap;
 
 /// Pengenal Unik Mandat Agen AI.
 pub type MandateId = [u8; 32];
@@ -227,17 +227,14 @@ mod tests {
         };
 
         let mut exec = AgentExecutive::new();
-        let mid = exec.register_mandate(mandate).expect("Registration should succeed");
+        let mid = exec
+            .register_mandate(mandate)
+            .expect("Registration should succeed");
 
         // Action 1: Cost 4,000 Quanta
         let cost1 = Quantum::new(4_000);
-        let action1_digest = DelegatedAction::compute_action_digest(
-            &mid,
-            "QueryData",
-            b"query_params",
-            cost1,
-            1,
-        );
+        let action1_digest =
+            DelegatedAction::compute_action_digest(&mid, "QueryData", b"query_params", cost1, 1);
         let action1 = DelegatedAction {
             mandate_id: mid,
             operation: "QueryData".to_string(),
@@ -248,17 +245,15 @@ mod tests {
         };
 
         assert!(exec.execute_delegated_action(&action1, 1_000).is_ok());
-        assert_eq!(exec.get_mandate(&mid).unwrap().cumulative_spent_quanta, Quantum::new(4_000));
+        assert_eq!(
+            exec.get_mandate(&mid).unwrap().cumulative_spent_quanta,
+            Quantum::new(4_000)
+        );
 
         // Action 2: Cost 7,000 Quanta (Exceeds remaining 6,000 cap)
         let cost2 = Quantum::new(7_000);
-        let action2_digest = DelegatedAction::compute_action_digest(
-            &mid,
-            "SubmitTask",
-            b"task_params",
-            cost2,
-            2,
-        );
+        let action2_digest =
+            DelegatedAction::compute_action_digest(&mid, "SubmitTask", b"task_params", cost2, 2);
         let action2 = DelegatedAction {
             mandate_id: mid,
             operation: "SubmitTask".to_string(),

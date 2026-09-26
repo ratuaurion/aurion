@@ -190,16 +190,8 @@ fn test_fuzz_l2_batch_calldata_codec_zero_panic() {
             // Kasus A: Mutasi dari batch frame yang valid
             let p_len = fuzzer.next_range(0, 256) as usize;
             let p_bytes = fuzzer.random_bytes(p_len);
-            let frame = L2BatchFrame::new(
-                1,
-                Hash256::ZERO,
-                Hash256::ZERO,
-                10,
-                20,
-                5,
-                0x00,
-                p_bytes,
-            );
+            let frame =
+                L2BatchFrame::new(1, Hash256::ZERO, Hash256::ZERO, 10, 20, 5, 0x00, p_bytes);
             let mut encoded = frame.encode();
             fuzzer.mutate(&mut encoded);
             encoded

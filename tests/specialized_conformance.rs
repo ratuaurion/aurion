@@ -9,16 +9,12 @@ use aurion::specialized::domains::{
     GameAction, GameSession, OrderBook, OrderSide, OrderType, ShieldedNote, ShieldedPool,
 };
 use aurion::specialized::messaging::{CrossLayerMessage, NullifierRegistry};
-use aurion::specialized::runtime::{
-    calculate_l3_fee_split, L3ExecutionConfig,
-};
+use aurion::specialized::runtime::{calculate_l3_fee_split, L3ExecutionConfig};
 use aurion::specialized::settlement::{
     L2SettlementClient, L3CheckpointGenerator, L3FinalityStatus, L3FinalityTier,
 };
 use aurion::specialized::state::{L3AccountProof, L3State};
-use aurion::specialized::types::{
-    DomainId, DomainMetadata, L3Block, L3SecurityModel,
-};
+use aurion::specialized::types::{DomainId, DomainMetadata, L3Block, L3SecurityModel};
 
 /// REQ-L3-01: Sovereign Ecosystem Subordination (L1 Anchor)
 #[test]
@@ -80,7 +76,9 @@ fn pillar_3_domain_fault_isolation() {
 
     // Failure / revert in Domain A must NOT affect Domain B
     let snap_a = state_a.snapshot();
-    state_a.credit(&user, Quantum(5_000)).expect("credit more a");
+    state_a
+        .credit(&user, Quantum(5_000))
+        .expect("credit more a");
     assert_eq!(state_a.get_balance(&user), Quantum(15_000));
     state_a.revert_to_snapshot(snap_a).expect("rollback a");
     assert_eq!(state_a.get_balance(&user), Quantum(10_000));
@@ -110,8 +108,12 @@ fn pillar_4_smt_deterministic_state_roots() {
 
     // Determinism check: same state produces identical root
     let mut state_clone = L3State::new(domain);
-    state_clone.credit(&u1, Quantum(100)).expect("credit u1 clone");
-    state_clone.credit(&u2, Quantum(200)).expect("credit u2 clone");
+    state_clone
+        .credit(&u1, Quantum(100))
+        .expect("credit u1 clone");
+    state_clone
+        .credit(&u2, Quantum(200))
+        .expect("credit u2 clone");
     assert_eq!(state_clone.compute_state_root(), root2);
 }
 
@@ -123,7 +125,9 @@ fn pillar_5_state_witness_membership_proofs() {
     let user = Address::from_bytes([0x88; 32]);
     state.credit(&user, Quantum(75_000)).expect("credit user");
 
-    let proof = state.generate_account_proof(&user).expect("proof generated");
+    let proof = state
+        .generate_account_proof(&user)
+        .expect("proof generated");
 
     // Valid proof verification against root
     assert!(proof.verify());
@@ -255,18 +259,35 @@ fn pillar_11_specialized_domain_adapters() {
     let mut book = OrderBook::new(DomainId::named("dex"), *b"AUR/USDT");
     let t1 = [1u8; 32];
     let t2 = [2u8; 32];
-    book.place_order(t1, OrderSide::Sell, OrderType::Limit, Quantum(100), Quantum(5))
-        .expect("place ask");
+    book.place_order(
+        t1,
+        OrderSide::Sell,
+        OrderType::Limit,
+        Quantum(100),
+        Quantum(5),
+    )
+    .expect("place ask");
     let trades = book
-        .place_order(t2, OrderSide::Buy, OrderType::Limit, Quantum(100), Quantum(5))
+        .place_order(
+            t2,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Quantum(100),
+            Quantum(5),
+        )
         .expect("place bid");
     assert_eq!(trades.len(), 1);
     assert_eq!(trades[0].price, Quantum(100));
 
     // 2. Gaming Adapter
     let session_id = [0x42; 32];
-    let mut session = GameSession::new(session_id, DomainId::named("game"), vec![t1, t2], Quantum(50))
-        .expect("game session");
+    let mut session = GameSession::new(
+        session_id,
+        DomainId::named("game"),
+        vec![t1, t2],
+        Quantum(50),
+    )
+    .expect("game session");
     session
         .apply_action(GameAction {
             player: t1,

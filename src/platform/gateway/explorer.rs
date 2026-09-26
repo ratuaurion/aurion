@@ -57,7 +57,14 @@ pub fn render_block_by_height(ctx: &RpcContext, height: u64) -> Option<String> {
 
     Some(format!(
         r#"{{"height":{},"round":{},"block_hash":"0x{}","prev_block_hash":"0x{}","state_root":"0x{}","tx_merkle_root":"0x{}","timestamp":{},"signatures_count":{}}}"#,
-        header.height, header.round, block_hash, prev_hash, state_root, tx_root, header.timestamp, signatures_count
+        header.height,
+        header.round,
+        block_hash,
+        prev_hash,
+        state_root,
+        tx_root,
+        header.timestamp,
+        signatures_count
     ))
 }
 
@@ -76,8 +83,7 @@ pub fn render_tx_by_hash(ctx: &RpcContext, hash_hex: &str) -> Option<String> {
         for (tx_hash, entry) in &mempool.entries {
             if hex::encode(tx_hash.as_bytes()) == clean_hash {
                 let tx = &entry.tx;
-                let interaction =
-                    describe_contract_interaction(ctx, tx, TxStatus::Pending);
+                let interaction = describe_contract_interaction(ctx, tx, TxStatus::Pending);
                 return Some(render_tx_detail_json(
                     clean_hash,
                     "PENDING",
@@ -162,7 +168,8 @@ pub fn tx_type_label(tx_type: crate::transaction::types::TxType) -> &'static str
 
 /// Menyajikan dokumen HTML5 mandiri untuk Community Sandbox Dashboard (/sandbox).
 pub fn render_sandbox_html(chain_id: u32) -> String {
-    format!(r##"<!DOCTYPE html>
+    format!(
+        r##"<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -471,5 +478,7 @@ pub fn render_sandbox_html(chain_id: u32) -> String {
     setInterval(updateStats, 3000);
   </script>
 </body>
-</html>"##, chain_id = chain_id)
+</html>"##,
+        chain_id = chain_id
+    )
 }

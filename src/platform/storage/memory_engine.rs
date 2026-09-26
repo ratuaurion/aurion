@@ -62,7 +62,9 @@ impl StateStore for MemoryStorageEngine {
                 raw.copy_from_slice(val);
                 Ok(Some(u64::from_be_bytes(raw)))
             } else {
-                Err(StorageError::Corruption("Invalid latest_height byte length".to_string()))
+                Err(StorageError::Corruption(
+                    "Invalid latest_height byte length".to_string(),
+                ))
             }
         } else {
             Ok(None)
@@ -93,7 +95,10 @@ impl StateStore for MemoryStorageEngine {
         blocks.insert(block.header.height, block.clone());
         hashes.insert(block.hash(), block.header.height);
         certs.insert(block.header.height, certificate.clone());
-        meta.insert("latest_height".to_string(), block.header.height.to_be_bytes().to_vec());
+        meta.insert(
+            "latest_height".to_string(),
+            block.header.height.to_be_bytes().to_vec(),
+        );
         meta.insert(
             "latest_block_hash".to_string(),
             block.hash().as_bytes().to_vec(),

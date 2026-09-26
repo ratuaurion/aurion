@@ -42,7 +42,7 @@ def get_balance_and_nonce(address):
     bal_raw = bal_res.get("result", 0)
     nonce = int(nonce_res.get("result", 0))
     bal_quanta = int(bal_raw) if bal_raw else 0
-    bal_aur = bal_quanta / 100_000_000
+    bal_aur = bal_quanta / 1_000_000_000
     return bal_quanta, bal_aur, nonce
 
 def wait_for_tx(tx_hash, timeout_secs=10):

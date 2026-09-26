@@ -9,10 +9,10 @@ mod legacy;
 
 #[cfg(test)]
 use crate::crypto::blake3_derive_key;
+use crate::crypto::{derive_address_from_pubkey, encode_address_bech32m};
 use argon2::{Algorithm, Argon2, Params, Version};
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{ChaCha20Poly1305, Nonce};
-use crate::crypto::{derive_address_from_pubkey, encode_address_bech32m};
 use ed25519_dalek::SigningKey;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -44,10 +44,18 @@ pub enum KeystoreError {
 impl std::fmt::Display for KeystoreError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::InvalidPassword => write!(f, "Kata sandi keystore tidak cocok (Verifikasi MAC gagal)"),
-            Self::AddressMismatch { expected, derived } => write!(f, "Alamat keystore tidak cocok: metadata '{expected}', derivasi '{derived}'"),
+            Self::InvalidPassword => {
+                write!(f, "Kata sandi keystore tidak cocok (Verifikasi MAC gagal)")
+            }
+            Self::AddressMismatch { expected, derived } => write!(
+                f,
+                "Alamat keystore tidak cocok: metadata '{expected}', derivasi '{derived}'"
+            ),
             Self::InvalidJsonFormat(e) => write!(f, "Format JSON keystore rusak: {e}"),
-            Self::MissingField(field) => write!(f, "Field wajib '{field}' tidak ditemukan pada file keystore"),
+            Self::MissingField(field) => write!(
+                f,
+                "Field wajib '{field}' tidak ditemukan pada file keystore"
+            ),
             Self::DecryptionFailed => write!(f, "Dekripsi keystore gagal"),
             Self::KdfFailure(e) => write!(f, "Derivasi kunci Argon2id gagal: {e}"),
             Self::CipherFailure(e) => write!(f, "Operasi cipher AEAD gagal: {e}"),
@@ -145,9 +153,18 @@ fn default_cipher_id() -> String {
 }
 
 /// Fungsi KDF kanonik: Argon2id dengan parameter V2.
-fn derive_key_argon2id(password: &str, salt: &[u8], params: &KdfParamsV2) -> Result<Zeroizing<[u8; SECRET_LEN]>, KeystoreError> {
-    let params = Params::new(params.m_cost, params.t_cost, params.p_cost, Some(SECRET_LEN))
-        .map_err(|e| KeystoreError::KdfFailure(e.to_string()))?;
+fn derive_key_argon2id(
+    password: &str,
+    salt: &[u8],
+    params: &KdfParamsV2,
+) -> Result<Zeroizing<[u8; SECRET_LEN]>, KeystoreError> {
+    let params = Params::new(
+        params.m_cost,
+        params.t_cost,
+        params.p_cost,
+        Some(SECRET_LEN),
+    )
+    .map_err(|e| KeystoreError::KdfFailure(e.to_string()))?;
     let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
 
     let mut derived = Zeroizing::new([0u8; SECRET_LEN]);
@@ -157,7 +174,10 @@ fn derive_key_argon2id(password: &str, salt: &[u8], params: &KdfParamsV2) -> Res
     Ok(derived)
 }
 
-fn verify_address_binding(signing_key: &SigningKey, metadata_address: &str) -> Result<(), KeystoreError> {
+fn verify_address_binding(
+    signing_key: &SigningKey,
+    metadata_address: &str,
+) -> Result<(), KeystoreError> {
     let address = derive_address_from_pubkey(signing_key.verifying_key().as_bytes());
     let derived = encode_address_bech32m(&address, "aur")
         .map_err(|e| KeystoreError::InvalidJsonFormat(e.to_string()))?;
@@ -472,7 +492,8 @@ mod tests {
         let signing_key = test_signing_key();
 
         let address = test_address();
-        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address).expect("Enkripsi V2 harus berhasil");
+        let keystore = Keystore::encrypt(&signing_key, TEST_PASSWORD, &address)
+            .expect("Enkripsi V2 harus berhasil");
         assert_eq!(keystore.version, 2);
         assert_eq!(keystore.crypto.cipher, AEAD_ALGORITHM);
 
@@ -481,7 +502,9 @@ mod tests {
         assert_eq!(parsed.address, address);
         assert_eq!(parsed.version, 2);
 
-        let recovered = parsed.decrypt(TEST_PASSWORD).expect("Dekripsi V2 harus berhasil");
+        let recovered = parsed
+            .decrypt(TEST_PASSWORD)
+            .expect("Dekripsi V2 harus berhasil");
         assert_eq!(recovered.to_bytes(), signing_key.to_bytes());
     }
 
@@ -520,7 +543,9 @@ mod tests {
         let parsed = Keystore::from_json_str(&legacy_keystore.to_json_string()).unwrap();
         assert!(parsed.is_legacy());
 
-        let recovered = parsed.decrypt(TEST_PASSWORD).expect("Dekripsi legacy harus berhasil");
+        let recovered = parsed
+            .decrypt(TEST_PASSWORD)
+            .expect("Dekripsi legacy harus berhasil");
         assert_eq!(recovered.to_bytes(), signing_key.to_bytes());
 
         let err = parsed.decrypt("WrongPassword").unwrap_err();

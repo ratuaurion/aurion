@@ -8,11 +8,10 @@ pub fn generate_golden_vectors_json() -> String {
     out.push_str("  \"version\": \"1.0.0\",\n");
     out.push_str("  \"constants\": {\n");
     out.push_str("    \"max_supply_aur\": 66000000,\n");
-    out.push_str("    \"quanta_per_aur\": 100000000,\n");
-    out.push_str("    \"max_supply_quanta\": \"6600000000000000\",\n");
-    out.push_str("    \"genesis_allocation_quanta\": \"2310000000000000\",\n");
-    out.push_str("    \"creator_allocation_quanta\": \"1980000000000000\",\n");
-    out.push_str("    \"developer_allocation_quanta\": \"330000000000000\",\n");
+    out.push_str("    \"quanta_per_aur\": 1000000000,\n");
+    out.push_str("    \"max_supply_quanta\": \"66000000000000000\",\n");
+    out.push_str("    \"master_treasury_allocation_quanta\": \"66000000000000000\",\n");
+    out.push_str("    \"single_treasury_model\": true,\n");
     out.push_str("    \"fee_burn_percent\": 0,\n");
     out.push_str("    \"fee_validator_percent\": 100,\n");
     out.push_str("    \"consensus\": \"round-based-bft-quorum-finality\",\n");

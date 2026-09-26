@@ -1,11 +1,11 @@
 //! Vote kanonikal BFT konsensus Aurion (Tepat 117 Bytes).
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
+use crate::consensus::certificate::ValidatorSet;
 use crate::core::{Hash256, Signature};
 use crate::crypto::{
     blake3_hash, ed25519_verify_strict, Keypair, DST_BFT_PRECOMMIT, DST_BFT_PREVOTE,
 };
-use crate::consensus::certificate::ValidatorSet;
 use thiserror::Error;
 
 pub const VOTE_BYTES: usize = 117;
@@ -120,15 +120,19 @@ impl Vote {
 
     /// Verifikasi keabsahan tanda tangan vote terhadap validator set.
     pub fn verify(&self, val_set: &ValidatorSet) -> Result<(), VoteError> {
-        let val_entry = val_set
-            .get_validator(self.validator_index)
-            .ok_or(VoteError::ValidatorIndexOutOfBounds {
+        let val_entry = val_set.get_validator(self.validator_index).ok_or(
+            VoteError::ValidatorIndexOutOfBounds {
                 index: self.validator_index,
                 set_size: val_set.validators.len(),
-            })?;
+            },
+        )?;
 
         let digest = self.signing_hash();
-        ed25519_verify_strict(&val_entry.consensus_pubkey, digest.as_bytes(), &self.signature)
-            .map_err(|_| VoteError::InvalidSignature)
+        ed25519_verify_strict(
+            &val_entry.consensus_pubkey,
+            digest.as_bytes(),
+            &self.signature,
+        )
+        .map_err(|_| VoteError::InvalidSignature)
     }
 }

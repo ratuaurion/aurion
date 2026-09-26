@@ -3,8 +3,8 @@
 //! Mesin Komputasi Terverifikasi Off-Chain (zk-Compute & WASM) L5 (REQ-L5-02).
 //! Invariant: AUR-L5-ARCH-001 (Non-Consensus Off-Chain Execution), AUR-L5-DATA-001 (Blake3 Attestations).
 
-use blake3::Hasher;
 use crate::primitives::core::Quantum;
+use blake3::Hasher;
 
 /// Pengenal Unik Tugas Komputasi L5 (Blake3 digest).
 pub type ComputeTaskId = [u8; 32];
@@ -241,12 +241,8 @@ mod tests {
         let task_id = [0x11; 32];
         let out_hash = [0x22; 32];
         let worker_id = [0x33; 32];
-        let mut proof = ZkComputeAttestation::generate_attestation(
-            &task_id,
-            &out_hash,
-            5_000,
-            &worker_id,
-        );
+        let mut proof =
+            ZkComputeAttestation::generate_attestation(&task_id, &out_hash, 5_000, &worker_id);
 
         assert!(ZkComputeAttestation::verify_attestation(
             &task_id, &out_hash, 5_000, &proof

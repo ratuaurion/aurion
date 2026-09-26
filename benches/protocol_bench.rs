@@ -200,7 +200,7 @@ fn bench_l1_execution() -> Vec<BenchResult> {
         voting_weight: 100,
     };
     let val_set = ValidatorSet::new(vec![val_entry]);
-    let genesis = build_genesis(creator_addr, dev_addr, val_set.validators.clone());
+    let genesis = build_genesis(creator_addr, val_set.validators.clone());
 
     // 1. Mempool Submission & Prioritized Sorting
     {
@@ -227,12 +227,7 @@ fn bench_l1_execution() -> Vec<BenchResult> {
             tx.signature = creator_kp.sign(&preimage);
 
             let acct = ledger.accounts.get(&creator_addr).cloned().unwrap();
-            let _ = mempool.submit_transaction(
-                tx,
-                &creator_kp.public_key_bytes(),
-                1000,
-                &acct,
-            );
+            let _ = mempool.submit_transaction(tx, &creator_kp.public_key_bytes(), 1000, &acct);
         }
         let elapsed = start.elapsed().as_nanos();
         results.push(BenchResult::new(
@@ -310,10 +305,13 @@ fn bench_l1_execution() -> Vec<BenchResult> {
     {
         // Bytecode: PUSH1 5, PUSH1 7, ADD, PUSH1 2, MUL, STOP
         let bytecode = vec![
-            Opcode::Push1 as u8, 5,
-            Opcode::Push1 as u8, 7,
+            Opcode::Push1 as u8,
+            5,
+            Opcode::Push1 as u8,
+            7,
             Opcode::Add as u8,
-            Opcode::Push1 as u8, 2,
+            Opcode::Push1 as u8,
+            2,
             Opcode::Mul as u8,
             Opcode::Stop as u8,
         ];
@@ -469,11 +467,9 @@ fn bench_l2_l3_l4_scaling() -> Vec<BenchResult> {
         let dest_addr = derive_address_from_pubkey(&Keypair::generate().public_key_bytes());
 
         // Inisialisasi saldo L2
-        sequencer.state.set_account(L2Account::new(
-            user_addr,
-            Quantum::new(100_000_000_000),
-            0,
-        ));
+        sequencer
+            .state
+            .set_account(L2Account::new(user_addr, Quantum::new(100_000_000_000), 0));
 
         let iters = 2_000u64;
         let mut txs = Vec::with_capacity(iters as usize);
@@ -659,7 +655,7 @@ fn bench_storage_persistence() -> Vec<BenchResult> {
         voting_weight: 100,
     };
     let val_set = ValidatorSet::new(vec![val_entry]);
-    let genesis = build_genesis(val_addr, val_addr, val_set.validators.clone());
+    let genesis = build_genesis(val_addr, val_set.validators.clone());
     let ledger = ChainLedger::from_genesis(genesis);
 
     let b0 = ledger.latest_block();
@@ -807,11 +803,21 @@ fn bench_memory_footprint() -> Vec<BenchResult> {
 // ============================================================================
 fn main() {
     println!();
-    println!("=========================================================================================");
-    println!("           AURION PROTOCOL PERFORMANCE & CAPACITY BENCHMARK SUITE (VER-008)              ");
-    println!("=========================================================================================");
-    println!("  Invariants: Zero Unsafe (AUR-ARCH-011) | Zero Float (AUR-ARCH-012) | Round-Based BFT   ");
-    println!("-----------------------------------------------------------------------------------------");
+    println!(
+        "========================================================================================="
+    );
+    println!(
+        "           AURION PROTOCOL PERFORMANCE & CAPACITY BENCHMARK SUITE (VER-008)              "
+    );
+    println!(
+        "========================================================================================="
+    );
+    println!(
+        "  Invariants: Zero Unsafe (AUR-ARCH-011) | Zero Float (AUR-ARCH-012) | Round-Based BFT   "
+    );
+    println!(
+        "-----------------------------------------------------------------------------------------"
+    );
 
     let mut all_results = Vec::new();
 
@@ -845,7 +851,9 @@ fn main() {
     println!("DONE ({} tests)", r6.len());
     all_results.extend(r6);
 
-    println!("-----------------------------------------------------------------------------------------");
+    println!(
+        "-----------------------------------------------------------------------------------------"
+    );
     println!();
     println!("+-------------------------+----------------------------------+----------+---------------+----------------+-----------------------+---------------+");
     println!("| Kategori                | Operasi                          | Sampel   | Total Waktu   | Unit Latensi   | Throughput            | Status SLA    |");
@@ -881,8 +889,13 @@ fn main() {
 
     println!("+-------------------------+----------------------------------+----------+---------------+----------------+-----------------------+---------------+");
     println!();
-    println!("  HASIL AKHIR: Seluruh {} pengujian benchmark empiris selesai dieksekusi.", all_results.len());
+    println!(
+        "  HASIL AKHIR: Seluruh {} pengujian benchmark empiris selesai dieksekusi.",
+        all_results.len()
+    );
     println!("  Status Invariant: 100% INTEGER ARITHMETIC | 0 UNSAFE CODE | ROUND-BASED BFT SLA SATISFIED.");
-    println!("=========================================================================================");
+    println!(
+        "========================================================================================="
+    );
     println!();
 }

@@ -8,9 +8,9 @@
 //! - AUR-ARCH-012: Zero floating-point arithmetic (All values in `Quantum(u128)`)
 //! - AUR-L3-ARCH-002: Specialized domain execution & batch settlement
 
+use blake3::Hasher;
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, VecDeque};
-use blake3::Hasher;
 
 use crate::primitives::core::Quantum;
 use crate::specialized::types::DomainId;
@@ -57,9 +57,7 @@ pub struct Order {
 impl Order {
     /// Remaining unfilled base quantity.
     pub fn remaining(&self) -> Quantum {
-        self.quantity
-            .checked_sub(self.filled)
-            .unwrap_or(Quantum(0))
+        self.quantity.checked_sub(self.filled).unwrap_or(Quantum(0))
     }
 
     /// Whether the order is completely fulfilled.
@@ -174,7 +172,10 @@ impl OrderBook {
             OrderSide::Buy => {
                 self.match_buy_order(&mut incoming, &mut trades)?;
                 if !incoming.is_filled() && incoming.order_type == OrderType::Limit {
-                    let level = self.bids.entry(Reverse(incoming.price.as_u128())).or_default();
+                    let level = self
+                        .bids
+                        .entry(Reverse(incoming.price.as_u128()))
+                        .or_default();
                     level.push_back(incoming);
                 }
             }
@@ -429,20 +430,38 @@ mod tests {
 
         // Resting Ask 1: Sell 10 @ 100
         let trades1 = book
-            .place_order(maker1, OrderSide::Sell, OrderType::Limit, Quantum(100), Quantum(10))
+            .place_order(
+                maker1,
+                OrderSide::Sell,
+                OrderType::Limit,
+                Quantum(100),
+                Quantum(10),
+            )
             .expect("place ask 1");
         assert!(trades1.is_empty());
         assert_eq!(book.best_ask(), Some(Quantum(100)));
 
         // Resting Ask 2: Sell 20 @ 105
         let trades2 = book
-            .place_order(maker2, OrderSide::Sell, OrderType::Limit, Quantum(105), Quantum(20))
+            .place_order(
+                maker2,
+                OrderSide::Sell,
+                OrderType::Limit,
+                Quantum(105),
+                Quantum(20),
+            )
             .expect("place ask 2");
         assert!(trades2.is_empty());
 
         // Aggressive Bid: Buy 15 @ 105 (Crosses ask 1 completely, and fills 5 of ask 2)
         let matched = book
-            .place_order(taker, OrderSide::Buy, OrderType::Limit, Quantum(105), Quantum(15))
+            .place_order(
+                taker,
+                OrderSide::Buy,
+                OrderType::Limit,
+                Quantum(105),
+                Quantum(15),
+            )
             .expect("place aggressive bid");
 
         assert_eq!(matched.len(), 2);
@@ -473,8 +492,14 @@ mod tests {
         let mut book = OrderBook::new(domain_id, pair);
 
         let trader = [4u8; 32];
-        book.place_order(trader, OrderSide::Buy, OrderType::Limit, Quantum(50), Quantum(100))
-            .expect("place bid");
+        book.place_order(
+            trader,
+            OrderSide::Buy,
+            OrderType::Limit,
+            Quantum(50),
+            Quantum(100),
+        )
+        .expect("place bid");
         assert_eq!(book.best_bid(), Some(Quantum(50)));
 
         let cancelled = book.cancel_order(1).expect("cancel bid");

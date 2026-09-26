@@ -6,8 +6,8 @@ use aurion::consensus::certificate::{CommitCertificate, ValidatorEntry, Validato
 use aurion::consensus::header::{BlockHeader, BLOCK_HEADER_BYTES};
 use aurion::consensus::vote::{Vote, VOTE_BYTES};
 use aurion::core::{
-    Address, Hash256, MonetaryError, Quantum, Signature,
-    MASTER_TREASURY_ALLOCATION_QUANTA, MAX_SUPPLY_QUANTA,
+    Address, Hash256, MonetaryError, Quantum, Signature, MASTER_TREASURY_ALLOCATION_QUANTA,
+    MAX_SUPPLY_QUANTA,
 };
 use aurion::crypto::{
     blake3_derive_key, blake3_hash, decode_address_bech32m, derive_address_from_pubkey,
@@ -205,7 +205,10 @@ fn pillar_5_state_transition_execution() {
         accounts.get(&recipient).unwrap().balance.as_u128(),
         300_000_000
     );
-    assert_eq!(accounts.get(&proposer).unwrap().balance.as_u128(), 50_000_000);
+    assert_eq!(
+        accounts.get(&proposer).unwrap().balance.as_u128(),
+        50_000_000
+    );
     assert_eq!(monetary.total_burned.as_u128(), 0);
 }
 
@@ -291,14 +294,13 @@ fn pillar_7_wire_framing_and_security() {
 #[test]
 fn pillar_8_genesis_block_and_state() {
     let treasury = Address::from_bytes([0xAA; 32]);
-    let developer = Address::from_bytes([0xBB; 32]);
     let val_entry = ValidatorEntry {
         validator_id: Address::from_bytes([1u8; 32]),
         consensus_pubkey: [1u8; 32],
         voting_weight: 100,
     };
 
-    let genesis = build_genesis(treasury, developer, vec![val_entry]);
+    let genesis = build_genesis(treasury, vec![val_entry]);
 
     assert_eq!(genesis.header.height, 0);
     assert_eq!(

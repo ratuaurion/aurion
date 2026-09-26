@@ -6,13 +6,13 @@
 //! - AUR-ARCH-011 (#![forbid(unsafe_code)])
 //! - AUR-ARCH-012 (Zero-Float Quantum u128)
 
-use std::collections::BTreeSet;
-use thiserror::Error;
 use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::blake3_hash;
 use crate::l2::bridge::{BridgeError, L2SettlementBridgeClient};
 use crate::l2::state::{L2Account, L2AccountProof, L2StateStore};
 use crate::l2::vm::L2ExecutionError;
+use std::collections::BTreeSet;
+use thiserror::Error;
 
 /// Kesalahan Operasi Relayer L2 & Cross-Layer Messaging
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -249,7 +249,9 @@ impl L2Relayer {
         amount: Quantum,
     ) -> Result<u64, RelayerError> {
         // 1. Kunci dana di vault bridge L1
-        let nonce = self.bridge.process_deposit_full(sender_l1, recipient_l2, amount)?;
+        let nonce = self
+            .bridge
+            .process_deposit_full(sender_l1, recipient_l2, amount)?;
 
         // 2. Mint / kreditkan saldo pada state L2
         let existing = state
@@ -559,7 +561,10 @@ mod tests {
             .expect("Penarikan L2->L1 gagal");
 
         // Saldo di L2 berkurang 10 AUR
-        assert_eq!(state.get_account(&sender_l2).unwrap().balance.as_u128(), 1_000_000_000);
+        assert_eq!(
+            state.get_account(&sender_l2).unwrap().balance.as_u128(),
+            1_000_000_000
+        );
         // Saldo vault L1 berkurang 10 AUR
         assert_eq!(relayer.bridge.vault_balance.as_u128(), 4_000_000_000);
     }
@@ -591,7 +596,10 @@ mod tests {
 
         assert_eq!(executed.len(), 1);
         assert_eq!(executed[0].status, MessageStatus::Executed);
-        assert_eq!(state.get_account(&target).unwrap().balance.as_u128(), 400_000);
+        assert_eq!(
+            state.get_account(&target).unwrap().balance.as_u128(),
+            400_000
+        );
         assert!(relayer.forced_queue.is_empty());
     }
 
@@ -611,7 +619,9 @@ mod tests {
         let mut relayer = L2Relayer::new(bridge, 100);
 
         // Hasilkan bukti SMT dari L2StateStore
-        let proof = state.generate_account_proof(&user_addr).expect("Proof SMT gagal");
+        let proof = state
+            .generate_account_proof(&user_addr)
+            .expect("Proof SMT gagal");
 
         // 1. Klaim sebelum freeze harus ditolak
         let err = relayer
@@ -637,4 +647,3 @@ mod tests {
         assert_eq!(double_err, RelayerError::AlreadyClaimed(user_addr));
     }
 }
-

@@ -37,11 +37,20 @@ fn test_sentry_node_allows_public_traffic() {
 fn test_shallow_liveness_health_check() {
     let mut supervisor = RuntimeSupervisor::new(NodeConfig::default());
 
-    assert!(!supervisor.check_liveness(), "Saat belum start, liveness wajib false");
+    assert!(
+        !supervisor.check_liveness(),
+        "Saat belum start, liveness wajib false"
+    );
     supervisor.start();
-    assert!(supervisor.check_liveness(), "Saat running, liveness wajib true (HTTP 200)");
+    assert!(
+        supervisor.check_liveness(),
+        "Saat running, liveness wajib true (HTTP 200)"
+    );
     supervisor.stop();
-    assert!(!supervisor.check_liveness(), "Saat stop, liveness wajib false");
+    assert!(
+        !supervisor.check_liveness(),
+        "Saat stop, liveness wajib false"
+    );
 }
 
 #[test]
@@ -54,7 +63,10 @@ fn test_deep_readiness_health_check() {
     supervisor.sync_lag = 0;
     supervisor.last_state_latency_ms = 10;
     let res = supervisor.check_readiness();
-    assert!(matches!(res, Err(HealthCheckError::InsufficientPeers { .. })));
+    assert!(matches!(
+        res,
+        Err(HealthCheckError::InsufficientPeers { .. })
+    ));
 
     // Skenario 2: Peer cukup (>= 3), tetapi sedang sinkronisasi ketinggalan blok (> 1) -> REJECT
     supervisor.active_peer_count = 4;
@@ -66,7 +78,10 @@ fn test_deep_readiness_health_check() {
     supervisor.sync_lag = 0;
     supervisor.last_state_latency_ms = 75; // Melebihi 50ms
     let res = supervisor.check_readiness();
-    assert!(matches!(res, Err(HealthCheckError::StateLatencyTooHigh { .. })));
+    assert!(matches!(
+        res,
+        Err(HealthCheckError::StateLatencyTooHigh { .. })
+    ));
 
     // Skenario 4: Semua kriteria Dokumen 12 terpenuhi sempurna -> PASS (HTTP 200)
     supervisor.last_state_latency_ms = 25; // <= 50ms

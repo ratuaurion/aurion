@@ -3,14 +3,14 @@
 //! Manajemen Registrasi & Siklus Hidup Node Infrastruktur L5 (REQ-L5-01).
 //! Menegakkan jaminan ekonomi (collateralization), verifikasi Ed25519, dan transisi status formal.
 
-use std::collections::BTreeMap;
-use blake3::Hasher;
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
-use crate::primitives::core::Quantum;
 use super::types::{
     compute_node_id, InfrastructureNodeId, NodeLifecycleStatus, NodeMetadata, NodeType,
     L5_MIN_NODE_COLLATERAL_QUANTA, L5_UNBONDING_DELAY_SLOTS,
 };
+use crate::primitives::core::Quantum;
+use blake3::Hasher;
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
+use std::collections::BTreeMap;
 
 /// Permohonan Registrasi Node Baru ke Jaringan Infrastruktur L5.
 #[derive(Debug, Clone)]
@@ -84,8 +84,8 @@ impl NodeRegistry {
             &req.endpoint,
         );
 
-        let verifying_key = VerifyingKey::from_bytes(&req.pubkey)
-            .map_err(|_| "Invalid Ed25519 public key")?;
+        let verifying_key =
+            VerifyingKey::from_bytes(&req.pubkey).map_err(|_| "Invalid Ed25519 public key")?;
         let sig = Signature::from_bytes(&req.signature);
 
         verifying_key
@@ -214,7 +214,10 @@ impl NodeRegistry {
         let valid_bps = penalty_bps.min(10_000) as u128;
         let slash_amount_quanta = (node.collateral.as_u128() * valid_bps) / 10_000;
         let slash_amount = Quantum::new(slash_amount_quanta);
-        let remaining_amount = node.collateral.checked_sub(slash_amount).unwrap_or(Quantum::new(0));
+        let remaining_amount = node
+            .collateral
+            .checked_sub(slash_amount)
+            .unwrap_or(Quantum::new(0));
 
         node.collateral = remaining_amount;
         node.status = NodeLifecycleStatus::Slashed;
@@ -284,7 +287,9 @@ mod tests {
             signature: sig,
         };
 
-        let node_id = registry.register_node(req, 100).expect("Registration should succeed");
+        let node_id = registry
+            .register_node(req, 100)
+            .expect("Registration should succeed");
         let node = registry.get_node(&node_id).expect("Node should exist");
         assert_eq!(node.status, NodeLifecycleStatus::ActiveNode);
         assert_eq!(node.reputation_bps, 10_000);
@@ -353,9 +358,14 @@ mod tests {
         assert!(registry.complete_unbonding(&node_id, 250).is_err());
 
         // 3. Complete at or after unlock_slot
-        let returned = registry.complete_unbonding(&node_id, unlock_slot + 1).unwrap();
+        let returned = registry
+            .complete_unbonding(&node_id, unlock_slot + 1)
+            .unwrap();
         assert_eq!(returned, col);
-        assert_eq!(registry.get_node(&node_id).unwrap().status, NodeLifecycleStatus::Retired);
+        assert_eq!(
+            registry.get_node(&node_id).unwrap().status,
+            NodeLifecycleStatus::Retired
+        );
         assert_eq!(registry.total_collateral(), Quantum::new(0));
     }
 }

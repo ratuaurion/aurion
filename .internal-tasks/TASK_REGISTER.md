@@ -666,7 +666,7 @@ melarang total konsep penambangan, sehingga kondisi ini melanggar AUR-ARCH-004
 5. **Kunci seremoni dapat direkonstruksi.** `new_deterministic()` menurunkan
    Master Treasury dari seed konstan `[0x01; 32]` yang terbaca di source publik.
    Penghitungan address mengonfirmasi seed itu menghasilkan `cb095697…95aad`,
-   yang **cocok** dengan `creator_address_hex` di `GENESIS_CEREMONY.json`.
+   yang **cocok** dengan `master_treasury_address_hex` di `GENESIS_CEREMONY.json`.
    **Belum diperbaiki** — menunggu keputusan pemilik proyek.
 
 
@@ -697,10 +697,12 @@ baris bila istilah mining atau skema 20/80 kembali masuk ke `src/`. Komentar yan
 
 - **Kunci seremoni masih deterministik** (`seed [0x01; 32]`). Tidak dapat
   diperbaiki tanpa mnemonic milik pemilik.
-- **Tiga angka alokasi Treasury tidak konsisten:** Konstitusi menyebut 66.000.000
-  AUR; `GENESIS_CEREMONY.json` `initial_supply_aur` = 23.100.000 AUR dengan
-  `creator_allocation_aur` = 19.800.000 AUR; `conformance/vectors.rs`
-  `genesis_allocation_quanta` = 2.310.000.000.000.000 Q.
+- **Tiga angka alokasi Treasury ~~tidak konsisten~~ → SELESAI (Single Treasury):**
+  seluruh sumber kini seragam pada `66.000.000` AUR (100% ke Master Treasury).
+  Konstitusi, `GENESIS_CEREMONY.json` (`initial_supply_aur` =
+  `master_treasury_allocation_aur` = 66.000.000 AUR), `conformance/vectors.rs`
+  (`master_treasury_allocation_quanta` = 66.000.000.000.000.000 Q), dan
+  `quantum.rs` (`MASTER_TREASURY_ALLOCATION_QUANTA`) telah disatukan.
 - **Dua salinan Konstitusi** (`CONSTITUTION.md` di root dan
   `docs/Constitutions/AURION CONSTITUTION.md`) dengan isi berbeda.
 

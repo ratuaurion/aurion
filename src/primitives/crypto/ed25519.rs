@@ -1,9 +1,7 @@
 //! Ed25519: Tanda tangan digital kanonikal dengan verifikasi ketat RFC 8032 (Anti-Malleability).
 
 use crate::core::Signature;
-use ed25519_dalek::{
-    Signature as DalekSignature, Signer, SigningKey, VerifyingKey,
-};
+use ed25519_dalek::{Signature as DalekSignature, Signer, SigningKey, VerifyingKey};
 use thiserror::Error;
 use zeroize::Zeroize;
 
@@ -46,8 +44,6 @@ impl Keypair {
         let hash = crate::crypto::blake3_derive_key("AURION-EPHEMERAL-KEYGEN", &entropy);
         Self::from_seed(hash.as_bytes())
     }
-
-
 
     #[inline]
     pub fn public_key_bytes(&self) -> [u8; 32] {
@@ -97,7 +93,6 @@ impl Clone for Keypair {
         Self::from_seed(&self.signing_key.to_bytes())
     }
 }
-
 
 /// Verifikasi tanda tangan Ed25519 dengan aturan ketat RFC 8032 (Anti-Malleability).
 pub fn ed25519_verify_strict(

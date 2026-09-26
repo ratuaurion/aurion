@@ -1,12 +1,19 @@
 //! Deterministic Multi-Party Genesis Ceremony Engine (PRD-015).
 //!
 //! Modul ini mengelola protokol upacara pembentukan blok Genesis ($H=0$) dan State Awal ($\sigma_0$)
-//! secara deterministik dan teratestasi kriptografis multi-pihak (Creator, Developer, dan 4 Genesis Validators $\mathcal{V}_0$).
+//! secara deterministik dan teratestasi kriptografis multi-pihak (Master Treasury dan
+//! 4 Genesis Validators $\mathcal{V}_0$).
+//!
+//! MODEL SINGLE TREASURY: seluruh pasokan genesis (100%) dipegang eksklusif oleh satu
+//! akun Master Treasury. Skema alokasi pecahan (Creator dan Developer terpisah) telah
+//! dihapus total; tidak ada peserta non-Treasury yang memegang saldo awal.
 
 use crate::consensus::certificate::ValidatorEntry;
 use crate::core::{Address, Hash256, Signature};
 use crate::crypto::{blake3_derive_key, ed25519_verify_strict, Keypair};
-use crate::genesis::builder::{build_genesis, GenesisInitialization, GENESIS_CHAIN_ID, GENESIS_TIMESTAMP};
+use crate::genesis::builder::{
+    build_genesis, GenesisInitialization, GENESIS_CHAIN_ID, GENESIS_TIMESTAMP,
+};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -16,26 +23,46 @@ pub const DST_GENESIS_CEREMONY: &str = "AURION-GENESIS-CEREMONY-V1";
 /// Total bobot voting validator awal: 1.000.000 (AUR-GENESIS-007).
 pub const CEREMONY_TOTAL_VOTING_POWER: u64 = 1_000_000;
 
+/// Initial supply Blok 0 dalam AUR pada model **Single Treasury**.
+///
+/// 100% dari seluruh pasokan genesis dialokasikan eksklusif ke satu akun
+/// Master Treasury. Skema alokasi pecahan (mis. 35% genesis / 30% creator /
+/// 5% developer) telah dihapus total dan tidak lagi menjadi bagian protokol.
+pub const GENESIS_INITIAL_SUPPLY_AUR: u64 = 66_000_000;
+
+/// Alokasi Master Treasury di Blok 0 (100% dari initial supply, model Single Treasury).
+pub const MASTER_TREASURY_ALLOCATION_AUR: u64 = GENESIS_INITIAL_SUPPLY_AUR;
+
 /// Kuorum voting BFT awal: >2/3 = 666.667 (AUR-GENESIS-007).
 pub const CEREMONY_QUORUM_THRESHOLD: u64 = 666_667;
+
+///
+/// Identitas kanonik blok Genesis model Single Treasury.
+///
+/// STATE ROOT `ec1446f1...` dihitung dari HANYA SATU akun (Master Treasury) pada
+/// `state_root` blok 0. Hash ini menggantikan identitas lama yang menyertakan
+/// rekening Developer bersaldo 0 pada state awal.
 pub const CANONICAL_GENESIS_HASH: &str =
-    "71b77cfbfbddaa26257f8a2b965350d95354ce3fbae5847267e5a7c61efdf9a4";
+    "42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a";
 pub const CANONICAL_GENESIS_STATE_ROOT: &str =
-    "07ac8f81ec5852b85d8b3dd768abbe35963e933c92103a04635aed99a69caed4";
+    "ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f";
+pub const CANONICAL_CEREMONY_HASH: &str =
+    "a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880";
 
 /// Peran entitas dalam upacara pembentukan Genesis.
+///
+/// Pada model Single Treasury hanya ada satu peran portasional: `MasterTreasury`,
+/// yaitu pemegang eksklusif 100% pasokan genesis, serta 4 `Validator` konsensus.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CeremonyRole {
-    Creator,
-    Developer,
+    MasterTreasury,
     Validator(u32),
 }
 
 impl std::fmt::Display for CeremonyRole {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CeremonyRole::Creator => write!(f, "Creator Vault (30%)"),
-            CeremonyRole::Developer => write!(f, "Developer Vault (5%)"),
+            CeremonyRole::MasterTreasury => write!(f, "Master Treasury Vault"),
             CeremonyRole::Validator(idx) => write!(f, "Genesis Validator {idx}"),
         }
     }
@@ -107,6 +134,9 @@ pub struct CeremonyVerificationReport {
 }
 
 /// Transkrip lengkap dan mandiri upacara pembentukan Genesis.
+///
+/// Skema alokasi bersifat tunggal (Single Treasury): tidak ada field alokasi
+/// Creator/Developer terpisah, dan tidak ada field alamat non-Treasury.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CeremonyTranscript {
     pub ceremony_version: u32,
@@ -117,10 +147,8 @@ pub struct CeremonyTranscript {
     pub state_root: String,
     pub hard_cap_aur: u64,
     pub initial_supply_aur: u64,
-    pub creator_allocation_aur: u64,
-    pub developer_allocation_aur: u64,
-    pub creator_address_hex: String,
-    pub developer_address_hex: String,
+    pub master_treasury_allocation_aur: u64,
+    pub master_treasury_address_hex: String,
     pub participants: Vec<CeremonyParticipant>,
     pub attestations: Vec<CeremonyAttestation>,
     pub total_validator_power: u64,
@@ -157,8 +185,7 @@ struct EmbeddedGenesisMetadata {
     ceremony_transcript_hash: String,
     hard_cap_aur: u64,
     initial_supply_aur: u64,
-    creator_allocation_aur: u64,
-    developer_allocation_aur: u64,
+    master_treasury_allocation_aur: u64,
     total_validator_power: u64,
     quorum_threshold: u64,
     genesis_validators_count: usize,
@@ -181,16 +208,15 @@ pub fn compute_ceremony_signing_message(
 
 /// Kunci-kunci upacara kanonikal untuk pembentukan deterministik rilis resmi.
 pub struct CanonicalCeremonyKeypairs {
-    pub creator: Keypair,
-    pub developer: Keypair,
+    pub master_treasury: Keypair,
     pub validators: Vec<Keypair>,
 }
 
 impl CanonicalCeremonyKeypairs {
-    /// Pembangkitan 6 keypair kanonikal dari seed terdefinisi secara deterministik.
+    /// Pembangkitan 5 keypair kanonikal dari seed terdefinisi secara deterministik
+    /// (1 Master Treasury + 4 Genesis Validator).
     pub fn new_deterministic() -> Self {
-        let creator = Keypair::from_seed(&[0x01; 32]);
-        let developer = Keypair::from_seed(&[0x02; 32]);
+        let master_treasury = Keypair::from_seed(&[0x01; 32]);
         let validators = vec![
             Keypair::from_seed(&[0x11; 32]), // Validator 1 (Alpha)
             Keypair::from_seed(&[0x12; 32]), // Validator 2 (Beta)
@@ -198,8 +224,7 @@ impl CanonicalCeremonyKeypairs {
             Keypair::from_seed(&[0x14; 32]), // Validator 4 (Delta)
         ];
         Self {
-            creator,
-            developer,
+            master_treasury,
             validators,
         }
     }
@@ -208,27 +233,17 @@ impl CanonicalCeremonyKeypairs {
 impl CeremonyTranscript {
     /// Eksekusi upacara genesis deterministik kanonikal menggunakan himpunan keypair.
     pub fn build_and_seal(keys: &CanonicalCeremonyKeypairs) -> Result<Self, CeremonyError> {
-        let creator_addr = keys.creator.derive_address();
-        let dev_addr = keys.developer.derive_address();
+        let treasury_addr = keys.master_treasury.derive_address();
 
         let mut validator_entries = Vec::with_capacity(keys.validators.len());
-        let mut participants = Vec::with_capacity(2 + keys.validators.len());
+        let mut participants = Vec::with_capacity(1 + keys.validators.len());
 
-        // Peserta 1: Creator
+        // Peserta 1: Master Treasury (pemegang eksklusif 100% pasokan genesis)
         participants.push(CeremonyParticipant {
-            role: CeremonyRole::Creator,
-            name: "Creator Sovereign Vault".to_string(),
-            public_key_hex: hex::encode(keys.creator.public_key_bytes()),
-            address_hex: creator_addr.to_hex(),
-            voting_weight: 0,
-        });
-
-        // Peserta 2: Developer
-        participants.push(CeremonyParticipant {
-            role: CeremonyRole::Developer,
-            name: "Developer Core Research Vault".to_string(),
-            public_key_hex: hex::encode(keys.developer.public_key_bytes()),
-            address_hex: dev_addr.to_hex(),
+            role: CeremonyRole::MasterTreasury,
+            name: "Master Treasury Sovereign Vault".to_string(),
+            public_key_hex: hex::encode(keys.master_treasury.public_key_bytes()),
+            address_hex: treasury_addr.to_hex(),
             voting_weight: 0,
         });
 
@@ -262,9 +277,8 @@ impl CeremonyTranscript {
             });
         }
 
-        // Bangun State Genesis σ0 dan Header Blok Nol
-        let genesis: GenesisInitialization =
-            build_genesis(creator_addr, dev_addr, validator_entries);
+        // Bangun State Genesis σ0 dan Header Blok Nol (100% ke Master Treasury)
+        let genesis: GenesisInitialization = build_genesis(treasury_addr, validator_entries);
         let block_hash = genesis.header.compute_block_hash();
         let state_root = genesis.header.state_root;
 
@@ -276,27 +290,17 @@ impl CeremonyTranscript {
             &state_root,
         );
 
-        // Kumpulkan atestasi dari seluruh 6 pihak
+        // Kumpulkan atestasi dari seluruh 5 pihak
         let mut attestations = Vec::with_capacity(participants.len());
         let mut attested_weight: u64 = 0;
 
-        // Tanda tangan Creator
-        let creator_sig = keys.creator.sign(&signing_msg);
+        // Tanda tangan Master Treasury
+        let treasury_sig = keys.master_treasury.sign(&signing_msg);
         attestations.push(CeremonyAttestation {
-            role: CeremonyRole::Creator,
-            participant_name: "Creator Sovereign Vault".to_string(),
-            public_key_hex: hex::encode(keys.creator.public_key_bytes()),
-            signature_hex: hex::encode(creator_sig.as_bytes()),
-            signed_at: GENESIS_TIMESTAMP,
-        });
-
-        // Tanda tangan Developer
-        let dev_sig = keys.developer.sign(&signing_msg);
-        attestations.push(CeremonyAttestation {
-            role: CeremonyRole::Developer,
-            participant_name: "Developer Core Research Vault".to_string(),
-            public_key_hex: hex::encode(keys.developer.public_key_bytes()),
-            signature_hex: hex::encode(dev_sig.as_bytes()),
+            role: CeremonyRole::MasterTreasury,
+            participant_name: "Master Treasury Sovereign Vault".to_string(),
+            public_key_hex: hex::encode(keys.master_treasury.public_key_bytes()),
+            signature_hex: hex::encode(treasury_sig.as_bytes()),
             signed_at: GENESIS_TIMESTAMP,
         });
 
@@ -341,12 +345,10 @@ impl CeremonyTranscript {
             timestamp: GENESIS_TIMESTAMP,
             genesis_block_hash: block_hash.to_hex(),
             state_root: state_root.to_hex(),
-            hard_cap_aur: 66_000_000,
-            initial_supply_aur: 23_100_000,
-            creator_allocation_aur: 19_800_000,
-            developer_allocation_aur: 3_300_000,
-            creator_address_hex: creator_addr.to_hex(),
-            developer_address_hex: dev_addr.to_hex(),
+            hard_cap_aur: GENESIS_INITIAL_SUPPLY_AUR,
+            initial_supply_aur: GENESIS_INITIAL_SUPPLY_AUR,
+            master_treasury_allocation_aur: MASTER_TREASURY_ALLOCATION_AUR,
+            master_treasury_address_hex: treasury_addr.to_hex(),
             participants,
             attestations,
             total_validator_power: CEREMONY_TOTAL_VOTING_POWER,
@@ -371,8 +373,8 @@ impl CeremonyTranscript {
         hasher.update(self.genesis_block_hash.as_bytes());
         hasher.update(self.state_root.as_bytes());
         hasher.update(&self.initial_supply_aur.to_be_bytes());
-        hasher.update(self.creator_address_hex.as_bytes());
-        hasher.update(self.developer_address_hex.as_bytes());
+        hasher.update(&self.master_treasury_allocation_aur.to_be_bytes());
+        hasher.update(self.master_treasury_address_hex.as_bytes());
 
         for att in &self.attestations {
             hasher.update(att.public_key_hex.as_bytes());
@@ -386,37 +388,40 @@ impl CeremonyTranscript {
     /// Verifikasi penuh seluruh tanda tangan, aturan moneter, kuorum validator, dan hash blok.
     pub fn verify(&self) -> Result<CeremonyVerificationReport, CeremonyError> {
         // 1. Verifikasi Invarian Moneter
-        if self.hard_cap_aur != 66_000_000 {
-            return Err(CeremonyError::MonetaryInvariantViolation {
-                reason: format!("Hard cap must be 66,000,000 AUR, got {}", self.hard_cap_aur),
-            });
-        }
-        if self.initial_supply_aur != 23_100_000 {
+        if self.hard_cap_aur != GENESIS_INITIAL_SUPPLY_AUR {
             return Err(CeremonyError::MonetaryInvariantViolation {
                 reason: format!(
-                    "Initial supply must be 23,100,000 AUR (35%), got {}",
+                    "Hard cap must be {GENESIS_INITIAL_SUPPLY_AUR} AUR, got {}",
+                    self.hard_cap_aur
+                ),
+            });
+        }
+        if self.initial_supply_aur != GENESIS_INITIAL_SUPPLY_AUR {
+            return Err(CeremonyError::MonetaryInvariantViolation {
+                reason: format!(
+                    "Initial supply must be {GENESIS_INITIAL_SUPPLY_AUR} AUR (100% Single Treasury), got {}",
                     self.initial_supply_aur
                 ),
             });
         }
-        if self.creator_allocation_aur != 19_800_000 || self.developer_allocation_aur != 3_300_000 {
+        if self.master_treasury_allocation_aur != MASTER_TREASURY_ALLOCATION_AUR {
             return Err(CeremonyError::MonetaryInvariantViolation {
-                reason: "Creator (30%) or Developer (5%) allocation mismatch".to_string(),
+                reason: format!(
+                    "Single Treasury violation: Master Treasury must hold exactly {MASTER_TREASURY_ALLOCATION_AUR} AUR (100% of genesis supply), got {}",
+                    self.master_treasury_allocation_aur
+                ),
             });
         }
 
         // 2. Rekonstruksi Blok Genesis & Validasi Hash
-        let creator_bytes: [u8; 32] = hex::decode(&self.creator_address_hex)
+        let treasury_bytes: [u8; 32] = hex::decode(&self.master_treasury_address_hex)
             .map_err(|e| CeremonyError::Serialization(e.to_string()))?
             .try_into()
-            .map_err(|_| CeremonyError::Serialization("Creator addr must be 32 bytes".to_string()))?;
-        let dev_bytes: [u8; 32] = hex::decode(&self.developer_address_hex)
-            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
-            .try_into()
-            .map_err(|_| CeremonyError::Serialization("Dev addr must be 32 bytes".to_string()))?;
+            .map_err(|_| {
+                CeremonyError::Serialization("Master Treasury addr must be 32 bytes".to_string())
+            })?;
 
-        let creator_addr = Address::from_bytes(creator_bytes);
-        let dev_addr = Address::from_bytes(dev_bytes);
+        let treasury_addr = Address::from_bytes(treasury_bytes);
 
         let mut validator_entries = Vec::new();
         for p in &self.participants {
@@ -438,7 +443,7 @@ impl CeremonyTranscript {
             }
         }
 
-        let genesis = build_genesis(creator_addr, dev_addr, validator_entries);
+        let genesis = build_genesis(treasury_addr, validator_entries);
         let expected_hash = genesis.header.compute_block_hash();
         if expected_hash.to_hex() != self.genesis_block_hash {
             return Err(CeremonyError::GenesisHashMismatch {
@@ -473,8 +478,7 @@ impl CeremonyTranscript {
 
         // 4. Verifikasi Seluruh Tanda Tangan Ed25519 (Strict RFC 8032)
         let mut attested_weight: u64 = 0;
-        let mut has_creator = false;
-        let mut has_developer = false;
+        let mut has_master_treasury = false;
 
         for att in &self.attestations {
             let pubkey_bytes: [u8; 32] = hex::decode(&att.public_key_hex)
@@ -496,8 +500,7 @@ impl CeremonyTranscript {
             })?;
 
             match att.role {
-                CeremonyRole::Creator => has_creator = true,
-                CeremonyRole::Developer => has_developer = true,
+                CeremonyRole::MasterTreasury => has_master_treasury = true,
                 CeremonyRole::Validator(idx) => {
                     let part = self
                         .participants
@@ -513,11 +516,10 @@ impl CeremonyTranscript {
             }
         }
 
-        if !has_creator {
-            return Err(CeremonyError::ParticipantMissing("Creator attestation missing".to_string()));
-        }
-        if !has_developer {
-            return Err(CeremonyError::ParticipantMissing("Developer attestation missing".to_string()));
+        if !has_master_treasury {
+            return Err(CeremonyError::ParticipantMissing(
+                "Master Treasury attestation missing".to_string(),
+            ));
         }
 
         // 5. Verifikasi Kuorum Validator
@@ -548,7 +550,7 @@ impl CeremonyTranscript {
             attested_validator_power: attested_weight,
             quorum_threshold: self.quorum_threshold,
             quorum_status: format!("PASSED ({attested_weight}/{CEREMONY_TOTAL_VOTING_POWER} >= {CEREMONY_QUORUM_THRESHOLD})"),
-            monetary_audit_status: "PASSED (100% Invariant Compliant: 35% Genesis, Zero-Float)".to_string(),
+            monetary_audit_status: "PASSED (100% Invariant Compliant: 100% Treasury Genesis, Zero-Float)".to_string(),
             verified_at: self.timestamp,
         })
     }
@@ -565,17 +567,14 @@ impl CeremonyTranscript {
 
     /// Merekonstruksi `GenesisInitialization` lengkap dari transkrip yang terverifikasi.
     pub fn build_genesis_initialization(&self) -> Result<GenesisInitialization, CeremonyError> {
-        let creator_bytes: [u8; 32] = hex::decode(&self.creator_address_hex)
+        let treasury_bytes: [u8; 32] = hex::decode(&self.master_treasury_address_hex)
             .map_err(|e| CeremonyError::Serialization(e.to_string()))?
             .try_into()
-            .map_err(|_| CeremonyError::Serialization("Creator addr must be 32 bytes".to_string()))?;
-        let dev_bytes: [u8; 32] = hex::decode(&self.developer_address_hex)
-            .map_err(|e| CeremonyError::Serialization(e.to_string()))?
-            .try_into()
-            .map_err(|_| CeremonyError::Serialization("Dev addr must be 32 bytes".to_string()))?;
+            .map_err(|_| {
+                CeremonyError::Serialization("Master Treasury addr must be 32 bytes".to_string())
+            })?;
 
-        let creator_addr = Address::from_bytes(creator_bytes);
-        let dev_addr = Address::from_bytes(dev_bytes);
+        let treasury_addr = Address::from_bytes(treasury_bytes);
 
         let mut validator_entries = Vec::new();
         for p in &self.participants {
@@ -597,7 +596,7 @@ impl CeremonyTranscript {
             }
         }
 
-        let genesis = build_genesis(creator_addr, dev_addr, validator_entries);
+        let genesis = build_genesis(treasury_addr, validator_entries);
         Ok(genesis)
     }
 
@@ -621,20 +620,22 @@ impl CeremonyTranscript {
                 .expect("Embedded mainnet genesis artifact must be valid JSON");
 
         assert_eq!(artifact.metadata.network, "aurion-mainnet");
-        assert_eq!(artifact.metadata.protocol_version, transcript.protocol_version);
+        assert_eq!(
+            artifact.metadata.protocol_version,
+            transcript.protocol_version
+        );
         assert_eq!(
             artifact.metadata.ceremony_transcript_hash,
             transcript.ceremony_hash
         );
         assert_eq!(artifact.metadata.hard_cap_aur, transcript.hard_cap_aur);
-        assert_eq!(artifact.metadata.initial_supply_aur, transcript.initial_supply_aur);
         assert_eq!(
-            artifact.metadata.creator_allocation_aur,
-            transcript.creator_allocation_aur
+            artifact.metadata.initial_supply_aur,
+            transcript.initial_supply_aur
         );
         assert_eq!(
-            artifact.metadata.developer_allocation_aur,
-            transcript.developer_allocation_aur
+            artifact.metadata.master_treasury_allocation_aur,
+            transcript.master_treasury_allocation_aur
         );
         assert_eq!(
             artifact.metadata.total_validator_power,
@@ -655,15 +656,15 @@ impl CeremonyTranscript {
         assert_eq!(computed_state_root, CANONICAL_GENESIS_STATE_ROOT);
         assert_eq!(artifact.genesis_block.header.chain_id, GENESIS_CHAIN_ID);
         assert_eq!(artifact.genesis_block.header.height, 0);
-        assert_eq!(
-            artifact.genesis_block.header.timestamp,
-            GENESIS_TIMESTAMP
-        );
+        assert_eq!(artifact.genesis_block.header.timestamp, GENESIS_TIMESTAMP);
         assert_eq!(
             artifact.genesis_block.header.state_root,
             CANONICAL_GENESIS_STATE_ROOT
         );
-        assert_eq!(artifact.genesis_block.header.block_hash, CANONICAL_GENESIS_HASH);
+        assert_eq!(
+            artifact.genesis_block.header.block_hash,
+            CANONICAL_GENESIS_HASH
+        );
 
         genesis
     }

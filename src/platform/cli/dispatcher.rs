@@ -46,8 +46,7 @@ struct GenesisInfo {
     genesis_block_hash: String,
     state_root: String,
     initial_supply_aur: u64,
-    creator_allocation_aur: u64,
-    developer_allocation_aur: u64,
+    master_treasury_allocation_aur: u64,
 }
 
 #[derive(Serialize)]
@@ -306,7 +305,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 version: env!("CARGO_PKG_VERSION"),
                 architecture: "Single Sovereign Primary Binary (/bin/aurion)",
                 hard_cap_aur: 66_000_000,
-                quantum_scale: "10^8 (1 AUR = 100,000,000 Quanta)",
+                quantum_scale: "10^9 (1 AUR = 1,000,000,000 Quanta)",
                 consensus: "Round-Based BFT Finality (>2/3 Quorum)",
                 hashing: "Blake3 256-bit",
                 signatures: "Ed25519 (Strict Anti-Malleability)",
@@ -315,7 +314,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 println!("Aurion Sovereign Blockchain v{}", info.version);
                 println!("Architecture: Single Sovereign Binary (/bin/aurion)");
                 println!("Invariant: #![forbid(unsafe_code)], Zero-Float exact Quantum (u128)");
-                println!("Hard Cap: 66,000,000 AUR | Genesis: 23,100,000 AUR (35%)");
+                println!(
+                    "Hard Cap: {} AUR",
+                    crate::core::MAX_SUPPLY_QUANTA / crate::core::QUANTA_PER_AUR
+                );
             });
             Ok(())
         }
@@ -327,67 +329,54 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let action = args.get(1).map(|s| s.as_str()).unwrap_or("inspect");
                 let mut keys = CanonicalCeremonyKeypairs::new_deterministic();
 
-                if args
-                    .windows(2)
-                    .any(|w| w[0] == "--creator-password" || w[0] == "--creator-passphrase")
-                {
-                    eprintln!("[AURION WARNING] Opsi --creator-password/--creator-passphrase pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --creator-password-stdin, env AURION_CREATOR_PASSWORD, atau prompt interaktif.");
+                if args.windows(2).any(|w| {
+                    w[0] == "--treasury-password"
+                        || w[0] == "--creator-password"
+                        || w[0] == "--treasury-passphrase"
+                        || w[0] == "--creator-passphrase"
+                }) {
+                    eprintln!("[AURION WARNING] Opsi password pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --treasury-password-stdin, env AURION_TREASURY_PASSWORD, atau prompt interaktif.");
                 }
-                let creator_keystore_arg = args
+                let treasury_keystore_arg = args
                     .windows(2)
-                    .find(|w| w[0] == "--creator-keystore")
+                    .find(|w| w[0] == "--treasury-keystore" || w[0] == "--creator-keystore")
                     .map(|w| w[1].as_str());
-                if let Some(path) = creator_keystore_arg {
-                    let content = std::fs::read_to_string(path)
-                        .map_err(|e| format!("Failed to read creator keystore from {path}: {e}"))?;
-                    let ks = Keystore::from_json_str(&content)
-                        .map_err(|e| format!("Failed to parse creator keystore: {e}"))?;
-                    let creator_stdin = args.iter().any(|a| {
-                        a == "--creator-password-stdin" || a == "--creator-passphrase-stdin"
-                    });
-                    let creator_pw = resolve_password(
-                        creator_stdin,
-                        Some("AURION_CREATOR_PASSWORD"),
-                        "Masukkan password Creator key",
-                        false,
-                    )
-                    .map_err(|e| format!("Gagal memperoleh password Creator key: {e}"))?;
-                    let sk = ks
-                        .unlock_and_migrate_to_file(&creator_pw, path)
-                        .map_err(|e| format!("Failed to decrypt creator keystore: {e}"))?;
-                    keys.creator = Keypair::from_seed(&sk.to_bytes());
-                }
-
-                if args
-                    .windows(2)
-                    .any(|w| w[0] == "--developer-password" || w[0] == "--dev-password")
-                {
-                    eprintln!("[AURION WARNING] Opsi --developer-password/--dev-password pada argv TIDAK AMAN (terekspos di process table & shell history) dan diabaikan. Gunakan --developer-password-stdin, env AURION_DEVELOPER_PASSWORD, atau prompt interaktif.");
-                }
-                let dev_keystore_arg = args
-                    .windows(2)
-                    .find(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore")
-                    .map(|w| w[1].as_str());
-                if let Some(path) = dev_keystore_arg {
+                if let Some(path) = treasury_keystore_arg {
                     let content = std::fs::read_to_string(path).map_err(|e| {
-                        format!("Failed to read developer keystore from {path}: {e}")
+                        format!("Failed to read Master Treasury keystore from {path}: {e}")
                     })?;
                     let ks = Keystore::from_json_str(&content)
-                        .map_err(|e| format!("Failed to parse developer keystore: {e}"))?;
-                    let dev_stdin = args
-                        .iter()
-                        .any(|a| a == "--developer-password-stdin" || a == "--dev-password-stdin");
-                    let dev_pw = resolve_password(
-                        dev_stdin,
-                        Some("AURION_DEVELOPER_PASSWORD"),
-                        "Masukkan password Developer key",
+                        .map_err(|e| format!("Failed to parse Master Treasury keystore: {e}"))?;
+                    let treasury_stdin = args.iter().any(|a| {
+                        a == "--treasury-password-stdin"
+                            || a == "--creator-password-stdin"
+                            || a == "--treasury-passphrase-stdin"
+                            || a == "--creator-passphrase-stdin"
+                    });
+                    let treasury_pw = resolve_password(
+                        treasury_stdin,
+                        Some("AURION_TREASURY_PASSWORD"),
+                        "Masukkan password Master Treasury key",
                         false,
                     )
-                    .map_err(|e| format!("Gagal memperoleh password Developer key: {e}"))?;
+                    .map_err(|e| format!("Gagal memperoleh password Master Treasury key: {e}"))?;
                     let sk = ks
-                        .unlock_and_migrate_to_file(&dev_pw, path)
-                        .map_err(|e| format!("Failed to decrypt developer keystore: {e}"))?;
-                    keys.developer = Keypair::from_seed(&sk.to_bytes());
+                        .unlock_and_migrate_to_file(&treasury_pw, path)
+                        .map_err(|e| format!("Failed to decrypt Master Treasury keystore: {e}"))?;
+                    keys.master_treasury = Keypair::from_seed(&sk.to_bytes());
+                }
+
+                // Model Single Treasury: opsi keystore Developer telah dihapus total
+                // karena tidak ada lagi alokasi non-Treasury pada Blok 0.
+                if args
+                    .windows(2)
+                    .any(|w| w[0] == "--developer-keystore" || w[0] == "--dev-keystore")
+                {
+                    eprintln!("[AURION ERROR] Opsi --developer-keystore/--dev-keystore DIHAPUS pada model Single Treasury (AUR-GENESIS: 100% pasokan Genesis hanya ke Master Treasury).");
+                    return Err(
+                        "Developer keystore is no longer part of the Single Treasury genesis model"
+                            .to_string(),
+                    );
                 }
 
                 match action {
@@ -434,19 +423,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                                 transcript.hard_cap_aur
                             );
                             println!(
-                                "  Initial Supply (35%):     {} AUR",
+                                "  Initial Supply:           {} AUR",
                                 transcript.initial_supply_aur
                             );
                             println!(
-                                "  Creator Allocation:       {} AUR (30%)",
-                                transcript.creator_allocation_aur
+                                "  Master Treasury Alloc:   {} AUR (100%)",
+                                transcript.master_treasury_allocation_aur
                             );
                             println!(
-                                "  Developer Allocation:     {} AUR (5%)",
-                                transcript.developer_allocation_aur
-                            );
-                            println!(
-                                "  Participants:             {} (Creator, Dev, 4 Validators)",
+                                "  Participants:             {} (Master Treasury + 4 Validators)",
                                 transcript.participants.len()
                             );
                             println!(
@@ -589,14 +574,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 return Ok(());
             }
 
-            let creator_addr = Address::from_bytes([1u8; 32]);
-            let dev_addr = Address::from_bytes([2u8; 32]);
-            let val_entry = ValidatorEntry {
-                validator_id: creator_addr,
-                consensus_pubkey: [1u8; 32],
-                voting_weight: 100,
-            };
-            let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
+            // Inspektor Genesis memakai artefak Mainnet kanonik yang disegel ke dalam
+            // binary, bukan alamat placeholder, agar hash yang dilaporkan selalu
+            // identik dengan identitas rantai yang nyata (Single Treasury 100%).
+            let genesis = CeremonyTranscript::canonical_mainnet_genesis();
             let gen_hash = genesis.header.compute_block_hash();
 
             match sub {
@@ -613,9 +594,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         timestamp: genesis.header.timestamp,
                         genesis_block_hash: gen_hash.to_hex(),
                         state_root: genesis.header.state_root.to_hex(),
-                        initial_supply_aur: 23_100_000,
-                        creator_allocation_aur: 19_800_000,
-                        developer_allocation_aur: 3_300_000,
+                        initial_supply_aur: crate::genesis::ceremony::GENESIS_INITIAL_SUPPLY_AUR,
+                        master_treasury_allocation_aur:
+                            crate::genesis::ceremony::MASTER_TREASURY_ALLOCATION_AUR,
                     };
                     format.print(&info, || {
                         println!(
@@ -631,15 +612,15 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         println!("  Genesis Timestamp:    {}", info.timestamp);
                         println!("  Genesis Block Hash:   {}", info.genesis_block_hash);
                         println!("  Initial State Root:   {}", info.state_root);
-                        println!("  Initial 35% Supply:   {} AUR", info.initial_supply_aur);
                         println!(
-                            "  Creator Allocation:   {} AUR (30%)",
-                            info.creator_allocation_aur
+                            "  Initial Supply:      {} AUR (100%)",
+                            info.initial_supply_aur
                         );
                         println!(
-                            "  Developer Allocation: {} AUR (5%)",
-                            info.developer_allocation_aur
+                            "  Master Treasury:     {} AUR (100% — Single Treasury)",
+                            info.master_treasury_allocation_aur
                         );
+                        println!("  Allocation Split:    NONE (Single Treasury model)");
                         println!(
                             "=================================================================="
                         );
@@ -752,11 +733,11 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     (crate::core::Quantum::ZERO, 0)
                 };
 
-                let whole = bal.as_u128() / 100_000_000;
-                let frac = bal.as_u128() % 100_000_000;
+                let whole = bal.as_u128() / crate::core::QUANTA_PER_AUR;
+                let frac = bal.as_u128() % crate::core::QUANTA_PER_AUR;
                 let info = AccountInfo {
                     address: addr_str.to_string(),
-                    balance_aur: format!("{whole}.{frac:08}"),
+                    balance_aur: format!("{whole}.{frac:09}"),
                     balance_quanta: bal.as_u128(),
                     nonce,
                 };
@@ -1071,9 +1052,9 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                             let _ingress_handle =
                                 observer_node.spawn_observer_ingress(observer, observer_shutdown);
                         }
-                        Err(error) => eprintln!(
-                            "[AURION SENTRY] Block ingress subscription failed: {error}"
-                        ),
+                        Err(error) => {
+                            eprintln!("[AURION SENTRY] Block ingress subscription failed: {error}")
+                        }
                     }
                 });
             }
@@ -1258,13 +1239,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 connect.push(normalize_tcp_endpoint(peer));
             }
             let connect_refs = connect.iter().map(String::as_str).collect::<Vec<_>>();
-            let zenoh_session = ZenohBftTransport::open_session(
-                node.config.chain_id,
-                &endpoint,
-                &connect_refs,
-            )
-            .await
-            .map_err(|error| format!("Validator Zenoh initialization failed: {error}"))?;
+            let zenoh_session =
+                ZenohBftTransport::open_session(node.config.chain_id, &endpoint, &connect_refs)
+                    .await
+                    .map_err(|error| format!("Validator Zenoh initialization failed: {error}"))?;
             let consensus_handle = node
                 .clone()
                 .spawn_consensus_engine_with_shutdown(
@@ -1281,11 +1259,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 let loc_target = endpoint.clone();
                 let identity = val_key.clone();
                 let chain_id = node.config.chain_id;
-                let current_h = node
-                    .ledger
-                    .lock()
-                    .map(|l| l.latest_height())
-                    .unwrap_or(0);
+                let current_h = node.ledger.lock().map(|l| l.latest_height()).unwrap_or(0);
                 let bootnode_node = Arc::clone(&node);
                 tokio::spawn(async move {
                     let transport_cfg = crate::wire::TransportConfig {
@@ -1417,13 +1391,12 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             };
 
             let creator_addr = Address::from_bytes([1u8; 32]);
-            let dev_addr = Address::from_bytes([2u8; 32]);
             let val_entry = ValidatorEntry {
                 validator_id: creator_addr,
                 consensus_pubkey: [1u8; 32],
                 voting_weight: 100,
             };
-            let genesis = build_genesis(creator_addr, dev_addr, vec![val_entry]);
+            let genesis = build_genesis(creator_addr, vec![val_entry]);
             let node = AurionNode::new(config, genesis, None, None);
 
             println!(
@@ -1559,10 +1532,10 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     });
                     let amount_quanta: u128 = get_arg_value(&args, "--amount-quanta")
                         .and_then(|s| s.parse().ok())
-                        .unwrap_or(100_000_000); // 1 AUR
+                        .unwrap_or(crate::core::QUANTA_PER_AUR); // 1 AUR
 
-                    let whole = amount_quanta / 100_000_000;
-                    let frac = amount_quanta % 100_000_000;
+                    let whole = amount_quanta / crate::core::QUANTA_PER_AUR;
+                    let frac = amount_quanta % crate::core::QUANTA_PER_AUR;
 
                     let gas_used = 10_000; // Base L2 gas
                     let fee_quanta = 10_000; // 1 Quanta per gas
@@ -3651,9 +3624,7 @@ fn attach_node_faucet(
     let dispenser = FaucetDispenser::new(keypair, node.config.chain_id, config);
 
     println!("[AURION FAUCET] Aktif — rekening faucet: {faucet_address}");
-    println!(
-        "[AURION FAUCET] Dana faucet WAJIB berasal dari Master Treasury (AUR-MON §2.3)."
-    );
+    println!("[AURION FAUCET] Dana faucet WAJIB berasal dari Master Treasury (AUR-MON §2.3).");
     println!("[AURION FAUCET] Jalankan 'aurion faucet init' bila rekening ini belum didanai.");
 
     node.rpc_context.attach_faucet(dispenser);

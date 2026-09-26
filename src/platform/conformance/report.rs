@@ -34,7 +34,10 @@ pub fn print_terminal_report(results: &[PillarExecutionResult]) {
     println!("--------------------------------------------------------------------------------");
     let total_time_ms = total_time_micros / 1000;
     let total_time_rem_us = total_time_micros % 1000;
-    println!("  Total Verification Time: {}.{:03} ms", total_time_ms, total_time_rem_us);
+    println!(
+        "  Total Verification Time: {}.{:03} ms",
+        total_time_ms, total_time_rem_us
+    );
 
     if all_passed {
         println!("\n  \x1b[32m>>> PROTOCOL COMPLIANCE VERDICT: 100% CANONICAL & PASS (8/8 PILARS) <<<\x1b[0m");
@@ -53,17 +56,36 @@ pub fn generate_json_report(results: &[PillarExecutionResult]) -> String {
     out.push_str("  \"standard\": \"RFC-2119-NORMATIVE\",\n");
     out.push_str("  \"total_pillars\": 8,\n");
 
-    let passed_count = results.iter().filter(|r| r.status == TestStatus::Passed).count();
+    let passed_count = results
+        .iter()
+        .filter(|r| r.status == TestStatus::Passed)
+        .count();
     out.push_str(&format!("  \"passed_pillars\": {passed_count},\n"));
-    out.push_str(&format!("  \"verdict\": \"{}\",\n", if passed_count == 8 { "CERTIFIED_CANONICAL" } else { "NON_COMPLIANT" }));
+    out.push_str(&format!(
+        "  \"verdict\": \"{}\",\n",
+        if passed_count == 8 {
+            "CERTIFIED_CANONICAL"
+        } else {
+            "NON_COMPLIANT"
+        }
+    ));
     out.push_str("  \"pillars\": [\n");
 
     for (idx, r) in results.iter().enumerate() {
         out.push_str("    {\n");
         out.push_str(&format!("      \"pillar_id\": {},\n", r.pillar_id));
         out.push_str(&format!("      \"name\": \"{}\",\n", r.name));
-        out.push_str(&format!("      \"status\": \"{}\",\n", match &r.status { TestStatus::Passed => "PASSED", TestStatus::Failed(_) => "FAILED" }));
-        out.push_str(&format!("      \"duration_microseconds\": {},\n", r.duration_micros));
+        out.push_str(&format!(
+            "      \"status\": \"{}\",\n",
+            match &r.status {
+                TestStatus::Passed => "PASSED",
+                TestStatus::Failed(_) => "FAILED",
+            }
+        ));
+        out.push_str(&format!(
+            "      \"duration_microseconds\": {},\n",
+            r.duration_micros
+        ));
         out.push_str(&format!("      \"detail\": \"{}\"\n", r.detail));
         if idx + 1 < results.len() {
             out.push_str("    },\n");

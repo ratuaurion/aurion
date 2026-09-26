@@ -110,8 +110,12 @@ impl GovernanceEngine {
         // Pastikan signal_bit tidak bertabrakan dengan proposal lain yang aktif
         for existing in self.proposals.values() {
             if existing.signal_bit == proposal.signal_bit {
-                let status = self.statuses.get(&existing.proposal_id).unwrap_or(&ProposalStatus::Draft);
-                if *status == ProposalStatus::ActiveSignaling || *status == ProposalStatus::LockedIn {
+                let status = self
+                    .statuses
+                    .get(&existing.proposal_id)
+                    .unwrap_or(&ProposalStatus::Draft);
+                if *status == ProposalStatus::ActiveSignaling || *status == ProposalStatus::LockedIn
+                {
                     return Err("Signal bit currently in use by an active proposal");
                 }
             }
@@ -131,16 +135,24 @@ impl GovernanceEngine {
             let proposal = self.proposals.get(&id).cloned().unwrap();
             let mut status = *self.statuses.get(&id).unwrap_or(&ProposalStatus::Draft);
 
-            let window_end = proposal.start_height.saturating_add(proposal.evaluation_window_blocks);
+            let window_end = proposal
+                .start_height
+                .saturating_add(proposal.evaluation_window_blocks);
 
             // Transisi dari Draft ke ActiveSignaling saat mencapai start_height
-            if status == ProposalStatus::Draft && height >= proposal.start_height && height < window_end {
+            if status == ProposalStatus::Draft
+                && height >= proposal.start_height
+                && height < window_end
+            {
                 status = ProposalStatus::ActiveSignaling;
                 self.statuses.insert(id, status);
             }
 
             // Hitung suara pensinyalan selama jendela evaluasi aktif
-            if status == ProposalStatus::ActiveSignaling && height >= proposal.start_height && height < window_end {
+            if status == ProposalStatus::ActiveSignaling
+                && height >= proposal.start_height
+                && height < window_end
+            {
                 let mask = 1u32 << proposal.signal_bit;
                 if (version_signal & mask) != 0 {
                     let count = self.signal_tallies.entry(id).or_insert(0);
@@ -152,7 +164,8 @@ impl GovernanceEngine {
                     let count = *self.signal_tallies.get(&id).unwrap_or(&0);
                     // Hitung persentase dukungan dalam bps (basis points): count * 10000 / window
                     let support_bps = if proposal.evaluation_window_blocks > 0 {
-                        ((count as u128 * 10_000) / (proposal.evaluation_window_blocks as u128)) as u32
+                        ((count as u128 * 10_000) / (proposal.evaluation_window_blocks as u128))
+                            as u32
                     } else {
                         0
                     };
@@ -216,7 +229,8 @@ mod tests {
     #[test]
     fn test_governance_lifecycle_activation() {
         let mut gov = GovernanceEngine::new(1);
-        let proposal = UpgradeProposal::new(101, "Aurion Fast Finality V2", 2, 1, 10, 20, 35).unwrap();
+        let proposal =
+            UpgradeProposal::new(101, "Aurion Fast Finality V2", 2, 1, 10, 20, 35).unwrap();
         gov.register_proposal(proposal).unwrap();
 
         assert_eq!(gov.get_status(101), Some(ProposalStatus::Draft));
@@ -258,7 +272,11 @@ mod tests {
         // Hanya sinyalkan 10 dari 20 blok (50% < 80%)
         let signal_mask = 1u32 << 2;
         for h in 0..30 {
-            let signal = if (10..20).contains(&h) { signal_mask } else { 0 };
+            let signal = if (10..20).contains(&h) {
+                signal_mask
+            } else {
+                0
+            };
             gov.record_block(h, signal);
         }
 

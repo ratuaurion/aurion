@@ -3,9 +3,7 @@
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
 use crate::core::{Address, Hash256, Signature};
-use crate::crypto::{
-    blake3_hash, derive_address_from_pubkey, ed25519_verify_strict, Keypair,
-};
+use crate::crypto::{blake3_hash, derive_address_from_pubkey, ed25519_verify_strict, Keypair};
 use thiserror::Error;
 
 pub const PROTOCOL_VERSION_V1: u32 = 1;
@@ -301,7 +299,9 @@ pub fn validate_handshake_hello(
         &hello.public_key,
         preimage_hash.as_bytes(),
         &hello.signature,
-    ).is_err() {
+    )
+    .is_err()
+    {
         return Err(HandshakeError::InvalidSignature);
     }
 
@@ -338,11 +338,7 @@ pub fn validate_handshake_ack(
         &ack.public_key,
     );
 
-    if ed25519_verify_strict(
-        &ack.public_key,
-        preimage_hash.as_bytes(),
-        &ack.signature,
-    ).is_err() {
+    if ed25519_verify_strict(&ack.public_key, preimage_hash.as_bytes(), &ack.signature).is_err() {
         return Err(HandshakeError::InvalidSignature);
     }
 

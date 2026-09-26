@@ -33,10 +33,7 @@ pub fn encode_address_bech32m(address: &Address, hrp_str: &str) -> Result<String
 }
 
 /// Decode string alamat Bech32m ke alamat kanonikal 32-byte.
-pub fn decode_address_bech32m(
-    encoded: &str,
-    expected_hrp: &str,
-) -> Result<Address, Bech32mError> {
+pub fn decode_address_bech32m(encoded: &str, expected_hrp: &str) -> Result<Address, Bech32mError> {
     let parsed = CheckedHrpstring::new::<Bech32m>(encoded)
         .map_err(|e| Bech32mError::InvalidFormat(e.to_string()))?;
 

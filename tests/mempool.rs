@@ -3,9 +3,7 @@
 
 use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::Keypair;
-use aurion::mempool::{
-    MempoolEngine, MempoolError, TransactionReceipt, TransactionState,
-};
+use aurion::mempool::{MempoolEngine, MempoolError, TransactionReceipt, TransactionState};
 use aurion::state::account::Account;
 use aurion::transaction::types::{Transaction, TxType};
 
@@ -43,9 +41,13 @@ fn test_mempool_admission_success() {
     let account = Account::new(Quantum::new(1_000_000_000), 0);
     let mut mempool = MempoolEngine::new(100, 3600);
 
-    let (tx, pubkey) = create_signed_tx(&keypair, 0, Quantum::new(100_000_000), Quantum::new(10_000));
+    let (tx, pubkey) =
+        create_signed_tx(&keypair, 0, Quantum::new(100_000_000), Quantum::new(10_000));
     let res = mempool.submit_transaction(tx, &pubkey, 1000, &account);
-    assert!(res.is_ok(), "Transaksi sah dengan saldo cukup wajib diterima");
+    assert!(
+        res.is_ok(),
+        "Transaksi sah dengan saldo cukup wajib diterima"
+    );
     assert_eq!(mempool.len(), 1);
 }
 
@@ -69,12 +71,16 @@ fn test_mempool_rbf_mandate_enforcement() {
     let mut mempool = MempoolEngine::new(100, 3600);
 
     // 1. Kirim transaksi awal dengan fee = 100_000 Quanta
-    let (tx1, pubkey) = create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(100_000));
-    let tx1_id = mempool.submit_transaction(tx1, &pubkey, 1000, &account).unwrap();
+    let (tx1, pubkey) =
+        create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(100_000));
+    let tx1_id = mempool
+        .submit_transaction(tx1, &pubkey, 1000, &account)
+        .unwrap();
     assert_eq!(mempool.len(), 1);
 
     // 2. Coba ganti dengan nonce sama tapi kenaikan fee hanya +5% (105_000) -> WAJIB DITOLAK
-    let (tx2_fail, _) = create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(105_000));
+    let (tx2_fail, _) =
+        create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(105_000));
     let res_fail = mempool.submit_transaction(tx2_fail, &pubkey, 1010, &account);
     assert!(matches!(
         res_fail,
@@ -83,8 +89,11 @@ fn test_mempool_rbf_mandate_enforcement() {
     assert_eq!(mempool.len(), 1);
 
     // 3. Coba ganti dengan nonce sama dan kenaikan fee +10% (110_000) -> WAJIB DITERIMA
-    let (tx2_ok, _) = create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(110_000));
-    let tx2_id = mempool.submit_transaction(tx2_ok, &pubkey, 1020, &account).unwrap();
+    let (tx2_ok, _) =
+        create_signed_tx(&keypair, 0, Quantum::new(10_000_000), Quantum::new(110_000));
+    let tx2_id = mempool
+        .submit_transaction(tx2_ok, &pubkey, 1020, &account)
+        .unwrap();
     assert_eq!(mempool.len(), 1);
     assert_ne!(tx1_id, tx2_id);
     assert!(mempool.entries.contains_key(&tx2_id));
@@ -102,13 +111,19 @@ fn test_mempool_capacity_eviction_anti_dos() {
 
     let (tx1, p1) = create_signed_tx(&k1, 0, Quantum::new(100), Quantum::new(10_000));
     let (tx2, p2) = create_signed_tx(&k2, 0, Quantum::new(100), Quantum::new(20_000));
-    mempool.submit_transaction(tx1, &p1, 1000, &account).unwrap();
-    mempool.submit_transaction(tx2, &p2, 1000, &account).unwrap();
+    mempool
+        .submit_transaction(tx1, &p1, 1000, &account)
+        .unwrap();
+    mempool
+        .submit_transaction(tx2, &p2, 1000, &account)
+        .unwrap();
     assert_eq!(mempool.len(), 2);
 
     // Transaksi ke-3 dengan fee 50_000 (lebih tinggi dari tx1=10_000) -> tx1 tergusur!
     let (tx3, p3) = create_signed_tx(&k3, 0, Quantum::new(100), Quantum::new(50_000));
-    let tx3_id = mempool.submit_transaction(tx3, &p3, 1000, &account).unwrap();
+    let tx3_id = mempool
+        .submit_transaction(tx3, &p3, 1000, &account)
+        .unwrap();
     assert_eq!(mempool.len(), 2);
     assert!(mempool.entries.contains_key(&tx3_id));
 }

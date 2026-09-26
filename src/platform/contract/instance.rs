@@ -508,7 +508,9 @@ impl<P: Provider, S: Signer> ContractInstance<P, S> {
             Some(n) => n,
             None => provider.get_nonce(&sender)?,
         };
-        let fee = request.fee.unwrap_or_else(|| auto_deploy_fee(request.constructor.len()));
+        let fee = request
+            .fee
+            .unwrap_or_else(|| auto_deploy_fee(request.constructor.len()));
         if fee.as_u128() < MIN_TX_FEE_QUANTA {
             return Err(ContractError::FeeBelowMinimum(fee.as_u128()));
         }

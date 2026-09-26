@@ -6,13 +6,12 @@
 //! Setiap REQ di-test secara terpisah, menggunakan hanya API aktual yang ter-ekspor.
 
 use aurion::interop::{
-    AnomalyEvent, AnomalySeverity, BridgeCircuitBreaker, BridgeStatus, ChainId,
-    CrossChainAssetVault, CrossChainMessage, CrossChainMessageParams, CrossDomainIdentityBinding,
-    DecentralizedStateReadRelay, EvmStateVerifier, ExternalHeaderEntry, FinancialRateLimiter,
-    HeaderSyncTracker, L4SecurityGate, MultiProverEngine, ProofPayload, ProtocolId, ProverId,
-    ProverVerdict, SovereignIdentityResolver, StateReadQuery, ThresholdCustodyAdapter,
-    UniversalNullifierRegistry, ZkStateProofVerifier,
-    decode_envelope, encode_envelope,
+    decode_envelope, encode_envelope, AnomalyEvent, AnomalySeverity, BridgeCircuitBreaker,
+    BridgeStatus, ChainId, CrossChainAssetVault, CrossChainMessage, CrossChainMessageParams,
+    CrossDomainIdentityBinding, DecentralizedStateReadRelay, EvmStateVerifier, ExternalHeaderEntry,
+    FinancialRateLimiter, HeaderSyncTracker, L4SecurityGate, MultiProverEngine, ProofPayload,
+    ProtocolId, ProverId, ProverVerdict, SovereignIdentityResolver, StateReadQuery,
+    ThresholdCustodyAdapter, UniversalNullifierRegistry, ZkStateProofVerifier,
 };
 use aurion::primitives::core::Quantum;
 use blake3::Hasher;
@@ -44,9 +43,13 @@ fn make_msg(src: ChainId, dst: ChainId, nonce: u64) -> CrossChainMessage {
 #[test]
 fn req_l4_01_canonical_envelope_codec_roundtrip() {
     let msg = make_msg(ChainId::Ethereum, ChainId::AurionL1, 1);
-    let encoded = encode_envelope(&msg, BridgeStatus::Active).expect("REQ-L4-01: encode must succeed");
+    let encoded =
+        encode_envelope(&msg, BridgeStatus::Active).expect("REQ-L4-01: encode must succeed");
     let (decoded, _status) = decode_envelope(&encoded).expect("REQ-L4-01: decode must succeed");
-    assert_eq!(msg.packet_id, decoded.packet_id, "REQ-L4-01: packet_id must survive roundtrip");
+    assert_eq!(
+        msg.packet_id, decoded.packet_id,
+        "REQ-L4-01: packet_id must survive roundtrip"
+    );
     assert_eq!(msg.source_chain, decoded.source_chain);
     assert_eq!(msg.destination_chain, decoded.destination_chain);
     assert_eq!(msg.sequence_nonce, decoded.sequence_nonce);
@@ -58,7 +61,10 @@ fn req_l4_01_canonical_envelope_codec_roundtrip() {
 #[test]
 fn req_l4_02_packet_integrity_self_validation() {
     let msg = make_msg(ChainId::Bitcoin, ChainId::AurionL1, 2);
-    assert!(msg.verify_integrity(), "REQ-L4-02: packet_id must match Blake3 digest of fields");
+    assert!(
+        msg.verify_integrity(),
+        "REQ-L4-02: packet_id must match Blake3 digest of fields"
+    );
 }
 
 /// REQ-L4-03: Payload size limit enforcement (DoS prevention — 64 KB cap).
@@ -77,7 +83,10 @@ fn req_l4_03_payload_dos_size_limit() {
         max_fee: q(1_000),
         proof: ProofPayload::None,
     });
-    assert!(oversized.is_err(), "REQ-L4-03: oversized payload must be rejected");
+    assert!(
+        oversized.is_err(),
+        "REQ-L4-03: oversized payload must be rejected"
+    );
 }
 
 /// REQ-L4-04: Bitcoin SPV Merkle proof verifier.
@@ -151,10 +160,24 @@ fn req_l4_07_trust_minimized_relayer_finality() {
         prev = bh;
     }
 
-    assert_eq!(tracker.latest_height(), 9, "REQ-L4-07: latest height must be 9");
-    assert_eq!(tracker.confirmed_height(), 6, "REQ-L4-07: confirmed height = 9 - 3 = 6");
-    assert!(tracker.is_confirmed(6), "REQ-L4-07: height 6 must be confirmed");
-    assert!(!tracker.is_confirmed(7), "REQ-L4-07: height 7 must NOT be confirmed");
+    assert_eq!(
+        tracker.latest_height(),
+        9,
+        "REQ-L4-07: latest height must be 9"
+    );
+    assert_eq!(
+        tracker.confirmed_height(),
+        6,
+        "REQ-L4-07: confirmed height = 9 - 3 = 6"
+    );
+    assert!(
+        tracker.is_confirmed(6),
+        "REQ-L4-07: height 6 must be confirmed"
+    );
+    assert!(
+        !tracker.is_confirmed(7),
+        "REQ-L4-07: height 7 must NOT be confirmed"
+    );
 }
 
 /// REQ-L4-08: Cross-chain asset vault lock-and-mint lifecycle with conservation invariant.
@@ -170,7 +193,10 @@ fn req_l4_08_vault_lock_mint_conservation() {
         .process_external_lock_and_mint(amount, ChainId::Ethereum, [0x99; 32], 1_700_000_000)
         .expect("REQ-L4-08: lock-and-mint must succeed");
 
-    assert!(vault.audit_conservation().unwrap(), "REQ-L4-08: 1:1 conservation invariant must hold");
+    assert!(
+        vault.audit_conservation().unwrap(),
+        "REQ-L4-08: 1:1 conservation invariant must hold"
+    );
     assert_eq!(vault.net_active_wrapped_supply(), amount);
     assert_eq!(vault.net_foreign_reserve(), amount);
 }
@@ -184,7 +210,11 @@ fn req_l4_09_multi_prover_2_of_3_quorum() {
     // 2 valid, 1 inconclusive → Accepted
     engine.submit_verdict(claim, ProverId::LightClient, ProverVerdict::Valid);
     engine.submit_verdict(claim, ProverId::ZkStateProof, ProverVerdict::Valid);
-    engine.submit_verdict(claim, ProverId::OptimisticWatcher, ProverVerdict::Inconclusive);
+    engine.submit_verdict(
+        claim,
+        ProverId::OptimisticWatcher,
+        ProverVerdict::Inconclusive,
+    );
 
     assert_eq!(
         engine.evaluate_quorum(claim),
@@ -221,15 +251,27 @@ fn req_l4_11_circuit_breaker_isolation() {
     });
 
     assert!(tripped, "REQ-L4-11: Critical anomaly must trip circuit");
-    assert!(cb.is_halted(ChainId::Ethereum), "REQ-L4-11: Ethereum bridge must be halted");
-    assert!(!cb.is_halted(ChainId::AurionL1), "REQ-L4-11: AurionL1 must NOT be halted");
-    assert!(!cb.is_halted(ChainId::Bitcoin), "REQ-L4-11: Bitcoin bridge must NOT be halted");
+    assert!(
+        cb.is_halted(ChainId::Ethereum),
+        "REQ-L4-11: Ethereum bridge must be halted"
+    );
+    assert!(
+        !cb.is_halted(ChainId::AurionL1),
+        "REQ-L4-11: AurionL1 must NOT be halted"
+    );
+    assert!(
+        !cb.is_halted(ChainId::Bitcoin),
+        "REQ-L4-11: Bitcoin bridge must NOT be halted"
+    );
 
     // Governance reset re-opens the bridge
     let token = cb.compute_reset_token(ChainId::Ethereum);
     cb.governance_reset(ChainId::Ethereum, &token)
         .expect("REQ-L4-11: governance reset with valid token must succeed");
-    assert!(!cb.is_halted(ChainId::Ethereum), "REQ-L4-11: Ethereum bridge must resume after reset");
+    assert!(
+        !cb.is_halted(ChainId::Ethereum),
+        "REQ-L4-11: Ethereum bridge must resume after reset"
+    );
 }
 
 /// REQ-L4-12: Universal nullifier anti-replay registry.
@@ -248,7 +290,8 @@ fn req_l4_12_universal_nullifier_anti_replay() {
     assert_eq!(registry.count(), 1);
 
     // Replay must be rejected
-    let replay = registry.register_nullifier(nullifier, ChainId::Ethereum, packet_id, 1_700_000_001);
+    let replay =
+        registry.register_nullifier(nullifier, ChainId::Ethereum, packet_id, 1_700_000_001);
     assert!(replay.is_err(), "REQ-L4-12: replay must be rejected");
 }
 
@@ -302,7 +345,8 @@ fn supplementary_cross_domain_identity_binding() {
     let aurion_key = [0xAA; 32];
     let foreign = [0xBB; 32];
 
-    let digest = CrossDomainIdentityBinding::commitment_digest(&aurion_key, ChainId::Ethereum, &foreign);
+    let digest =
+        CrossDomainIdentityBinding::commitment_digest(&aurion_key, ChainId::Ethereum, &foreign);
     let sig = CrossDomainIdentityBinding::generate_test_signature(&foreign, &digest);
 
     resolver
@@ -324,10 +368,16 @@ fn supplementary_multi_prover_fraud_blocks() {
     let mut gate = L4SecurityGate::new(q(10_000_000), 1000);
     let claim = MultiProverEngine::compute_claim_id(&[0xFF; 32], ChainId::Bitcoin);
 
-    gate.multi_prover.submit_verdict(claim, ProverId::LightClient, ProverVerdict::Fraudulent);
-    gate.multi_prover.submit_verdict(claim, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
-    gate.multi_prover.submit_verdict(claim, ProverId::OptimisticWatcher, ProverVerdict::Valid);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::LightClient, ProverVerdict::Fraudulent);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::ZkStateProof, ProverVerdict::Fraudulent);
+    gate.multi_prover
+        .submit_verdict(claim, ProverId::OptimisticWatcher, ProverVerdict::Valid);
 
     let result = gate.approve_transfer(claim, ChainId::Bitcoin, q(1_000_000), 1);
-    assert!(result.is_err(), "supplementary: fraudulent 2-of-3 must block transfer");
+    assert!(
+        result.is_err(),
+        "supplementary: fraudulent 2-of-3 must block transfer"
+    );
 }

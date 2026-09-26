@@ -123,11 +123,7 @@ pub struct CrossChainAssetVault {
 }
 
 impl CrossChainAssetVault {
-    pub fn new(
-        chain: ChainId,
-        asset_symbol: [u8; 8],
-        custody: ThresholdCustodyAdapter,
-    ) -> Self {
+    pub fn new(chain: ChainId, asset_symbol: [u8; 8], custody: ThresholdCustodyAdapter) -> Self {
         Self {
             chain,
             asset_symbol,
@@ -335,18 +331,19 @@ mod tests {
         let k3 = [0x33; 32];
         let custody = ThresholdCustodyAdapter::new(vec![k1, k2, k3]).unwrap();
 
-        let mut vault = CrossChainAssetVault::new(
-            ChainId::Bitcoin,
-            *b"wBTC0000",
-            custody,
-        );
+        let mut vault = CrossChainAssetVault::new(ChainId::Bitcoin, *b"wBTC0000", custody);
 
         let deposit_amount = Quantum::new(500_000_000); // 5 BTC in Quanta units
         let recipient = [0x99; 32];
 
         // 1. Lock external & Mint wrapped
         let mint_id = vault
-            .process_external_lock_and_mint(deposit_amount, ChainId::Bitcoin, recipient, 1_700_000_000)
+            .process_external_lock_and_mint(
+                deposit_amount,
+                ChainId::Bitcoin,
+                recipient,
+                1_700_000_000,
+            )
             .expect("Mint should succeed");
         assert_ne!(mint_id, [0u8; 32]);
 
@@ -357,7 +354,12 @@ mod tests {
         // 2. Burn wrapped to unlock 2 BTC
         let burn_amount = Quantum::new(200_000_000);
         let burn_id = vault
-            .process_burn_for_external_unlock(burn_amount, ChainId::Bitcoin, recipient, 1_700_000_100)
+            .process_burn_for_external_unlock(
+                burn_amount,
+                ChainId::Bitcoin,
+                recipient,
+                1_700_000_100,
+            )
             .expect("Burn should succeed");
 
         // Net supply is now 3 BTC, reserve is still 5 BTC before unlock authorization

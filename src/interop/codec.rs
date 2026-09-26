@@ -9,8 +9,8 @@
 //! - AUR-L4-ARCH-002: Universal Cross-Domain Envelope Standard.
 
 use crate::interop::types::{
-    BridgeStatus, ChainId, CrossChainMessage, MAX_L4_PAYLOAD_BYTES, ProofPayload, ProtocolId,
-    RouteDescriptor,
+    BridgeStatus, ChainId, CrossChainMessage, ProofPayload, ProtocolId, RouteDescriptor,
+    MAX_L4_PAYLOAD_BYTES,
 };
 use crate::primitives::core::Quantum;
 
@@ -186,7 +186,8 @@ fn encode_proof_payload(proof: &ProofPayload) -> Vec<u8> {
             zk_proof,
             signatures,
         } => {
-            let mut out = Vec::with_capacity(1 + 1 + 4 + zk_proof.len() + 4 + signatures.len() * 64);
+            let mut out =
+                Vec::with_capacity(1 + 1 + 4 + zk_proof.len() + 4 + signatures.len() * 64);
             out.push(0x04);
             out.push(if *light_client_verified { 1 } else { 0 });
             out.extend_from_slice(&(zk_proof.len() as u32).to_be_bytes());
@@ -299,8 +300,7 @@ mod tests {
         };
         let msg = CrossChainMessage::new(params).expect("Message should be valid");
 
-        let encoded =
-            encode_envelope(&msg, BridgeStatus::Active).expect("Encoding should succeed");
+        let encoded = encode_envelope(&msg, BridgeStatus::Active).expect("Encoding should succeed");
         assert_eq!(&encoded[0..4], &L4_WIRE_MAGIC);
 
         let (decoded, status) = decode_envelope(&encoded).expect("Decoding should succeed");
@@ -337,7 +337,8 @@ mod tests {
         };
         let msg = CrossChainMessage::new(params).expect("Message should be valid");
 
-        let encoded = encode_envelope(&msg, BridgeStatus::Rebalancing).expect("Encoding should succeed");
+        let encoded =
+            encode_envelope(&msg, BridgeStatus::Rebalancing).expect("Encoding should succeed");
         let (decoded, status) = decode_envelope(&encoded).expect("Decoding should succeed");
         assert_eq!(decoded.packet_id, msg.packet_id);
         assert_eq!(status, BridgeStatus::Rebalancing);
@@ -390,6 +391,9 @@ mod tests {
         encoded[payload_idx] ^= 0xFF;
 
         let err = decode_envelope(&encoded);
-        assert!(err.is_err(), "Integrity check must fail when payload is altered");
+        assert!(
+            err.is_err(),
+            "Integrity check must fail when payload is altered"
+        );
     }
 }

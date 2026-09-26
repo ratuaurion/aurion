@@ -98,7 +98,7 @@ Ketika blok $H$ selesai divalidasi dan disetujui konsensus:
 Saat node dinyalakan kembali (*startup*):
 1. Membuka database `redb`.
 2. Membaca `latest_height` dari tabel `metadata`.
-3. Jika database kosong: menginisialisasi blok Genesis ($H=0$) dan alokasi 35% hard cap.
+3. Jika database kosong: menginisialisasi blok Genesis ($H=0$) dan alokasi 100% hard cap ke Master Treasury (Single Treasury).
 4. Jika database berisi:
    - Memuat blok terbaru pada `latest_height`.
    - Merekonstruksi state akun dari tabel `accounts`.

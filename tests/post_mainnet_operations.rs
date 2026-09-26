@@ -32,7 +32,10 @@ async fn test_prometheus_metrics_endpoint_openmetrics_format() {
 
     assert_eq!(registry.block_height.load(Ordering::SeqCst), 120);
     assert_eq!(registry.bft_round.load(Ordering::SeqCst), 1);
-    assert_eq!(registry.transactions_processed_total.load(Ordering::SeqCst), 45);
+    assert_eq!(
+        registry.transactions_processed_total.load(Ordering::SeqCst),
+        45
+    );
     assert_eq!(*registry.burned_quanta_total.lock().unwrap(), 900_000_000);
     assert_eq!(registry.bft_finality_latency_ms.load(Ordering::SeqCst), 750);
     assert_eq!(registry.mempool_size.load(Ordering::SeqCst), 15);
@@ -187,7 +190,11 @@ async fn test_disaster_recovery_circuit_breaker_and_snapshot_restore() {
 
     cb.record_round_failure("Timeout 4");
     assert!(cb.is_tripped);
-    assert!(cb.trip_reason.as_ref().unwrap().contains("failure threshold exceeded"));
+    assert!(cb
+        .trip_reason
+        .as_ref()
+        .unwrap()
+        .contains("failure threshold exceeded"));
 
     cb.reset();
     assert!(!cb.is_tripped);
@@ -201,7 +208,8 @@ async fn test_disaster_recovery_circuit_breaker_and_snapshot_restore() {
     accounts.insert(addr1, Account::new(Quantum::new(50_000_000), 0));
     accounts.insert(addr2, Account::new(Quantum::new(75_000_000), 0));
 
-    let hashmap: std::collections::HashMap<Address, Account> = accounts.iter().map(|(k, v)| (*k, v.clone())).collect();
+    let hashmap: std::collections::HashMap<Address, Account> =
+        accounts.iter().map(|(k, v)| (*k, v.clone())).collect();
     let state_root = aurion::statemachine::state::smt::compute_accounts_state_root(&hashmap);
 
     let snapshot = StateSnapshot {
@@ -225,7 +233,9 @@ async fn test_disaster_recovery_circuit_breaker_and_snapshot_restore() {
             .as_nanos()
     ));
 
-    snapshot.write_to_file(&snap_path).expect("Failed to write snapshot");
+    snapshot
+        .write_to_file(&snap_path)
+        .expect("Failed to write snapshot");
 
     let db_path = temp_dir.join(format!(
         "aurion_test_recovery_{}.redb",
@@ -260,38 +270,81 @@ async fn test_disaster_recovery_circuit_breaker_and_snapshot_restore() {
 async fn test_post_mainnet_cli_dispatchers() {
     // 1. aurion metrics status
     let cmd = CliCommand::Metrics(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd, OutputFormat::Text).await.is_ok());
+    assert!(aurion::cli::dispatcher::dispatch(cmd, OutputFormat::Text)
+        .await
+        .is_ok());
 
     let cmd_json = CliCommand::Metrics(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_json, OutputFormat::Json).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_json, OutputFormat::Json)
+            .await
+            .is_ok()
+    );
 
     // 2. aurion metrics export
     let cmd_export = CliCommand::Metrics(vec!["export".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_export, OutputFormat::Text).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_export, OutputFormat::Text)
+            .await
+            .is_ok()
+    );
 
     // 3. aurion governance status
     let cmd_gov = CliCommand::Governance(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_gov, OutputFormat::Text).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_gov, OutputFormat::Text)
+            .await
+            .is_ok()
+    );
 
     let cmd_gov_json = CliCommand::Governance(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_gov_json, OutputFormat::Json).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_gov_json, OutputFormat::Json)
+            .await
+            .is_ok()
+    );
 
     // 4. aurion governance signal
-    let cmd_signal = CliCommand::Governance(vec!["signal".to_string(), "--bit".to_string(), "2".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_signal, OutputFormat::Text).await.is_ok());
+    let cmd_signal = CliCommand::Governance(vec![
+        "signal".to_string(),
+        "--bit".to_string(),
+        "2".to_string(),
+    ]);
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_signal, OutputFormat::Text)
+            .await
+            .is_ok()
+    );
 
     // 5. aurion recovery status
     let cmd_rec_status = CliCommand::Recovery(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_rec_status, OutputFormat::Text).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_rec_status, OutputFormat::Text)
+            .await
+            .is_ok()
+    );
 
     let cmd_rec_status_json = CliCommand::Recovery(vec!["status".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_rec_status_json, OutputFormat::Json).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_rec_status_json, OutputFormat::Json)
+            .await
+            .is_ok()
+    );
 
     // 6. aurion recovery audit
     let cmd_audit = CliCommand::Recovery(vec!["audit".to_string()]);
-    assert!(aurion::cli::dispatcher::dispatch(cmd_audit, OutputFormat::Text).await.is_ok());
+    assert!(
+        aurion::cli::dispatcher::dispatch(cmd_audit, OutputFormat::Text)
+            .await
+            .is_ok()
+    );
 
     // 7. run_cli entrypoint
-    let args = vec!["metrics".to_string(), "status".to_string(), "--output".to_string(), "json".to_string()];
+    let args = vec![
+        "metrics".to_string(),
+        "status".to_string(),
+        "--output".to_string(),
+        "json".to_string(),
+    ];
     assert!(run_cli(&args).await.is_ok());
 }

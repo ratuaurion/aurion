@@ -5,8 +5,8 @@ pub mod blake3;
 pub mod ed25519;
 
 pub use bech32m::{
-    decode_address_bech32m, derive_address_from_pubkey, encode_address_bech32m,
-    Bech32mError, DST_ADDRESS, HRP_MAINNET, HRP_TESTNET,
+    decode_address_bech32m, derive_address_from_pubkey, encode_address_bech32m, Bech32mError,
+    DST_ADDRESS, HRP_MAINNET, HRP_TESTNET,
 };
 pub use blake3::{blake3_derive_key, blake3_hash};
 pub use ed25519::{ed25519_verify_strict, Ed25519Error, Keypair};

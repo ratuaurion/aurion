@@ -244,7 +244,10 @@ fn full_deploy_then_call_lifecycle_decodes_in_explorer() {
     // 2.1 Deploy.
     let deployed = chain.apply(deploy_tx(sender, 0), 1);
     let contract = deployed.expect("deploy harus melaporkan kontrak");
-    assert!(chain.accounts.contains_key(&contract), "akun kontrak harus ada");
+    assert!(
+        chain.accounts.contains_key(&contract),
+        "akun kontrak harus ada"
+    );
 
     // 2.2 Daftarkan metadata pada code_hash yang BENAR-benar ada di state.
     let code_hash = chain.accounts[&contract].code_hash.expect("code_hash");

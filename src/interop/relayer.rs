@@ -8,9 +8,7 @@
 //! - AUR-L4-ARCH-001: Sovereign Root Independence.
 //! - AUR-L4-MSG-001: Strict Cryptographic Inclusion Verification.
 
-use crate::interop::types::{
-    BridgeStatus, ChainId, CrossChainMessage, ProofPayload, ProtocolId,
-};
+use crate::interop::types::{BridgeStatus, ChainId, CrossChainMessage, ProofPayload, ProtocolId};
 use crate::interop::verifier::{
     BitcoinSpvVerifier, ExternalHeaderEntry, HeaderSyncTracker, ZkStateProofVerifier,
 };
@@ -59,7 +57,9 @@ impl TrustMinimizedRelayer {
     pub fn register_chain_tracker(&mut self, tracker: HeaderSyncTracker) {
         let chain = tracker.chain;
         self.trackers.insert(chain, tracker);
-        self.bridge_status.entry(chain).or_insert(BridgeStatus::Active);
+        self.bridge_status
+            .entry(chain)
+            .or_insert(BridgeStatus::Active);
     }
 
     /// Ingests an external header into the respective chain tracker.
@@ -120,7 +120,9 @@ impl TrustMinimizedRelayer {
         // 5. Header finality verification
         let tracker = match self.trackers.get(&msg.source_chain) {
             Some(t) => t,
-            None => return RelayVerificationResult::InvalidProof("Unregistered source chain tracker"),
+            None => {
+                return RelayVerificationResult::InvalidProof("Unregistered source chain tracker")
+            }
         };
 
         if !tracker.is_confirmed(source_height) {
@@ -148,10 +150,16 @@ impl TrustMinimizedRelayer {
                         0,
                         confirmed_header.root_commitment,
                     ) {
-                        return RelayVerificationResult::InvalidProof("Invalid Bitcoin SPV Merkle branch");
+                        return RelayVerificationResult::InvalidProof(
+                            "Invalid Bitcoin SPV Merkle branch",
+                        );
                     }
                 }
-                _ => return RelayVerificationResult::InvalidProof("Expected MerkleInclusion proof for Bitcoin SPV"),
+                _ => {
+                    return RelayVerificationResult::InvalidProof(
+                        "Expected MerkleInclusion proof for Bitcoin SPV",
+                    )
+                }
             },
             ProtocolId::ZkRollup => match &msg.proof {
                 ProofPayload::ZkSnark(proof_bytes) => {
@@ -161,15 +169,26 @@ impl TrustMinimizedRelayer {
                         public_inputs,
                         proof_bytes,
                     ) {
-                        return RelayVerificationResult::InvalidProof("ZK state proof verification failed");
+                        return RelayVerificationResult::InvalidProof(
+                            "ZK state proof verification failed",
+                        );
                     }
                 }
-                _ => return RelayVerificationResult::InvalidProof("Expected ZkSnark proof for ZK rollup"),
+                _ => {
+                    return RelayVerificationResult::InvalidProof(
+                        "Expected ZkSnark proof for ZK rollup",
+                    )
+                }
             },
-            ProtocolId::ThresholdVault | ProtocolId::CosmosIbc | ProtocolId::EvmSyncCommittee | ProtocolId::NativeCrossLayer => {
+            ProtocolId::ThresholdVault
+            | ProtocolId::CosmosIbc
+            | ProtocolId::EvmSyncCommittee
+            | ProtocolId::NativeCrossLayer => {
                 // Proof is verified by specific adapter rules
                 if msg.proof.is_empty() {
-                    return RelayVerificationResult::InvalidProof("Proof cannot be empty for this protocol");
+                    return RelayVerificationResult::InvalidProof(
+                        "Proof cannot be empty for this protocol",
+                    );
                 }
             }
             ProtocolId::CustomProtocol => {}
@@ -180,7 +199,8 @@ impl TrustMinimizedRelayer {
 
         // 8. Update monotonic sequence tracking
         let sender_key = (msg.source_chain, msg.sender);
-        self.next_expected_nonce.insert(sender_key, msg.sequence_nonce + 1);
+        self.next_expected_nonce
+            .insert(sender_key, msg.sequence_nonce + 1);
 
         RelayVerificationResult::Verified {
             packet_id: msg.packet_id,
@@ -236,7 +256,11 @@ mod tests {
                 .ingest_header(ExternalHeaderEntry {
                     height: h,
                     block_hash: [h as u8; 32],
-                    parent_hash: if h > 0 { [(h - 1) as u8; 32] } else { [0u8; 32] },
+                    parent_hash: if h > 0 {
+                        [(h - 1) as u8; 32]
+                    } else {
+                        [0u8; 32]
+                    },
                     root_commitment: merkle_root,
                     timestamp: 1_700_000_000 + h * 600,
                 })
@@ -270,7 +294,11 @@ mod tests {
                 .ingest_header(ExternalHeaderEntry {
                     height: h,
                     block_hash: [h as u8; 32],
-                    parent_hash: if h > 0 { [(h - 1) as u8; 32] } else { [0u8; 32] },
+                    parent_hash: if h > 0 {
+                        [(h - 1) as u8; 32]
+                    } else {
+                        [0u8; 32]
+                    },
                     root_commitment: [0x55; 32],
                     timestamp: 1_700_000_000 + h * 600,
                 })
@@ -294,6 +322,9 @@ mod tests {
         let msg = CrossChainMessage::new(params).unwrap();
 
         let res = relayer.verify_inbound_message(&msg, 4, 1_700_000_000);
-        assert!(matches!(res, RelayVerificationResult::PendingFinality { .. }));
+        assert!(matches!(
+            res,
+            RelayVerificationResult::PendingFinality { .. }
+        ));
     }
 }

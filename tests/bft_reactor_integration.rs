@@ -118,9 +118,7 @@ fn build_proposal(
     let mut accounts = guard.accounts.clone();
     let subsidy = calculate_block_subsidy(height);
     if !subsidy.is_zero() {
-        let account = accounts
-            .entry(proposer_address)
-            .or_default();
+        let account = accounts.entry(proposer_address).or_default();
         account.balance = account
             .balance
             .checked_add(subsidy)
@@ -314,25 +312,11 @@ async fn test_vote_accumulator_rejects_replay_and_equivocation() {
     let block_hash_a = Hash256::from_bytes([0x11; 32]);
     let block_hash_b = Hash256::from_bytes([0x22; 32]);
 
-    let vote_a = Vote::new_signed(
-        &keys.validators[0],
-        PHASE_PRECOMMIT,
-        1,
-        0,
-        block_hash_a,
-        0,
-    )
-    .expect("valid precommit must sign");
+    let vote_a = Vote::new_signed(&keys.validators[0], PHASE_PRECOMMIT, 1, 0, block_hash_a, 0)
+        .expect("valid precommit must sign");
     let vote_a_dup = vote_a.clone();
-    let vote_b = Vote::new_signed(
-        &keys.validators[0],
-        PHASE_PRECOMMIT,
-        1,
-        0,
-        block_hash_b,
-        0,
-    )
-    .expect("valid alternate precommit must sign");
+    let vote_b = Vote::new_signed(&keys.validators[0], PHASE_PRECOMMIT, 1, 0, block_hash_b, 0)
+        .expect("valid alternate precommit must sign");
 
     assert_eq!(accumulator.add_vote_checked(vote_a.clone()).unwrap(), 1);
     assert_eq!(accumulator.add_vote_checked(vote_a_dup).unwrap(), 1);

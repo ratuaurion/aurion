@@ -313,9 +313,10 @@ impl ZenohBftObserver {
     }
 
     pub async fn recv(&mut self) -> Result<Block, TransportError> {
-        self.receiver.recv().await.ok_or_else(|| {
-            TransportError::ChannelClosed("committed block channel closed".into())
-        })?
+        self.receiver
+            .recv()
+            .await
+            .ok_or_else(|| TransportError::ChannelClosed("committed block channel closed".into()))?
     }
 }
 
@@ -391,11 +392,7 @@ impl BftTransport for ZenohBftTransport {
             .await
     }
 
-    async fn broadcast_round_advance(
-        &self,
-        height: u64,
-        round: u64,
-    ) -> Result<(), TransportError> {
+    async fn broadcast_round_advance(&self, height: u64, round: u64) -> Result<(), TransportError> {
         let mut payload = Vec::with_capacity(ROUND_ADVANCE_WIRE_BYTES);
         payload.extend_from_slice(&height.to_be_bytes());
         payload.extend_from_slice(&round.to_be_bytes());
@@ -502,11 +499,13 @@ fn decode_frame(
                 });
             }
             if payload.len() < 32 {
-                return Err(TransportError::InvalidPayload("missing transaction sender public key".into()));
+                return Err(TransportError::InvalidPayload(
+                    "missing transaction sender public key".into(),
+                ));
             }
-            let sender_pubkey = payload[..32]
-                .try_into()
-                .map_err(|_| TransportError::InvalidPayload("invalid transaction sender public key".into()))?;
+            let sender_pubkey = payload[..32].try_into().map_err(|_| {
+                TransportError::InvalidPayload("invalid transaction sender public key".into())
+            })?;
             cursor = 32;
             ConsensusMessage::Transaction {
                 sender_pubkey,

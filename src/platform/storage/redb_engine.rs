@@ -45,15 +45,29 @@ impl RedbStorageEngine {
         };
 
         // Inisialisasi tabel kosong jika belum ada
-        let write_txn = db.begin_write().map_err(|e| StorageError::Database(e.to_string()))?;
+        let write_txn = db
+            .begin_write()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
         {
-            let _ = write_txn.open_table(ACCOUNTS_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-            let _ = write_txn.open_table(BLOCKS_BY_HEIGHT).map_err(|e| StorageError::Database(e.to_string()))?;
-            let _ = write_txn.open_table(BLOCKS_BY_HASH).map_err(|e| StorageError::Database(e.to_string()))?;
-            let _ = write_txn.open_table(CERTIFICATES_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-            let _ = write_txn.open_table(METADATA_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
+            let _ = write_txn
+                .open_table(ACCOUNTS_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
+            let _ = write_txn
+                .open_table(BLOCKS_BY_HEIGHT)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
+            let _ = write_txn
+                .open_table(BLOCKS_BY_HASH)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
+            let _ = write_txn
+                .open_table(CERTIFICATES_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
+            let _ = write_txn
+                .open_table(METADATA_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
         }
-        write_txn.commit().map_err(|e| StorageError::Database(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         Ok(Self { db: Arc::new(db) })
     }
@@ -61,9 +75,16 @@ impl RedbStorageEngine {
 
 impl StateStore for RedbStorageEngine {
     fn get_account(&self, address: &Address) -> Result<Option<Account>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(ACCOUNTS_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-        let result = table.get(address.as_bytes().as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(ACCOUNTS_TABLE)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let result = table
+            .get(address.as_bytes().as_slice())
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         match result {
             Some(entry) => {
@@ -77,11 +98,19 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_all_accounts(&self) -> Result<HashMap<Address, Account>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(ACCOUNTS_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(ACCOUNTS_TABLE)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
         let mut accounts = HashMap::new();
 
-        for entry_res in table.iter().map_err(|e| StorageError::Database(e.to_string()))? {
+        for entry_res in table
+            .iter()
+            .map_err(|e| StorageError::Database(e.to_string()))?
+        {
             let (k, v) = entry_res.map_err(|e| StorageError::Database(e.to_string()))?;
             let key_bytes = k.value();
             let val_bytes = v.value();
@@ -99,9 +128,16 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_block_by_height(&self, height: u64) -> Result<Option<Block>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(BLOCKS_BY_HEIGHT).map_err(|e| StorageError::Database(e.to_string()))?;
-        let result = table.get(height).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(BLOCKS_BY_HEIGHT)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let result = table
+            .get(height)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         match result {
             Some(entry) => {
@@ -115,9 +151,16 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_block_by_hash(&self, hash: &Hash256) -> Result<Option<Block>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let hash_table = read_txn.open_table(BLOCKS_BY_HASH).map_err(|e| StorageError::Database(e.to_string()))?;
-        let height_entry = hash_table.get(hash.as_bytes().as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let hash_table = read_txn
+            .open_table(BLOCKS_BY_HASH)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let height_entry = hash_table
+            .get(hash.as_bytes().as_slice())
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         match height_entry {
             Some(h) => self.get_block_by_height(h.value()),
@@ -126,9 +169,16 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_certificate(&self, height: u64) -> Result<Option<CommitCertificate>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(CERTIFICATES_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-        let result = table.get(height).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(CERTIFICATES_TABLE)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let result = table
+            .get(height)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         match result {
             Some(entry) => {
@@ -142,9 +192,16 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_latest_height(&self) -> Result<Option<u64>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-        let entry = table.get("latest_height").map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(METADATA_TABLE)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let entry = table
+            .get("latest_height")
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         match entry {
             Some(val) => {
@@ -154,7 +211,9 @@ impl StateStore for RedbStorageEngine {
                     raw.copy_from_slice(bytes);
                     Ok(Some(u64::from_be_bytes(raw)))
                 } else {
-                    Err(StorageError::Corruption("Invalid latest_height byte length".to_string()))
+                    Err(StorageError::Corruption(
+                        "Invalid latest_height byte length".to_string(),
+                    ))
                 }
             }
             None => Ok(None),
@@ -162,9 +221,16 @@ impl StateStore for RedbStorageEngine {
     }
 
     fn get_metadata(&self, key: &str) -> Result<Option<Vec<u8>>, StorageError> {
-        let read_txn = self.db.begin_read().map_err(|e| StorageError::Database(e.to_string()))?;
-        let table = read_txn.open_table(METADATA_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
-        let entry = table.get(key).map_err(|e| StorageError::Database(e.to_string()))?;
+        let read_txn = self
+            .db
+            .begin_read()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let table = read_txn
+            .open_table(METADATA_TABLE)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
+        let entry = table
+            .get(key)
+            .map_err(|e| StorageError::Database(e.to_string()))?;
         Ok(entry.map(|v| v.value().to_vec()))
     }
 
@@ -174,53 +240,82 @@ impl StateStore for RedbStorageEngine {
         certificate: &CommitCertificate,
         updated_accounts: &[(Address, Account)],
     ) -> Result<(), StorageError> {
-        let write_txn = self.db.begin_write().map_err(|e| StorageError::Database(e.to_string()))?;
+        let write_txn = self
+            .db
+            .begin_write()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
 
         // 1. Update accounts table
         {
-            let mut acc_table = write_txn.open_table(ACCOUNTS_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
+            let mut acc_table = write_txn
+                .open_table(ACCOUNTS_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             for (addr, account) in updated_accounts {
                 let mut buf = Vec::new();
                 account.encode_canonical(&mut buf);
-                acc_table.insert(addr.as_bytes().as_slice(), buf.as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+                acc_table
+                    .insert(addr.as_bytes().as_slice(), buf.as_slice())
+                    .map_err(|e| StorageError::Database(e.to_string()))?;
             }
         }
 
         // 2. Insert canonical block by height
         {
-            let mut block_table = write_txn.open_table(BLOCKS_BY_HEIGHT).map_err(|e| StorageError::Database(e.to_string()))?;
+            let mut block_table = write_txn
+                .open_table(BLOCKS_BY_HEIGHT)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             let mut block_buf = Vec::new();
             block.encode_canonical(&mut block_buf);
-            block_table.insert(block.header.height, block_buf.as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+            block_table
+                .insert(block.header.height, block_buf.as_slice())
+                .map_err(|e| StorageError::Database(e.to_string()))?;
         }
 
         // 3. Insert block hash index
         {
-            let mut hash_table = write_txn.open_table(BLOCKS_BY_HASH).map_err(|e| StorageError::Database(e.to_string()))?;
+            let mut hash_table = write_txn
+                .open_table(BLOCKS_BY_HASH)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             let block_hash = block.hash();
-            hash_table.insert(block_hash.as_bytes().as_slice(), block.header.height).map_err(|e| StorageError::Database(e.to_string()))?;
+            hash_table
+                .insert(block_hash.as_bytes().as_slice(), block.header.height)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
         }
 
         // 4. Insert commit certificate
         {
-            let mut cert_table = write_txn.open_table(CERTIFICATES_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
+            let mut cert_table = write_txn
+                .open_table(CERTIFICATES_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             let mut cert_buf = Vec::new();
             certificate.encode_canonical(&mut cert_buf);
-            cert_table.insert(block.header.height, cert_buf.as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+            cert_table
+                .insert(block.header.height, cert_buf.as_slice())
+                .map_err(|e| StorageError::Database(e.to_string()))?;
         }
 
         // 5. Update latest_height in metadata
         {
-            let mut meta_table = write_txn.open_table(METADATA_TABLE).map_err(|e| StorageError::Database(e.to_string()))?;
+            let mut meta_table = write_txn
+                .open_table(METADATA_TABLE)
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             let height_bytes = block.header.height.to_be_bytes();
-            meta_table.insert("latest_height", height_bytes.as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
+            meta_table
+                .insert("latest_height", height_bytes.as_slice())
+                .map_err(|e| StorageError::Database(e.to_string()))?;
             let block_hash = block.hash();
-            meta_table.insert("latest_block_hash", block_hash.as_bytes().as_slice()).map_err(|e| StorageError::Database(e.to_string()))?;
-            meta_table.insert("latest_state_root", &block.header.state_root.as_bytes()[..]).map_err(|e| StorageError::Database(e.to_string()))?;
+            meta_table
+                .insert("latest_block_hash", block_hash.as_bytes().as_slice())
+                .map_err(|e| StorageError::Database(e.to_string()))?;
+            meta_table
+                .insert("latest_state_root", &block.header.state_root.as_bytes()[..])
+                .map_err(|e| StorageError::Database(e.to_string()))?;
         }
 
         // Atomic commit to disk via WAL
-        write_txn.commit().map_err(|e| StorageError::Database(e.to_string()))?;
+        write_txn
+            .commit()
+            .map_err(|e| StorageError::Database(e.to_string()))?;
         Ok(())
     }
 }

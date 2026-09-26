@@ -8,8 +8,8 @@
 //! - AUR-ARCH-012: Zero floating-point arithmetic (`Quantum(u128)`)
 //! - AUR-L3-ARCH-002: Ephemeral high-frequency game loop with final settlement commit
 
-use std::collections::BTreeMap;
 use blake3::Hasher;
+use std::collections::BTreeMap;
 
 use crate::primitives::core::Quantum;
 use crate::specialized::types::DomainId;
@@ -178,7 +178,10 @@ impl GameSession {
     }
 
     /// Finalizes the game session, declares a winner, and generates the settlement summary.
-    pub fn finalize_session(&mut self, winner: [u8; 32]) -> Result<GameSettlementSummary, GamingError> {
+    pub fn finalize_session(
+        &mut self,
+        winner: [u8; 32],
+    ) -> Result<GameSettlementSummary, GamingError> {
         if self.status != GameSessionStatus::Active {
             return Err(GamingError::SessionNotActive);
         }
@@ -239,8 +242,8 @@ mod tests {
         let players = vec![p1, p2];
         let stake = Quantum(500);
 
-        let mut session = GameSession::new(session_id, domain_id, players, stake)
-            .expect("init game session");
+        let mut session =
+            GameSession::new(session_id, domain_id, players, stake).expect("init game session");
 
         assert_eq!(session.status, GameSessionStatus::Active);
         assert_eq!(session.action_count, 0);
@@ -292,8 +295,8 @@ mod tests {
         let domain_id = DomainId::named("game-arena-fast");
         let session_id = [0x77u8; 32];
         let p1 = [1u8; 32];
-        let mut session = GameSession::new(session_id, domain_id, vec![p1], Quantum(100))
-            .expect("init");
+        let mut session =
+            GameSession::new(session_id, domain_id, vec![p1], Quantum(100)).expect("init");
 
         session.abort_session().expect("abort");
         assert_eq!(session.status, GameSessionStatus::Aborted);

@@ -16,9 +16,9 @@ Seluruh peserta jaringan produksi Aurion terikat pada invariant konstitusional b
 | **Network Name** | `aurion-mainnet` | Jaringan produksi berdaulat utama |
 | **Chain ID** | `1001` | Sesuai `GENESIS_CHAIN_ID` |
 | **Genesis Timestamp** | `1773532800` | 15 Maret 2026, 00:00:00 UTC |
-| **Genesis Block Hash ($H=0$)** | `d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9` | Blake3 digest atas header blok nol |
-| **Initial State Root ($\sigma_0$)** | `61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850` | SMT Blake3 256-bit state root |
-| **Ceremony Transcript Hash** | `f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380` | Checksum transkrip upacara multi-pihak |
+| **Genesis Block Hash ($H=0$)** | `42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a` | Blake3 digest atas header blok nol |
+| **Initial State Root ($\sigma_0$)** | `ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f` | SMT Blake3 256-bit state root |
+| **Ceremony Transcript Hash** | `a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880` | Checksum transkrip upacara multi-pihak |
 | **Hard Cap Pasokan Genesis** | `66,000,000` AUR | $6.6 \times 10^{16}$ Quantum (9 desimal, $u128$) |
 | **Alokasi Genesis (100%)** | `66,000,000` AUR | 100% dialokasikan ke Master Treasury Account |
 | **Emisi Blok Berkelanjutan (H > 0)** | `1` AUR per blok ($10^9\text{ Q}$) | 20% Proposer, 80% Precommit Voters QC |
@@ -48,11 +48,11 @@ Ekspektasi keluaran:
 ```json
 {
   "overall_status": "VERIFIED_CANONICAL",
-  "ceremony_hash": "f88d06b37766746bcb9c9985c35ebf6448c441a578a576ee51bd7efbc64e3380",
-  "genesis_block_hash": "d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9",
-  "state_root": "61e647706990a010ba95f781d506620cf69b2dc57a7b1b53ca96f0f1d07bb850",
+  "ceremony_hash": "a747bb72ce0f2ed7d41b72a90ff98eec644c60f6b2e4071b948d48acc5467880",
+  "genesis_block_hash": "42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a",
+  "state_root": "ec1446f10466dc7551edb1ed51028723f22e0b529d524e87a1dac0f6927eb58f",
   "quorum_status": "PASSED (1000000/1000000 >= 666667)",
-  "monetary_audit_status": "PASSED (100% Invariant Compliant: 35% Genesis, Zero-Float)"
+  "monetary_audit_status": "PASSED (100% Invariant Compliant: 100% Master Treasury Genesis, Zero-Float)"
 }
 ```
 
@@ -119,7 +119,7 @@ aurion node start --network mainnet --data-dir data/fullnode.redb --rpc-bind 0.0
 
 Saat 4 simpul validator $\mathcal{V}_0$ saling terhubung melalui protokol Zenoh / Wire `AUR0`:
 1. Proposer Blok 1 mengumpulkan transaksi yang valid dari mempool.
-2. Membentuk proposal header Blok 1 dengan `prev_block_hash = d82f72ac1be185911bd803987660e624c0ed1c12d4a189b147de9c5b7f5635f9` (Genesis Hash).
+2. Membentuk proposal header Blok 1 dengan `prev_block_hash = 42e9a752ddfdd0308fc993077121276beb0386b1433df20156ec0705611daf3a` (Genesis Hash).
 3. Melakukan 2-phase BFT voting (`prevote` $\to$ `precommit`).
 4. Setelah mengumpulkan $\ge 666,667$ bobot voting suara validator, dibentuk `CommitCertificate`.
 5. Blok 1 dikomit secara atomik ke dalam penyimpanan fisik `redb 4.3`.

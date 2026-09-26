@@ -3,10 +3,10 @@
 //! Kliring Ekonomi Mesin-ke-Mesin Otonom (M2M Settlement) L5 (REQ-L5-08).
 //! Invariant: AUR-L5-PREC-001 (Zero-Float Quantum), AUR-L5-ARCH-001 (Non-Consensus Off-Chain Clearing).
 
-use std::collections::BTreeMap;
+use crate::primitives::core::Quantum;
 use blake3::Hasher;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
-use crate::primitives::core::Quantum;
+use std::collections::BTreeMap;
 
 /// Pengenal Unik Perangkat Otonom / Sensor / Server (Blake3 Device ID).
 pub type DeviceId = [u8; 32];
@@ -146,7 +146,11 @@ impl M2MClearingHouse {
             return Err("M2M contract is not active");
         }
 
-        let last_nonce = self.latest_nonces.get(&receipt.contract_id).copied().unwrap_or(0);
+        let last_nonce = self
+            .latest_nonces
+            .get(&receipt.contract_id)
+            .copied()
+            .unwrap_or(0);
         if receipt.nonce <= last_nonce {
             return Err("Nonce must be strictly increasing");
         }
@@ -176,7 +180,8 @@ impl M2MClearingHouse {
         }
 
         contract.settled_quanta = new_settled;
-        self.latest_nonces.insert(receipt.contract_id, receipt.nonce);
+        self.latest_nonces
+            .insert(receipt.contract_id, receipt.nonce);
 
         Ok(contract.settled_quanta)
     }
@@ -224,9 +229,14 @@ mod tests {
             consumer_signature: sig,
         };
 
-        let settled = house.clear_metered_usage(&receipt).expect("Clearing should succeed");
+        let settled = house
+            .clear_metered_usage(&receipt)
+            .expect("Clearing should succeed");
         assert_eq!(settled, Quantum::new(5_000));
-        assert_eq!(house.get_contract(&cid).unwrap().settled_quanta, Quantum::new(5_000));
+        assert_eq!(
+            house.get_contract(&cid).unwrap().settled_quanta,
+            Quantum::new(5_000)
+        );
     }
 
     #[test]

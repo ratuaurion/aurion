@@ -55,7 +55,12 @@ impl HealthReporter {
     }
 
     /// Evaluasi liveness ringan (HTTP 200 jika node running).
-    pub fn shallow_check(&self, current_height: u64, connected_peers: usize, is_synced: bool) -> ShallowHealthReport {
+    pub fn shallow_check(
+        &self,
+        current_height: u64,
+        connected_peers: usize,
+        is_synced: bool,
+    ) -> ShallowHealthReport {
         ShallowHealthReport {
             status: "HEALTHY".to_string(),
             service: "aurion-node".to_string(),
@@ -63,7 +68,11 @@ impl HealthReporter {
             current_height,
             role: format!("{:?}", self.role),
             connected_peers,
-            sync_state: if is_synced { "SYNCED".to_string() } else { "CATCHING_UP".to_string() },
+            sync_state: if is_synced {
+                "SYNCED".to_string()
+            } else {
+                "CATCHING_UP".to_string()
+            },
         }
     }
 
@@ -96,9 +105,15 @@ impl HealthReporter {
             name: "p2p_mesh_connectivity".to_string(),
             healthy: peer_ok,
             message: if peer_ok {
-                format!("Peer count ({}) satisfies threshold ({})", connected_peers, self.min_peer_threshold)
+                format!(
+                    "Peer count ({}) satisfies threshold ({})",
+                    connected_peers, self.min_peer_threshold
+                )
             } else {
-                format!("Insufficient peers: {} < threshold {}", connected_peers, self.min_peer_threshold)
+                format!(
+                    "Insufficient peers: {} < threshold {}",
+                    connected_peers, self.min_peer_threshold
+                )
             },
         });
 
@@ -143,7 +158,11 @@ impl HealthReporter {
             .unwrap_or(0);
 
         DeepHealthReport {
-            status: if all_healthy { "READY".to_string() } else { "DEGRADED".to_string() },
+            status: if all_healthy {
+                "READY".to_string()
+            } else {
+                "DEGRADED".to_string()
+            },
             service: "aurion-node".to_string(),
             chain_id: self.chain_id,
             current_height,

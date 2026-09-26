@@ -187,7 +187,10 @@ impl SovereignIdentityResolver {
         let key = (binding.foreign_chain, binding.foreign_address);
         self.bindings.insert(key, binding.aurion_pubkey);
 
-        let entry = self.reverse_bindings.entry(binding.aurion_pubkey).or_default();
+        let entry = self
+            .reverse_bindings
+            .entry(binding.aurion_pubkey)
+            .or_default();
         if !entry.contains(&key) {
             entry.push(key);
         }
@@ -206,7 +209,9 @@ impl SovereignIdentityResolver {
 
     /// Retrieves all linked foreign addresses for an Aurion identity.
     pub fn get_linked_addresses(&self, aurion_pubkey: &[u8; 32]) -> Option<&[(ChainId, [u8; 32])]> {
-        self.reverse_bindings.get(aurion_pubkey).map(|v| v.as_slice())
+        self.reverse_bindings
+            .get(aurion_pubkey)
+            .map(|v| v.as_slice())
     }
 }
 
@@ -243,7 +248,8 @@ impl UniversalNullifierRegistry {
         }
 
         self.registered_nullifiers.insert(nullifier);
-        self.nullifier_metadata.insert(nullifier, (source_chain, packet_id, timestamp));
+        self.nullifier_metadata
+            .insert(nullifier, (source_chain, packet_id, timestamp));
         Ok(())
     }
 
@@ -293,7 +299,11 @@ mod tests {
                 .ingest_header(ExternalHeaderEntry {
                     height: h_num,
                     block_hash: [h_num as u8; 32],
-                    parent_hash: if h_num > 0 { [(h_num - 1) as u8; 32] } else { [0u8; 32] },
+                    parent_hash: if h_num > 0 {
+                        [(h_num - 1) as u8; 32]
+                    } else {
+                        [0u8; 32]
+                    },
                     root_commitment: state_root,
                     timestamp: 1_700_000_000 + h_num * 12,
                 })
@@ -322,7 +332,8 @@ mod tests {
         let foreign_addr = [0xBB; 32];
         let chain = ChainId::Ethereum;
 
-        let digest = CrossDomainIdentityBinding::commitment_digest(&aurion_key, chain, &foreign_addr);
+        let digest =
+            CrossDomainIdentityBinding::commitment_digest(&aurion_key, chain, &foreign_addr);
         let sig = CrossDomainIdentityBinding::generate_test_signature(&foreign_addr, &digest);
 
         let binding = CrossDomainIdentityBinding {
@@ -332,7 +343,9 @@ mod tests {
             attestation_sig: sig,
         };
 
-        resolver.register_binding(binding).expect("Binding should succeed");
+        resolver
+            .register_binding(binding)
+            .expect("Binding should succeed");
 
         let resolved = resolver.resolve_foreign_address(chain, &foreign_addr);
         assert_eq!(resolved, Some(&aurion_key));
@@ -358,7 +371,8 @@ mod tests {
         assert!(registry.is_nullified(&nullifier));
 
         // Replay attempt must fail
-        let replay = registry.register_nullifier(nullifier, ChainId::Bitcoin, packet_id, 1_700_000_000);
+        let replay =
+            registry.register_nullifier(nullifier, ChainId::Bitcoin, packet_id, 1_700_000_000);
         assert!(replay.is_err());
     }
 }

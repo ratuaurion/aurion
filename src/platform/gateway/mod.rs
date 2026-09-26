@@ -8,6 +8,7 @@ pub mod faucet;
 pub mod rpc;
 
 pub use contract_decode::{describe_contract_interaction, DecodeStatus, TxStatus};
-pub use explorer::{render_block_by_height, render_explorer_stats, render_sandbox_html, render_tx_by_hash};
+pub use explorer::{
+    render_block_by_height, render_explorer_stats, render_sandbox_html, render_tx_by_hash,
+};
 pub use faucet::{FaucetConfig, FaucetDispenser, FaucetError};
-

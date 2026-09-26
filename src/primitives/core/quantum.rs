@@ -81,7 +81,6 @@ impl Quantum {
         self.0 == 0
     }
 
-
     #[inline]
     pub fn checked_add(self, other: Quantum) -> Result<Quantum, MonetaryError> {
         self.0
@@ -130,8 +129,12 @@ impl Quantum {
             return Err(MonetaryError::InvalidPrecision);
         }
 
-        let whole: u128 = parts[0].parse().map_err(|_| MonetaryError::InvalidPrecision)?;
-        let whole_quanta = whole.checked_mul(QUANTA_PER_AUR).ok_or(MonetaryError::Overflow)?;
+        let whole: u128 = parts[0]
+            .parse()
+            .map_err(|_| MonetaryError::InvalidPrecision)?;
+        let whole_quanta = whole
+            .checked_mul(QUANTA_PER_AUR)
+            .ok_or(MonetaryError::Overflow)?;
 
         if parts.len() == 1 {
             return Ok(Quantum(whole_quanta));
@@ -147,10 +150,15 @@ impl Quantum {
             padded[i] = b;
         }
 
-        let padded_str = std::str::from_utf8(&padded).map_err(|_| MonetaryError::InvalidPrecision)?;
-        let frac: u128 = padded_str.parse().map_err(|_| MonetaryError::InvalidPrecision)?;
+        let padded_str =
+            std::str::from_utf8(&padded).map_err(|_| MonetaryError::InvalidPrecision)?;
+        let frac: u128 = padded_str
+            .parse()
+            .map_err(|_| MonetaryError::InvalidPrecision)?;
 
-        let total = whole_quanta.checked_add(frac).ok_or(MonetaryError::Overflow)?;
+        let total = whole_quanta
+            .checked_add(frac)
+            .ok_or(MonetaryError::Overflow)?;
         Ok(Quantum(total))
     }
 

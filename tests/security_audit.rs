@@ -56,8 +56,15 @@ fn test_exploit_forged_ed25519_signature_rejection() {
     let forged_signature = mallory.sign(tx_id.as_bytes());
 
     // Verifikasi menggunakan kunci publik Alice HARUS GAGAL
-    let verify_result = ed25519_verify_strict(&alice.public_key_bytes(), tx_id.as_bytes(), &forged_signature);
-    assert!(verify_result.is_err(), "Signature yang dipalsukan pihak ketiga harus ditolak");
+    let verify_result = ed25519_verify_strict(
+        &alice.public_key_bytes(),
+        tx_id.as_bytes(),
+        &forged_signature,
+    );
+    assert!(
+        verify_result.is_err(),
+        "Signature yang dipalsukan pihak ketiga harus ditolak"
+    );
 }
 
 #[test]
@@ -75,7 +82,10 @@ fn test_exploit_signature_malleability_rfc8032() {
     let mutated_sig = Signature(mutated_bytes);
 
     let verify_mutated = ed25519_verify_strict(&kp.public_key_bytes(), message, &mutated_sig);
-    assert!(verify_mutated.is_err(), "Tanda tangan termutasi wajib ditolak sesuai RFC 8032");
+    assert!(
+        verify_mutated.is_err(),
+        "Tanda tangan termutasi wajib ditolak sesuai RFC 8032"
+    );
 }
 
 #[test]
@@ -87,11 +97,17 @@ fn test_exploit_replay_attack_multi_layer_nullifier() {
 
     // Konsumsi pertama berhasil
     let accepted_first_time = nullifier_registry.insert(tx_nullifier);
-    assert!(accepted_first_time, "Konsumsi pertama nullifier harus diterima");
+    assert!(
+        accepted_first_time,
+        "Konsumsi pertama nullifier harus diterima"
+    );
 
     // Percobaan replay serangan ganda (double-spend / replay)
     let accepted_second_time = nullifier_registry.insert(tx_nullifier);
-    assert!(!accepted_second_time, "Upaya replay nullifier yang sama harus ditolak seketika");
+    assert!(
+        !accepted_second_time,
+        "Upaya replay nullifier yang sama harus ditolak seketika"
+    );
 }
 
 #[test]
@@ -107,7 +123,10 @@ fn test_exploit_avm_reentrancy_and_stack_depth() {
 
     // Upaya eksploitasi stack overflow melampaui batas aman
     let overflow_attempt = stack.push([0xffu8; 32]);
-    assert!(overflow_attempt.is_err(), "Stack overflow harus ditolak deterministik");
+    assert!(
+        overflow_attempt.is_err(),
+        "Stack overflow harus ditolak deterministik"
+    );
 }
 
 #[test]
@@ -126,8 +145,10 @@ fn test_exploit_avm_out_of_gas_depletion() {
 
     // Program membutuhkan 2 PUSH (2*3=6 gas) + 1 ADD (3 gas) + 1 BLAKE3 (30 gas) = 39 gas > 15 gas
     let bytecode = vec![
-        Opcode::Push1 as u8, 0x01,
-        Opcode::Push1 as u8, 0x02,
+        Opcode::Push1 as u8,
+        0x01,
+        Opcode::Push1 as u8,
+        0x02,
         Opcode::Add as u8,
         Opcode::Blake3 as u8,
     ];
@@ -137,7 +158,10 @@ fn test_exploit_avm_out_of_gas_depletion() {
     let result = AvmEngine::execute(&verified, ctx, &storage);
 
     assert!(
-        matches!(result, ExecutionResult::OutOfGas | ExecutionResult::Revert { .. }),
+        matches!(
+            result,
+            ExecutionResult::OutOfGas | ExecutionResult::Revert { .. }
+        ),
         "Eksekusi yang melampaui gas harus dihentikan dan di-revert tanpa mutasi storage"
     );
 }
@@ -171,7 +195,9 @@ fn test_exploit_mempool_sub_rbf_spam_rejection() {
         ..tx1
     };
 
-    mempool.submit_transaction(signed_tx1, &pubkey, 500, &account).expect("Insert initial tx");
+    mempool
+        .submit_transaction(signed_tx1, &pubkey, 500, &account)
+        .expect("Insert initial tx");
 
     // Upaya replace-by-fee dengan kenaikan hanya 5% (fee: 105 < required 110)
     let tx_spam_rbf = Transaction {
@@ -196,7 +222,10 @@ fn test_exploit_mempool_sub_rbf_spam_rejection() {
     };
 
     let rbf_result = mempool.submit_transaction(signed_spam_rbf, &pubkey, 500, &account);
-    assert!(rbf_result.is_err(), "Penggantian tx dengan fee < 10% wajib ditolak oleh mandat RBF");
+    assert!(
+        rbf_result.is_err(),
+        "Penggantian tx dengan fee < 10% wajib ditolak oleh mandat RBF"
+    );
 
     // Penggantian yang sah dengan kenaikan 20% (fee: 120 >= 110)
     let tx_valid_rbf = Transaction {
@@ -221,7 +250,10 @@ fn test_exploit_mempool_sub_rbf_spam_rejection() {
     };
 
     let valid_res = mempool.submit_transaction(signed_valid_rbf, &pubkey, 500, &account);
-    assert!(valid_res.is_ok(), "Penggantian tx dengan fee >= 10% harus diterima");
+    assert!(
+        valid_res.is_ok(),
+        "Penggantian tx dengan fee >= 10% harus diterima"
+    );
 }
 
 #[test]
@@ -246,7 +278,10 @@ fn test_exploit_bft_equivocation_detection() {
         None => false,
     };
 
-    assert!(is_equivocation, "BFT consensus harus mendeteksi vote ganda pada slot & round yang sama");
+    assert!(
+        is_equivocation,
+        "BFT consensus harus mendeteksi vote ganda pada slot & round yang sama"
+    );
 }
 
 #[test]
@@ -256,7 +291,10 @@ fn test_exploit_p2p_wire_oversize_injection() {
     let malicious_oversize_payload_len = MAX_P2P_FRAME_SIZE + 1024;
     let is_rejected = malicious_oversize_payload_len > MAX_P2P_FRAME_SIZE;
 
-    assert!(is_rejected, "Payload P2P melampaui batas maksimum 8 MB harus ditolak sebelum alokasi memori");
+    assert!(
+        is_rejected,
+        "Payload P2P melampaui batas maksimum 8 MB harus ditolak sebelum alokasi memori"
+    );
 }
 
 #[test]
@@ -273,8 +311,15 @@ fn test_exploit_balance_drain_underflow_protection() {
 
     // Simulasi pengurangan saldo dengan checked_sub harus mengembalikan error, BUKAN underflow
     let sub_result = sender_account.balance.checked_sub(total_required);
-    assert!(sub_result.is_err(), "Mutasi saldo di bawah 0 harus menghasilkan MonetaryError::InsufficientBalance");
-    assert_eq!(sender_account.balance.as_u128(), 500, "Saldo akun tidak boleh berubah jika transfer gagal");
+    assert!(
+        sub_result.is_err(),
+        "Mutasi saldo di bawah 0 harus menghasilkan MonetaryError::InsufficientBalance"
+    );
+    assert_eq!(
+        sender_account.balance.as_u128(),
+        500,
+        "Saldo akun tidak boleh berubah jika transfer gagal"
+    );
 }
 
 #[test]
@@ -286,7 +331,10 @@ fn test_exploit_zeroize_memory_hygiene() {
     secret_key_material.zeroize();
 
     for byte in &secret_key_material {
-        assert_eq!(*byte, 0, "Semua byte memori rahasia harus bernilai 0 pasca zeroize");
+        assert_eq!(
+            *byte, 0,
+            "Semua byte memori rahasia harus bernilai 0 pasca zeroize"
+        );
     }
 }
 
@@ -297,7 +345,10 @@ fn test_security_audit_runner_end_to_end() {
     assert_eq!(report.total_checks, 10);
     assert_eq!(report.passed_checks, 10);
     assert_eq!(report.failed_checks, 0);
-    assert_eq!(report.readiness_verdict, "AURION MAINNET PRODUCTION READY (PASS)");
+    assert_eq!(
+        report.readiness_verdict,
+        "AURION MAINNET PRODUCTION READY (PASS)"
+    );
 
     // Pastikan tidak ada temuan Critical atau High yang Failed
     for chk in &report.results {

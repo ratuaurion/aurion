@@ -94,7 +94,12 @@ fn context_with_contract() -> (Arc<RpcContext>, Address, Address) {
     accounts.insert(sender, Account::new(Quantum::new(100_000_000_000), 0));
     accounts.insert(
         contract,
-        Account::new_contract(Quantum::ZERO, 0, blake3_hash(&echo_runtime()), Hash256::ZERO),
+        Account::new_contract(
+            Quantum::ZERO,
+            0,
+            blake3_hash(&echo_runtime()),
+            Hash256::ZERO,
+        ),
     );
     *ctx.accounts.lock().expect("accounts") = accounts;
     (ctx, sender, contract)
@@ -163,7 +168,10 @@ fn test_aur_call_rejects_bad_params_and_excessive_gas_limit() {
     let tx = unsigned_call(sender, contract, echo_runtime());
 
     // 1. Parameter kosong.
-    let err = ctx.dispatch(&request("aur_call", vec![]), 1_000).error.expect("err");
+    let err = ctx
+        .dispatch(&request("aur_call", vec![]), 1_000)
+        .error
+        .expect("err");
     assert_eq!(err.code, ERR_INVALID_PARAMS);
 
     // 2. Hex rusak.
@@ -246,7 +254,10 @@ fn test_aur_estimate_gas_reports_failure_in_payload_not_rpc_error() {
     let tx = unsigned_call(sender, contract, vec![0xFF]);
 
     let resp = ctx.dispatch(&request("aur_estimateGas", vec![hex_raw(&tx)]), 1_000);
-    assert!(resp.error.is_none(), "kegagalan kontrak bukan error transport");
+    assert!(
+        resp.error.is_none(),
+        "kegagalan kontrak bukan error transport"
+    );
     let value: serde_json::Value =
         serde_json::from_str(&resp.result.expect("result")).expect("json");
     assert_eq!(value["success"], serde_json::Value::Bool(false));
@@ -305,10 +316,7 @@ fn test_aur_get_contract_metadata_not_found_then_registered() {
     let json = metadata.to_json().expect("json");
 
     let resp = ctx.dispatch(
-        &request(
-            "aur_sendContractMetadata",
-            vec![code_hash.to_hex(), json],
-        ),
+        &request("aur_sendContractMetadata", vec![code_hash.to_hex(), json]),
         1_000,
     );
     assert!(resp.error.is_none(), "error: {:?}", resp.error);

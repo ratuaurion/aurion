@@ -177,14 +177,14 @@ pub fn apply_transaction(
                     })
                 }
                 ExecutionResult::Revert { reason, .. } => {
-                    Err(StateTransitionError::ContractExecutionFailed(format!("Deployment reverted: {reason}")))
+                    Err(StateTransitionError::ContractExecutionFailed(format!(
+                        "Deployment reverted: {reason}"
+                    )))
                 }
-                ExecutionResult::OutOfGas => {
-                    Err(StateTransitionError::ContractExecutionFailed("Deployment out of gas".to_string()))
-                }
-                ExecutionResult::Error(e) => {
-                    Err(StateTransitionError::ContractExecutionFailed(e))
-                }
+                ExecutionResult::OutOfGas => Err(StateTransitionError::ContractExecutionFailed(
+                    "Deployment out of gas".to_string(),
+                )),
+                ExecutionResult::Error(e) => Err(StateTransitionError::ContractExecutionFailed(e)),
             }
         }
 
@@ -234,14 +234,14 @@ pub fn apply_transaction(
                     storage_changes,
                 }),
                 ExecutionResult::Revert { reason, .. } => {
-                    Err(StateTransitionError::ContractExecutionFailed(format!("Call reverted: {reason}")))
+                    Err(StateTransitionError::ContractExecutionFailed(format!(
+                        "Call reverted: {reason}"
+                    )))
                 }
-                ExecutionResult::OutOfGas => {
-                    Err(StateTransitionError::ContractExecutionFailed("Call out of gas".to_string()))
-                }
-                ExecutionResult::Error(e) => {
-                    Err(StateTransitionError::ContractExecutionFailed(e))
-                }
+                ExecutionResult::OutOfGas => Err(StateTransitionError::ContractExecutionFailed(
+                    "Call out of gas".to_string(),
+                )),
+                ExecutionResult::Error(e) => Err(StateTransitionError::ContractExecutionFailed(e)),
             }
         }
     }

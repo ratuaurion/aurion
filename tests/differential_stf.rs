@@ -198,23 +198,19 @@ fn produce_test_block(
     miner: &Address,
     timestamp: u64,
 ) -> Block {
-    let candidate_block = bft.assemble_block_proposal(
-        ledger,
-        mempool,
-        0,
-        timestamp,
-        miner,
-        1024 * 1024,
-    );
+    let candidate_block =
+        bft.assemble_block_proposal(ledger, mempool, 0, timestamp, miner, 1024 * 1024);
 
     let block_hash = candidate_block.hash();
     let height = candidate_block.height();
 
     let mut precommits = Vec::new();
     for (idx, key) in val_keys.iter().enumerate().take(3) {
-        let prevote = Vote::new_signed(key, PHASE_PREVOTE, height, 0, block_hash, idx as u32).unwrap();
+        let prevote =
+            Vote::new_signed(key, PHASE_PREVOTE, height, 0, block_hash, idx as u32).unwrap();
         prevote.verify(val_set).unwrap();
-        let precommit = Vote::new_signed(key, PHASE_PRECOMMIT, height, 0, block_hash, idx as u32).unwrap();
+        let precommit =
+            Vote::new_signed(key, PHASE_PRECOMMIT, height, 0, block_hash, idx as u32).unwrap();
         precommit.verify(val_set).unwrap();
         precommits.push(precommit);
     }
@@ -223,8 +219,14 @@ fn produce_test_block(
         .create_commit_certificate(val_set, block_hash, height, 0, precommits)
         .unwrap();
 
-    let block = Block::new(candidate_block.header, candidate_block.transactions, Some(cert));
-    ledger.apply_block(block.clone(), miner).expect("Block apply failed");
+    let block = Block::new(
+        candidate_block.header,
+        candidate_block.transactions,
+        Some(cert),
+    );
+    ledger
+        .apply_block(block.clone(), miner)
+        .expect("Block apply failed");
     block
 }
 
@@ -256,7 +258,7 @@ fn test_differential_stf_massive_multi_block_simulation() {
     let dev_key = Keypair::generate();
     let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(creator_addr, val_entries.clone());
     let validator_set = ValidatorSet::new(val_entries);
     let mut ledger = ChainLedger::from_genesis(genesis);
 
@@ -325,7 +327,9 @@ fn test_differential_stf_massive_multi_block_simulation() {
 
         // Terapkan transaksi yang benar-benar masuk blok kanonikal ke reference model
         for tx in &block1.transactions {
-            ref_stf.apply_tx(&miner_addr, tx).expect("Ref seed apply failed");
+            ref_stf
+                .apply_tx(&miner_addr, tx)
+                .expect("Ref seed apply failed");
         }
 
         // Terapkan subsidi blok 1 ke reference
@@ -520,7 +524,7 @@ fn test_differential_adversarial_rejection_consistency() {
     let dev_key = Keypair::generate();
     let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(creator_addr, val_entries.clone());
     let ledger = ChainLedger::from_genesis(genesis);
     let mut ref_stf = ReferenceSTF::new_genesis(creator_addr, dev_addr);
 
@@ -659,7 +663,7 @@ fn test_differential_boundary_exact_depletion() {
     let dev_key = Keypair::generate();
     let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-    let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+    let genesis = build_genesis(creator_addr, val_entries.clone());
     let validator_set = ValidatorSet::new(val_entries);
     let mut ledger = ChainLedger::from_genesis(genesis);
     let mut ref_stf = ReferenceSTF::new_genesis(creator_addr, dev_addr);

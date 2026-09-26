@@ -4,12 +4,12 @@
 //! Mematuhi Invariant AUR-ARCH-011 (#![forbid(unsafe_code)]), AUR-ARCH-012 (Zero-Float Quantum u128),
 //! AUR-L3-MSG-001 (Strict Replay Protection), dan AUR-L3-MSG-002 (Ordered Delivery Guarantee).
 
-use std::collections::{BTreeMap, BTreeSet};
-use thiserror::Error;
 use crate::core::{Address, Hash256, Quantum};
 use crate::crypto::blake3_hash;
 use crate::specialized::state::L3AccountProof;
 use crate::specialized::types::DomainId;
+use std::collections::{BTreeMap, BTreeSet};
+use thiserror::Error;
 
 /// Domain Separation Tag untuk Nullifier L3
 pub const DST_L3_NULLIFIER: &str = "AURION-L3-NULLIFIER-V1";
@@ -17,14 +17,19 @@ pub const DST_L3_NULLIFIER: &str = "AURION-L3-NULLIFIER-V1";
 /// Kesalahan Perpesanan & Relayer L3
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum L3MessagingError {
-    #[error("Pesan sudah dieksekusi sebelumnya (Replay Attack dicegah oleh Nullifier Registry: {0})")]
+    #[error(
+        "Pesan sudah dieksekusi sebelumnya (Replay Attack dicegah oleh Nullifier Registry: {0})"
+    )]
     DuplicateNullifier(Hash256),
 
     #[error("Nonce perpesanan tidak berurutan: diharapkan {expected}, aktual {actual}")]
     OutOfOrderNonce { expected: u64, actual: u64 },
 
     #[error("Domain tujuan tidak cocok: diharapkan {expected}, aktual {actual}")]
-    DestinationMismatch { expected: DomainId, actual: DomainId },
+    DestinationMismatch {
+        expected: DomainId,
+        actual: DomainId,
+    },
 
     #[error("Bukti Merkle inklusi pesan tidak valid")]
     InvalidMerkleProof,
@@ -172,7 +177,8 @@ impl L2L3TwoWayRelayer {
             return Err(L3MessagingError::InvalidTransferAmount);
         }
 
-        self.deposit_vault_l2 = self.deposit_vault_l2
+        self.deposit_vault_l2 = self
+            .deposit_vault_l2
             .checked_add(amount)
             .map_err(|_| L3MessagingError::StateError("Overflow vault deposit L2".to_string()))?;
 
@@ -209,9 +215,12 @@ impl L2L3TwoWayRelayer {
         }
 
         // 3. Buka kunci saldo dari deposit vault L2 (Konservasi nilai aset)
-        self.deposit_vault_l2 = self.deposit_vault_l2
+        self.deposit_vault_l2 = self
+            .deposit_vault_l2
             .checked_sub(proof.amount)
-            .map_err(|_| L3MessagingError::StateError("Saldo deposit vault L2 tidak mencukupi".to_string()))?;
+            .map_err(|_| {
+                L3MessagingError::StateError("Saldo deposit vault L2 tidak mencukupi".to_string())
+            })?;
 
         Ok((proof.recipient_l2, proof.amount))
     }
@@ -258,7 +267,6 @@ impl CrossDomainEventRouter {
 mod tests {
     use super::*;
 
-
     #[test]
     fn test_cross_layer_message_and_nullifier_anti_replay() {
         let l2_domain = DomainId::from_bytes([0x02; 32]);
@@ -266,32 +274,33 @@ mod tests {
 
         let mut registry = NullifierRegistry::new();
 
-        let msg1 = CrossLayerMessage::new(
-            l2_domain,
-            l3_domain,
-            1,
-            b"DEPOSIT_100_AUR".to_vec(),
-            vec![],
-        );
+        let msg1 =
+            CrossLayerMessage::new(l2_domain, l3_domain, 1, b"DEPOSIT_100_AUR".to_vec(), vec![]);
 
         // Konsumsi pertama harus berhasil
-        registry.verify_and_consume(&msg1).expect("Konsumsi msg1 pertama harus sukses");
+        registry
+            .verify_and_consume(&msg1)
+            .expect("Konsumsi msg1 pertama harus sukses");
         assert!(registry.is_spent(&msg1.nullifier));
 
         // Replay attack: konsumsi kedua dengan nullifier yang sama harus ditolak keras!
         let replay_err = registry.verify_and_consume(&msg1);
-        assert!(matches!(replay_err, Err(L3MessagingError::DuplicateNullifier(_))));
+        assert!(matches!(
+            replay_err,
+            Err(L3MessagingError::DuplicateNullifier(_))
+        ));
 
         // Pesan kedua dengan nonce out of order (misal loncat ke 3) harus ditolak
-        let msg_bad_nonce = CrossLayerMessage::new(
-            l2_domain,
-            l3_domain,
-            3,
-            b"DEPOSIT_200_AUR".to_vec(),
-            vec![],
-        );
+        let msg_bad_nonce =
+            CrossLayerMessage::new(l2_domain, l3_domain, 3, b"DEPOSIT_200_AUR".to_vec(), vec![]);
         let nonce_err = registry.verify_and_consume(&msg_bad_nonce);
-        assert!(matches!(nonce_err, Err(L3MessagingError::OutOfOrderNonce { expected: 2, actual: 3 })));
+        assert!(matches!(
+            nonce_err,
+            Err(L3MessagingError::OutOfOrderNonce {
+                expected: 2,
+                actual: 3
+            })
+        ));
     }
 
     #[test]
@@ -303,7 +312,9 @@ mod tests {
         let alice_l3 = Address::from_bytes([0xaa; 32]);
 
         // 1. L2 -> L3 Deposit
-        let deposit_msg = relayer.create_deposit_message(l2_domain, alice_l3, Quantum::new(500_000)).unwrap();
+        let deposit_msg = relayer
+            .create_deposit_message(l2_domain, alice_l3, Quantum::new(500_000))
+            .unwrap();
         assert_eq!(relayer.deposit_vault_l2, Quantum::new(500_000));
         assert_eq!(deposit_msg.nonce, 1);
 
@@ -327,11 +338,9 @@ mod tests {
             vec![],
         );
 
-        let (recipient, unlocked) = relayer.verify_withdrawal_and_unlock(
-            &withdrawal_msg,
-            state_root,
-            &withdrawal_proof,
-        ).expect("Verifikasi penarikan dan unlock harus berhasil");
+        let (recipient, unlocked) = relayer
+            .verify_withdrawal_and_unlock(&withdrawal_msg, state_root, &withdrawal_proof)
+            .expect("Verifikasi penarikan dan unlock harus berhasil");
 
         assert_eq!(recipient, Address::from_bytes([0xbb; 32]));
         assert_eq!(unlocked, Quantum::new(200_000));
@@ -346,8 +355,20 @@ mod tests {
 
         let mut router = CrossDomainEventRouter::new();
 
-        let msg_to_dex = CrossLayerMessage::new(gaming_domain, dex_domain, 1, b"BUY_IN_GAME_TOKEN".to_vec(), vec![]);
-        let msg_to_privacy = CrossLayerMessage::new(dex_domain, privacy_domain, 1, b"SHIELD_FUNDS".to_vec(), vec![]);
+        let msg_to_dex = CrossLayerMessage::new(
+            gaming_domain,
+            dex_domain,
+            1,
+            b"BUY_IN_GAME_TOKEN".to_vec(),
+            vec![],
+        );
+        let msg_to_privacy = CrossLayerMessage::new(
+            dex_domain,
+            privacy_domain,
+            1,
+            b"SHIELD_FUNDS".to_vec(),
+            vec![],
+        );
 
         router.route_message(msg_to_dex);
         router.route_message(msg_to_privacy);

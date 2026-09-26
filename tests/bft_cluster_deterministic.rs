@@ -42,8 +42,7 @@ fn fixture() -> ClusterFixture {
         .collect();
     let validator_set = ValidatorSet::new(validators);
     let genesis = build_genesis(
-        keys.creator.derive_address(),
-        keys.developer.derive_address(),
+        keys.master_treasury.derive_address(),
         validator_set.validators.clone(),
     );
 
@@ -194,7 +193,7 @@ async fn test_happy_path_two_phase_advancement() {
 
     let mut node_accounts = vec![fixture.accounts.clone(); VALIDATOR_COUNT];
     for height in 1..=2 {
-        let tx = transaction(&fixture.keys.creator, recipient, height - 1, 100);
+        let tx = transaction(&fixture.keys.master_treasury, recipient, height - 1, 100);
         let (envelope, next_accounts) = proposal(&mut fixture, height, tx, 1_773_532_800 + height);
         assert_valid_proposal(&envelope, &fixture, &next_accounts);
 
@@ -240,21 +239,19 @@ async fn test_happy_path_two_phase_advancement() {
     }
 
     assert_eq!(node_accounts.len(), VALIDATOR_COUNT);
-    assert!(
-        node_accounts
-            .iter()
-            .map(compute_accounts_state_root)
-            .collect::<Vec<_>>()
-            .windows(2)
-            .all(|pair| pair[0] == pair[1])
-    );
+    assert!(node_accounts
+        .iter()
+        .map(compute_accounts_state_root)
+        .collect::<Vec<_>>()
+        .windows(2)
+        .all(|pair| pair[0] == pair[1]));
 }
 
 #[tokio::test]
 async fn test_stf_gating_rejects_corrupted_state_root() {
     let mut fixture = fixture();
     let recipient = Address([0xAB; 32]);
-    let tx = transaction(&fixture.keys.creator, recipient, 0, 100);
+    let tx = transaction(&fixture.keys.master_treasury, recipient, 0, 100);
     let (envelope, expected_accounts) = proposal(&mut fixture, 1, tx, 1_773_532_801);
     let proposer = envelope.proposer_index as usize;
     let mut corrupted_block = envelope.block;
@@ -288,7 +285,7 @@ async fn test_stf_gating_rejects_corrupted_state_root() {
 #[tokio::test]
 async fn test_proposer_auth_rejects_out_of_turn_leader() {
     let mut fixture = fixture();
-    let tx = transaction(&fixture.keys.creator, Address([0xAC; 32]), 0, 100);
+    let tx = transaction(&fixture.keys.master_treasury, Address([0xAC; 32]), 0, 100);
     let (block_envelope, _) = proposal(&mut fixture, 1, tx, 1_773_532_802);
     let leader = BftEngine::select_proposer(
         &fixture.validator_set,
@@ -312,7 +309,7 @@ async fn test_proposer_auth_rejects_out_of_turn_leader() {
 #[tokio::test]
 async fn test_byzantine_fault_tolerance_one_node_offline() {
     let mut fixture = fixture();
-    let tx = transaction(&fixture.keys.creator, Address([0xAD; 32]), 0, 100);
+    let tx = transaction(&fixture.keys.master_treasury, Address([0xAD; 32]), 0, 100);
     let (envelope, next_accounts) = proposal(&mut fixture, 1, tx, 1_773_532_803);
     assert_valid_proposal(&envelope, &fixture, &next_accounts);
 

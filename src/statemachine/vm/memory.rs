@@ -30,7 +30,11 @@ impl Memory {
 
     /// Perluas memori jika offset + len melebihi ukuran saat ini.
     /// Mengembalikan ukuran memori baru dalam bytes jika terjadi ekspansi.
-    pub fn ensure_capacity(&mut self, offset: usize, len: usize) -> Result<Option<(usize, usize)>, MemoryError> {
+    pub fn ensure_capacity(
+        &mut self,
+        offset: usize,
+        len: usize,
+    ) -> Result<Option<(usize, usize)>, MemoryError> {
         if len == 0 {
             return Ok(None);
         }

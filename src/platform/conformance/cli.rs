@@ -1,12 +1,12 @@
 //! Antarmuka CLI untuk Conformance Test Suite (CTS) & Unified Matrix Aurion.
 
-use std::fs;
-use std::process;
 use crate::conformance::{
     generate_golden_vectors_json, generate_json_report, generate_markdown_report,
     generate_matrix_json, generate_matrix_markdown, print_terminal_matrix, print_terminal_report,
     run_all_pillars, run_unified_matrix, MatrixStatus, TestStatus,
 };
+use std::fs;
+use std::process;
 
 pub fn handle_conformance_subcommand(subargs: &[String]) {
     let subcmd = if !subargs.is_empty() {
@@ -53,12 +53,17 @@ pub fn handle_conformance_subcommand(subargs: &[String]) {
                     i += 1;
                 }
 
-                let all_passed = matrix.pillars.iter().all(|p| p.status == MatrixStatus::Passed);
+                let all_passed = matrix
+                    .pillars
+                    .iter()
+                    .all(|p| p.status == MatrixStatus::Passed);
                 if !all_passed {
                     process::exit(1);
                 }
             } else {
-                println!("\n[AURION CTS] Initializing 8-Pillar Protocol Conformance Audit (L1 Core)...");
+                println!(
+                    "\n[AURION CTS] Initializing 8-Pillar Protocol Conformance Audit (L1 Core)..."
+                );
                 println!("Tip: Use 'aurion conformance run --all' or 'aurion conformance matrix' to audit all 54 multi-layer pillars.");
                 let results = run_all_pillars();
                 print_terminal_report(&results);
@@ -99,7 +104,9 @@ pub fn handle_conformance_subcommand(subargs: &[String]) {
             }
         }
         "matrix" => {
-            println!("\n[AURION CTS] Executing Unified 54-Pillar Conformance Audit Matrix (L1..L5)...");
+            println!(
+                "\n[AURION CTS] Executing Unified 54-Pillar Conformance Audit Matrix (L1..L5)..."
+            );
             let matrix = run_unified_matrix();
             print_terminal_matrix(&matrix);
 
@@ -131,7 +138,10 @@ pub fn handle_conformance_subcommand(subargs: &[String]) {
                 i += 1;
             }
 
-            let all_passed = matrix.pillars.iter().all(|p| p.status == MatrixStatus::Passed);
+            let all_passed = matrix
+                .pillars
+                .iter()
+                .all(|p| p.status == MatrixStatus::Passed);
             if !all_passed {
                 process::exit(1);
             }
@@ -168,4 +178,3 @@ pub fn handle_conformance_subcommand(subargs: &[String]) {
         }
     }
 }
-

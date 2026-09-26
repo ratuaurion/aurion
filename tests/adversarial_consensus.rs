@@ -21,9 +21,7 @@ use aurion::consensus::bft::certificate::{
     CertificateError, CommitCertificate, ValidatorEntry, ValidatorSet,
 };
 use aurion::consensus::bft::engine::{BftEngine, BftEngineError};
-use aurion::consensus::bft::vote::{
-    Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE,
-};
+use aurion::consensus::bft::vote::{Vote, VoteError, PHASE_PRECOMMIT, PHASE_PREVOTE};
 use aurion::core::{Address, Hash256, Quantum, Signature};
 use aurion::crypto::{derive_address_from_pubkey, Keypair};
 use aurion::genesis::builder::build_genesis;
@@ -76,7 +74,7 @@ impl ClusterFixture {
         let dev_key = Keypair::generate();
         let dev_addr = derive_address_from_pubkey(&dev_key.public_key_bytes());
 
-        let genesis = build_genesis(creator_addr, dev_addr, val_entries.clone());
+        let genesis = build_genesis(creator_addr, val_entries.clone());
 
         let mut ledgers = Vec::with_capacity(4);
         let mut mempools = Vec::with_capacity(4);
@@ -85,10 +83,7 @@ impl ClusterFixture {
         for (idx, key) in val_keys.iter().enumerate().take(4) {
             ledgers.push(ChainLedger::from_genesis(genesis.clone()));
             mempools.push(MempoolEngine::new(1024 * 1024, 3600));
-            engines.push(BftEngine::new(
-                Some(key.clone()),
-                Some(idx as u32),
-            ));
+            engines.push(BftEngine::new(Some(key.clone()), Some(idx as u32)));
         }
 
         Self {
@@ -106,7 +101,13 @@ impl ClusterFixture {
     }
 
     /// Membuat transaksi transfer sah dari creator untuk menguji eksekusi transaksi.
-    fn create_tx(&self, recipient: Address, amount_aur: u64, fee_aur: u64, nonce: u64) -> Transaction {
+    fn create_tx(
+        &self,
+        recipient: Address,
+        amount_aur: u64,
+        fee_aur: u64,
+        nonce: u64,
+    ) -> Transaction {
         let amount = Quantum::from_aur(amount_aur).expect("Valid amount");
         let fee = Quantum::from_aur(fee_aur).expect("Valid fee");
 
@@ -196,7 +197,9 @@ fn test_adversarial_offline_validator_tolerance_liveness() {
         let prevote = cluster.engines[idx]
             .produce_prevote(block_hash, 1, round)
             .expect("Prevote produce succeeded");
-        prevote.verify(&cluster.validator_set).expect("Prevote valid");
+        prevote
+            .verify(&cluster.validator_set)
+            .expect("Prevote valid");
         prevote_weight += cluster.val_entries[idx].voting_weight;
     }
     assert!(prevote_weight >= cluster.validator_set.quorum_threshold());
@@ -207,7 +210,9 @@ fn test_adversarial_offline_validator_tolerance_liveness() {
         let precommit = cluster.engines[idx]
             .produce_precommit(block_hash, 1, round)
             .expect("Precommit produce succeeded");
-        precommit.verify(&cluster.validator_set).expect("Precommit valid");
+        precommit
+            .verify(&cluster.validator_set)
+            .expect("Precommit valid");
         precommits.push(precommit);
     }
 
@@ -330,7 +335,8 @@ fn test_adversarial_partition_healing_and_recovery() {
     // Setelah kegagalan partisi di Round 0, partisi sembuh dan jaringan beralih ke Round 1
     let prev_hash = cluster.ledgers[0].latest_block().hash();
     let round = 1;
-    let proposer_idx = BftEngine::select_proposer(&cluster.validator_set, 1, round, &prev_hash) as usize;
+    let proposer_idx =
+        BftEngine::select_proposer(&cluster.validator_set, 1, round, &prev_hash) as usize;
     let miner_addr = cluster.val_addrs[proposer_idx];
 
     // Proposer terpilih merakit blok di Round 1
@@ -347,10 +353,14 @@ fn test_adversarial_partition_healing_and_recovery() {
     // Seluruh 4 validator telah terhubung kembali dan memberikan suara di Round 1
     let mut precommits = Vec::new();
     for idx in 0..4 {
-        let prevote = cluster.engines[idx].produce_prevote(block_hash, 1, round).unwrap();
+        let prevote = cluster.engines[idx]
+            .produce_prevote(block_hash, 1, round)
+            .unwrap();
         prevote.verify(&cluster.validator_set).unwrap();
 
-        let precommit = cluster.engines[idx].produce_precommit(block_hash, 1, round).unwrap();
+        let precommit = cluster.engines[idx]
+            .produce_precommit(block_hash, 1, round)
+            .unwrap();
         precommit.verify(&cluster.validator_set).unwrap();
         precommits.push(precommit);
     }
@@ -364,7 +374,9 @@ fn test_adversarial_partition_healing_and_recovery() {
 
     // Seluruh 4 node berhasil menerapkan blok hasil pemulihan
     for ledger in &mut cluster.ledgers {
-        ledger.apply_block(block.clone(), &miner_addr).expect("Block applied after partition healed");
+        ledger
+            .apply_block(block.clone(), &miner_addr)
+            .expect("Block applied after partition healed");
         assert_eq!(ledger.latest_height(), 1);
         assert_eq!(ledger.latest_block().hash(), block.hash());
     }
@@ -472,8 +484,15 @@ fn test_adversarial_forged_vote_signature_and_sybil_rejected() {
 
     // Kasus 5b: Penyerang menggunakan validator_index di luar batas (Sybil Index out-of-bounds)
     let out_of_bounds_idx = 99u32;
-    let oob_vote = Vote::new_signed(&attacker_key, PHASE_PRECOMMIT, 1, 0, dummy_hash, out_of_bounds_idx)
-        .expect("Vote signed syntactically");
+    let oob_vote = Vote::new_signed(
+        &attacker_key,
+        PHASE_PRECOMMIT,
+        1,
+        0,
+        dummy_hash,
+        out_of_bounds_idx,
+    )
+    .expect("Vote signed syntactically");
 
     assert_eq!(
         oob_vote.verify(&cluster.validator_set).unwrap_err(),
@@ -530,20 +549,16 @@ fn test_adversarial_phase_confusion_and_illegal_phase_rejected() {
     };
 
     assert_eq!(
-        cert_with_prevote.verify(&cluster.validator_set).unwrap_err(),
+        cert_with_prevote
+            .verify(&cluster.validator_set)
+            .unwrap_err(),
         CertificateError::InvalidPhase(PHASE_PREVOTE)
     );
 
     // Kasus 6b: Pembuatan suara dengan nilai fase ilegal (bukan 0x01 dan bukan 0x02)
     let illegal_phase = 0x03u8;
-    let illegal_vote_res = Vote::new_signed(
-        &cluster.val_keys[0],
-        illegal_phase,
-        1,
-        0,
-        dummy_hash,
-        0,
-    );
+    let illegal_vote_res =
+        Vote::new_signed(&cluster.val_keys[0], illegal_phase, 1, 0, dummy_hash, 0);
 
     assert_eq!(
         illegal_vote_res.unwrap_err(),
@@ -582,7 +597,10 @@ fn test_adversarial_proposer_election_determinism_and_fair_rotation() {
         proposers_seen.insert(p);
     }
     // Dari 10 putaran, setidaknya lebih dari 1 validator unik terpilih
-    assert!(proposers_seen.len() > 1, "Proposer must rotate across rounds");
+    assert!(
+        proposers_seen.len() > 1,
+        "Proposer must rotate across rounds"
+    );
 
     // 4. Kasus himpunan validator kosong
     let empty_set = ValidatorSet::new(Vec::new());
@@ -700,10 +718,12 @@ fn test_adversarial_byzantine_network_simulator_multi_round() {
 
         // Jika proposer terpilih sedang terputus (offline), pacemaker BFT memicu timeout
         // dan menaikkan putaran ke round berikutnya secara deterministik hingga proposer online
-        let mut proposer = BftEngine::select_proposer(&cluster.validator_set, height, round, &prev_hash);
+        let mut proposer =
+            BftEngine::select_proposer(&cluster.validator_set, height, round, &prev_hash);
         while net.dropped_links.contains(&(proposer, (proposer + 1) % 4)) {
             round += 1;
-            proposer = BftEngine::select_proposer(&cluster.validator_set, height, round, &prev_hash);
+            proposer =
+                BftEngine::select_proposer(&cluster.validator_set, height, round, &prev_hash);
         }
         let miner = cluster.val_addrs[proposer as usize];
 

@@ -121,7 +121,9 @@ fn pillar_3_smt_state_roots_and_proofs() {
     assert_ne!(root, Hash256::ZERO);
 
     // Generate dan verify keanggotaan proof
-    let proof = store.generate_account_proof(&user).expect("Generate proof gagal");
+    let proof = store
+        .generate_account_proof(&user)
+        .expect("Generate proof gagal");
     assert_eq!(proof.address, user);
     assert_eq!(proof.account_hash, acc.compute_account_hash());
     assert_eq!(proof.root, root);
@@ -151,7 +153,9 @@ fn pillar_4_da_posting_to_l1() {
     let frame_bytes = frame.encode();
 
     // Ingestion DA frame ke L1 Bridge
-    bridge.verify_state_transition_with_da(&frame_bytes).expect("Posting DA gagal");
+    bridge
+        .verify_state_transition_with_da(&frame_bytes)
+        .expect("Posting DA gagal");
     assert_eq!(bridge.latest_batch_index, 1);
     assert_eq!(bridge.latest_state_root, Hash256::from_bytes([0x11; 32]));
 
@@ -231,10 +235,19 @@ fn pillar_6_two_way_messaging_relayer() {
     };
 
     relayer
-        .process_l2_withdrawal_to_l1(&mut state, user_l2, user_l1, Quantum::new(200_000_000), proof)
+        .process_l2_withdrawal_to_l1(
+            &mut state,
+            user_l2,
+            user_l1,
+            Quantum::new(200_000_000),
+            proof,
+        )
         .expect("Penarikan L2->L1 gagal");
 
-    assert_eq!(state.get_account(&user_l2).unwrap().balance.as_u128(), 300_000_000);
+    assert_eq!(
+        state.get_account(&user_l2).unwrap().balance.as_u128(),
+        300_000_000
+    );
     assert_eq!(relayer.bridge.vault_balance.as_u128(), 300_000_000);
 }
 
@@ -271,7 +284,10 @@ fn pillar_7_forced_inclusion_queue() {
         .process_forced_inclusion_batch(&mut state, 10)
         .expect("Eksekusi batch antrean paksa gagal");
     assert_eq!(executed.len(), 1);
-    assert_eq!(state.get_account(&target).unwrap().balance.as_u128(), 100_000_000);
+    assert_eq!(
+        state.get_account(&target).unwrap().balance.as_u128(),
+        100_000_000
+    );
     assert!(relayer.forced_queue.is_empty());
 }
 
@@ -282,7 +298,9 @@ fn pillar_8_sequencer_mempool_and_soft_finality() {
     assert_eq!(MAX_L2_MEMPOOL_CAPACITY, 10_000);
 
     let sender = Address::from_bytes([1u8; 32]);
-    sequencer.state.set_account(L2Account::new(sender, Quantum::new(500_000_000), 0));
+    sequencer
+        .state
+        .set_account(L2Account::new(sender, Quantum::new(500_000_000), 0));
 
     let tx = L2Transaction::new(
         sender,
@@ -298,7 +316,9 @@ fn pillar_8_sequencer_mempool_and_soft_finality() {
     assert_eq!(sequencer.mempool.len(), 1);
 
     // Produksi blok dengan soft finality (<50ms)
-    let opt = sequencer.produce_block_with_attestation(10).expect("Produksi blok gagal");
+    let opt = sequencer
+        .produce_block_with_attestation(10)
+        .expect("Produksi blok gagal");
     assert!(opt.is_some());
     let (block, receipt) = opt.unwrap();
     assert_eq!(block.header.block_number, 1);
@@ -321,22 +341,30 @@ fn pillar_9_escape_hatch_emergency_exit() {
     bridge.process_deposit(Quantum::new(1_000_000_000)).unwrap(); // Vault ada 10 AUR
 
     let mut relayer = L2Relayer::new(bridge, 100);
-    let proof = state.generate_account_proof(&victim).expect("SMT proof gagal");
+    let proof = state
+        .generate_account_proof(&victim)
+        .expect("SMT proof gagal");
 
     // Klaim ditolak saat jaringan normal
-    let err = relayer.process_escape_hatch(&proof, victim, 10, balance).unwrap_err();
+    let err = relayer
+        .process_escape_hatch(&proof, victim, 10, balance)
+        .unwrap_err();
     assert_eq!(err, RelayerError::EscapeHatchNotActive);
 
     // Memicu pembekuan sequencer
     relayer.trigger_emergency_freeze();
 
     // Klaim berhasil saat freeze
-    let claimed = relayer.process_escape_hatch(&proof, victim, 10, balance).expect("Escape hatch gagal");
+    let claimed = relayer
+        .process_escape_hatch(&proof, victim, 10, balance)
+        .expect("Escape hatch gagal");
     assert_eq!(claimed, balance);
     assert_eq!(relayer.bridge.vault_balance.as_u128(), 200_000_000);
 
     // Proteksi anti-klaim ganda
-    let double_err = relayer.process_escape_hatch(&proof, victim, 10, balance).unwrap_err();
+    let double_err = relayer
+        .process_escape_hatch(&proof, victim, 10, balance)
+        .unwrap_err();
     assert_eq!(double_err, RelayerError::AlreadyClaimed(victim));
 }
 

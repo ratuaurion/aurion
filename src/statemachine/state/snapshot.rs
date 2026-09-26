@@ -119,14 +119,15 @@ impl StateSnapshot {
         }
 
         // Terapkan seluruh akun ke database storage
-        let cert = self.certificate.clone().unwrap_or_else(|| {
-            CommitCertificate {
+        let cert = self
+            .certificate
+            .clone()
+            .unwrap_or_else(|| CommitCertificate {
                 height: self.height,
                 round: 0,
                 block_hash: self.block_hash,
                 precommits: Vec::new(),
-            }
-        });
+            });
         let dummy_block = crate::consensus::block::Block::new(
             crate::consensus::header::BlockHeader {
                 version: 1,

@@ -125,7 +125,6 @@ fn now_millis() -> u128 {
         .unwrap_or(0)
 }
 
-
 /// Registry metadata kontrak **off-chain** per simpul.
 ///
 /// Metadata (ABI + runtime) sengaja TIDAK disimpan on-chain: `Account` hanya
@@ -204,11 +203,11 @@ pub fn decode_raw_tx(raw_hex: &str) -> Result<Transaction, JsonRpcError> {
 fn optional_u64(params: &[String], index: usize, name: &str) -> Result<Option<u64>, JsonRpcError> {
     match params.get(index) {
         None => Ok(None),
-        Some(raw) => raw
-            .trim()
-            .parse::<u64>()
-            .map(Some)
-            .map_err(|_| invalid_params(format!("Parameter '{name}' harus integer u64: '{raw}'"))),
+        Some(raw) => {
+            raw.trim().parse::<u64>().map(Some).map_err(|_| {
+                invalid_params(format!("Parameter '{name}' harus integer u64: '{raw}'"))
+            })
+        }
     }
 }
 
@@ -348,7 +347,9 @@ pub fn parse_address(raw: &str) -> Result<Address, JsonRpcError> {
     }
     let cleaned = raw.trim().trim_start_matches("0x");
     let bytes = hex::decode(cleaned).map_err(|e| {
-        invalid_params(format!("address '{raw}' bukan Bech32m 'aur' maupun hex: {e}"))
+        invalid_params(format!(
+            "address '{raw}' bukan Bech32m 'aur' maupun hex: {e}"
+        ))
     })?;
     if bytes.len() != 32 {
         return Err(invalid_params(format!(
@@ -435,10 +436,7 @@ pub fn handle_call(
 ///
 /// # Errors
 /// `-32602` parameter salah, `-32004` kuota habis.
-pub fn handle_estimate_gas(
-    ctx: &RpcContext,
-    params: &[String],
-) -> Result<String, JsonRpcError> {
+pub fn handle_estimate_gas(ctx: &RpcContext, params: &[String]) -> Result<String, JsonRpcError> {
     let raw_hex = params
         .first()
         .ok_or_else(|| invalid_params("Missing raw transaction hex parameter"))?;
@@ -723,4 +721,3 @@ impl IntentBinding {
         }
     }
 }
-

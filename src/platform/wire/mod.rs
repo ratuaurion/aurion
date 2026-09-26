@@ -16,9 +16,9 @@ pub use frame::{
     MAX_WIRE_PAYLOAD_BYTES, WIRE_FRAME_HEADER_BYTES, WIRE_MAGIC,
 };
 pub use handshake::{
-    validate_handshake_ack, validate_handshake_hello, HandshakeAck, HandshakeError,
-    HandshakeHello, DST_HANDSHAKE_ACK, DST_HANDSHAKE_HELLO, HANDSHAKE_STATUS_FAILED,
-    HANDSHAKE_STATUS_SUCCESS, MAX_CLOCK_DRIFT_SECS, PROTOCOL_VERSION_V1,
+    validate_handshake_ack, validate_handshake_hello, HandshakeAck, HandshakeError, HandshakeHello,
+    DST_HANDSHAKE_ACK, DST_HANDSHAKE_HELLO, HANDSHAKE_STATUS_FAILED, HANDSHAKE_STATUS_SUCCESS,
+    MAX_CLOCK_DRIFT_SECS, PROTOCOL_VERSION_V1,
 };
 pub use messages::*;
 pub use peer::{

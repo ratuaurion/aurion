@@ -1,8 +1,8 @@
 //! CommitCertificate dan Quorum Verification BFT konsensus Aurion.
 
 use crate::codec::{CanonicalDecode, CanonicalEncode, CodecError};
-use crate::core::{Address, Hash256};
 use crate::consensus::vote::{Vote, PHASE_PRECOMMIT, VOTE_BYTES};
+use crate::core::{Address, Hash256};
 use thiserror::Error;
 
 pub const VALIDATOR_ENTRY_BYTES: usize = 72;
@@ -225,7 +225,10 @@ mod tests {
         assert_eq!(&bytes[40..48], &3u64.to_be_bytes());
         assert_eq!(&bytes[48..52], &1u32.to_be_bytes());
         assert_eq!(bytes[52], PHASE_PRECOMMIT);
-        assert_eq!(&bytes[52 + 1 + 8 + 8 + 32..52 + 1 + 8 + 8 + 32 + 4], &2u32.to_be_bytes());
+        assert_eq!(
+            &bytes[52 + 1 + 8 + 8 + 32..52 + 1 + 8 + 8 + 32 + 4],
+            &2u32.to_be_bytes()
+        );
         assert_eq!(&bytes[bytes.len() - 64..], &[0x22; 64]);
 
         let decoded = CommitCertificate::decode_canonical_exact(&bytes).expect("decode vector");

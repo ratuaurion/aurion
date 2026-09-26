@@ -3,10 +3,10 @@
 //! AUR-L3-STATE-001 (SMT Root 256-bit), AUR-L3-STATE-002 (State Witness Availability),
 //! dan AUR-L3-SEC-001 (Domain Fault Isolation & Atomic Rollback).
 
-use std::collections::BTreeMap;
 use crate::core::{Address, Hash256, Quantum};
 use crate::specialized::types::DomainId;
 use crate::state::smt::{smt_branch_hash, smt_leaf_hash};
+use std::collections::BTreeMap;
 
 /// Ukuran kanonikal representasi biner L3AccountState: 32 + 16 + 8 + 32 + 4 = 92 byte
 pub const L3_ACCOUNT_ENCODED_SIZE: usize = 92;
@@ -161,7 +161,9 @@ impl L3State {
     /// Mengambil saldo akun (0 jika belum terdaftar)
     #[must_use]
     pub fn get_balance(&self, address: &Address) -> Quantum {
-        self.accounts.get(address).map_or(Quantum::ZERO, |a| a.balance)
+        self.accounts
+            .get(address)
+            .map_or(Quantum::ZERO, |a| a.balance)
     }
 
     /// Mengambil nonce akun (0 jika belum terdaftar)
@@ -172,37 +174,47 @@ impl L3State {
 
     /// Menambah saldo akun secara aman (Zero-Float)
     pub fn credit(&mut self, address: &Address, amount: Quantum) -> Result<(), &'static str> {
-        let acct = self.accounts.entry(*address).or_insert_with(|| {
-            L3AccountState::new(*address, Quantum::ZERO, 0)
-        });
-        acct.balance = acct.balance.checked_add(amount)
+        let acct = self
+            .accounts
+            .entry(*address)
+            .or_insert_with(|| L3AccountState::new(*address, Quantum::ZERO, 0));
+        acct.balance = acct
+            .balance
+            .checked_add(amount)
             .map_err(|_| "Overflow saldo akun L3")?;
         Ok(())
     }
 
     /// Mengurangi saldo akun secara aman (Zero-Float)
     pub fn debit(&mut self, address: &Address, amount: Quantum) -> Result<(), &'static str> {
-        let acct = self.accounts.get_mut(address)
+        let acct = self
+            .accounts
+            .get_mut(address)
             .ok_or("Akun L3 tidak ditemukan untuk didebit")?;
-        acct.balance = acct.balance.checked_sub(amount)
+        acct.balance = acct
+            .balance
+            .checked_sub(amount)
             .map_err(|_| "Saldo akun L3 tidak mencukupi")?;
         Ok(())
     }
 
     /// Menaikkan nonce akun sebesar 1
     pub fn increment_nonce(&mut self, address: &Address) -> Result<u64, &'static str> {
-        let acct = self.accounts.entry(*address).or_insert_with(|| {
-            L3AccountState::new(*address, Quantum::ZERO, 0)
-        });
-        acct.nonce = acct.nonce.checked_add(1)
-            .ok_or("Overflow nonce akun L3")?;
+        let acct = self
+            .accounts
+            .entry(*address)
+            .or_insert_with(|| L3AccountState::new(*address, Quantum::ZERO, 0));
+        acct.nonce = acct.nonce.checked_add(1).ok_or("Overflow nonce akun L3")?;
         Ok(acct.nonce)
     }
 
     /// Mengambil nilai storage kontrak pada slot tertentu
     #[must_use]
     pub fn get_storage(&self, address: &Address, key: &Hash256) -> Hash256 {
-        self.storage.get(&(*address, *key)).copied().unwrap_or(Hash256::ZERO)
+        self.storage
+            .get(&(*address, *key))
+            .copied()
+            .unwrap_or(Hash256::ZERO)
     }
 
     /// Menulis nilai storage kontrak pada slot tertentu dan memperbarui storage_root
@@ -227,7 +239,8 @@ impl L3State {
     /// Membuat checkpoint snapshot state untuk isolasi transaksi & rollback
     pub fn snapshot(&mut self) -> usize {
         let id = self.snapshots.len();
-        self.snapshots.push((self.accounts.clone(), self.storage.clone()));
+        self.snapshots
+            .push((self.accounts.clone(), self.storage.clone()));
         id
     }
 
@@ -259,7 +272,8 @@ impl L3State {
             return Hash256::ZERO;
         }
 
-        let mut current_level: Vec<Hash256> = self.accounts
+        let mut current_level: Vec<Hash256> = self
+            .accounts
             .values()
             .map(L3AccountState::compute_account_hash)
             .collect();
@@ -268,7 +282,11 @@ impl L3State {
             let mut next_level = Vec::with_capacity(current_level.len().div_ceil(2));
             for chunk in current_level.chunks(2) {
                 let left = &chunk[0];
-                let right = if chunk.len() > 1 { &chunk[1] } else { &chunk[0] };
+                let right = if chunk.len() > 1 {
+                    &chunk[1]
+                } else {
+                    &chunk[0]
+                };
                 next_level.push(smt_branch_hash(left, right));
             }
             current_level = next_level;
@@ -286,7 +304,8 @@ impl L3State {
         let addrs: Vec<&Address> = self.accounts.keys().collect();
         let target_idx = addrs.iter().position(|&a| a == address)?;
 
-        let mut current_hashes: Vec<Hash256> = self.accounts
+        let mut current_hashes: Vec<Hash256> = self
+            .accounts
             .values()
             .map(L3AccountState::compute_account_hash)
             .collect();
@@ -310,7 +329,11 @@ impl L3State {
             let mut next_hashes = Vec::with_capacity(current_hashes.len().div_ceil(2));
             for chunk in current_hashes.chunks(2) {
                 let left = &chunk[0];
-                let right = if chunk.len() > 1 { &chunk[1] } else { &chunk[0] };
+                let right = if chunk.len() > 1 {
+                    &chunk[1]
+                } else {
+                    &chunk[0]
+                };
                 next_hashes.push(smt_branch_hash(left, right));
             }
             current_hashes = next_hashes;
@@ -392,9 +415,15 @@ mod tests {
 
         // Verifikasi membership proof untuk setiap akun
         for addr in [&addr1, &addr2, &addr3] {
-            let proof = state.generate_account_proof(addr).expect("Proof harus berhasil dibuat");
+            let proof = state
+                .generate_account_proof(addr)
+                .expect("Proof harus berhasil dibuat");
             assert_eq!(proof.root, root);
-            assert!(proof.verify(), "Proof verification harus lolos untuk {:?}", addr);
+            assert!(
+                proof.verify(),
+                "Proof verification harus lolos untuk {:?}",
+                addr
+            );
         }
     }
 }

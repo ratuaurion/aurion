@@ -20,7 +20,7 @@ use crate::mempool::MempoolEngine;
 use crate::state::account::Account;
 use crate::transaction::types::{Transaction, TxType};
 
-pub const DEFAULT_FAUCET_DISPENSE_QUANTA: u128 = 1_000_000_000; // 10 AUR (10 * 10^8 Quanta)
+pub const DEFAULT_FAUCET_DISPENSE_QUANTA: u128 = 1_000_000_000; // 1 AUR (10^9 Quanta)
 pub const DEFAULT_FAUCET_FEE_QUANTA: u128 = 2_000; // 0.00002 AUR
 pub const DEFAULT_FAUCET_COOLDOWN_SECS: u64 = 60; // 60 detik cooldown per alamat
 
@@ -30,7 +30,7 @@ pub const DEFAULT_FAUCET_COOLDOWN_SECS: u64 = 60; // 60 detik cooldown per alama
 /// rekening hingga nol: sedetik setelah saldo nol, faucet tidak lagi dapat
 /// melayani siapa pun dan jaringan kehilangan sumber dana pembangun. Dengan
 /// reserving, operator melihat "faucet dry" jauh sebelum kejadian.
-pub const DEFAULT_FAUCET_RESERVE_FLOOR_QUANTA: u128 = 100_000_000; // 1 AUR
+pub const DEFAULT_FAUCET_RESERVE_FLOOR_QUANTA: u128 = 1_000_000_000; // 1 AUR
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 pub enum FaucetError {

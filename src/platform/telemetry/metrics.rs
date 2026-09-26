@@ -43,13 +43,22 @@ impl MetricsRegistry {
     }
 
     /// Rekam mutasi blok baru pada metrik.
-    pub fn record_block(&self, height: u64, round: u64, tx_count: u64, burned_quanta: u128, latency_ms: u64) {
+    pub fn record_block(
+        &self,
+        height: u64,
+        round: u64,
+        tx_count: u64,
+        burned_quanta: u128,
+        latency_ms: u64,
+    ) {
         self.block_height.store(height, Ordering::SeqCst);
         self.bft_round.store(round, Ordering::SeqCst);
-        self.transactions_processed_total.fetch_add(tx_count, Ordering::SeqCst);
+        self.transactions_processed_total
+            .fetch_add(tx_count, Ordering::SeqCst);
         self.blocks_finalized_total.fetch_add(1, Ordering::SeqCst);
-        self.bft_finality_latency_ms.store(latency_ms, Ordering::SeqCst);
-        
+        self.bft_finality_latency_ms
+            .store(latency_ms, Ordering::SeqCst);
+
         let mut burned = self.burned_quanta_total.lock().unwrap();
         *burned = burned.saturating_add(burned_quanta);
     }
@@ -81,49 +90,88 @@ impl MetricsRegistry {
 
         let mut out = String::with_capacity(2048);
 
-        out.push_str("# HELP aurion_block_height Current canonical block height of the sovereign ledger.\n");
+        out.push_str(
+            "# HELP aurion_block_height Current canonical block height of the sovereign ledger.\n",
+        );
         out.push_str("# TYPE aurion_block_height gauge\n");
-        out.push_str(&format!("aurion_block_height{{chain_id=\"{}\"}} {}\n\n", chain, height));
+        out.push_str(&format!(
+            "aurion_block_height{{chain_id=\"{}\"}} {}\n\n",
+            chain, height
+        ));
 
         out.push_str("# HELP aurion_bft_round Current BFT consensus round.\n");
         out.push_str("# TYPE aurion_bft_round gauge\n");
-        out.push_str(&format!("aurion_bft_round{{chain_id=\"{}\"}} {}\n\n", chain, round));
+        out.push_str(&format!(
+            "aurion_bft_round{{chain_id=\"{}\"}} {}\n\n",
+            chain, round
+        ));
 
-        out.push_str("# HELP aurion_bft_validators_active Number of active consensus validators.\n");
+        out.push_str(
+            "# HELP aurion_bft_validators_active Number of active consensus validators.\n",
+        );
         out.push_str("# TYPE aurion_bft_validators_active gauge\n");
-        out.push_str(&format!("aurion_bft_validators_active{{chain_id=\"{}\"}} {}\n\n", chain, validators));
+        out.push_str(&format!(
+            "aurion_bft_validators_active{{chain_id=\"{}\"}} {}\n\n",
+            chain, validators
+        ));
 
         out.push_str("# HELP aurion_connected_peers Number of active authenticated P2P peers.\n");
         out.push_str("# TYPE aurion_connected_peers gauge\n");
-        out.push_str(&format!("aurion_connected_peers{{chain_id=\"{}\"}} {}\n\n", chain, peers));
+        out.push_str(&format!(
+            "aurion_connected_peers{{chain_id=\"{}\"}} {}\n\n",
+            chain, peers
+        ));
 
-        out.push_str("# HELP aurion_mempool_size Number of pending transactions currently in the mempool.\n");
+        out.push_str(
+            "# HELP aurion_mempool_size Number of pending transactions currently in the mempool.\n",
+        );
         out.push_str("# TYPE aurion_mempool_size gauge\n");
-        out.push_str(&format!("aurion_mempool_size{{chain_id=\"{}\"}} {}\n\n", chain, mempool));
+        out.push_str(&format!(
+            "aurion_mempool_size{{chain_id=\"{}\"}} {}\n\n",
+            chain, mempool
+        ));
 
         out.push_str("# HELP aurion_node_sync_status Node synchronization status (1 = synced, 0 = syncing).\n");
         out.push_str("# TYPE aurion_node_sync_status gauge\n");
-        out.push_str(&format!("aurion_node_sync_status{{chain_id=\"{}\"}} {}\n\n", chain, sync));
+        out.push_str(&format!(
+            "aurion_node_sync_status{{chain_id=\"{}\"}} {}\n\n",
+            chain, sync
+        ));
 
         out.push_str("# HELP aurion_transactions_processed_total Total count of transactions processed and finalized.\n");
         out.push_str("# TYPE aurion_transactions_processed_total counter\n");
-        out.push_str(&format!("aurion_transactions_processed_total{{chain_id=\"{}\"}} {}\n\n", chain, txs));
+        out.push_str(&format!(
+            "aurion_transactions_processed_total{{chain_id=\"{}\"}} {}\n\n",
+            chain, txs
+        ));
 
         out.push_str("# HELP aurion_blocks_finalized_total Total number of blocks committed to the ledger.\n");
         out.push_str("# TYPE aurion_blocks_finalized_total counter\n");
-        out.push_str(&format!("aurion_blocks_finalized_total{{chain_id=\"{}\"}} {}\n\n", chain, blocks));
+        out.push_str(&format!(
+            "aurion_blocks_finalized_total{{chain_id=\"{}\"}} {}\n\n",
+            chain, blocks
+        ));
 
         out.push_str("# HELP aurion_burned_quanta_total Cumulative quanta permanently burned by the 20% protocol fee split.\n");
         out.push_str("# TYPE aurion_burned_quanta_total counter\n");
-        out.push_str(&format!("aurion_burned_quanta_total{{chain_id=\"{}\"}} {}\n\n", chain, burned));
+        out.push_str(&format!(
+            "aurion_burned_quanta_total{{chain_id=\"{}\"}} {}\n\n",
+            chain, burned
+        ));
 
         out.push_str("# HELP aurion_bft_finality_latency_ms Round-based BFT finality commit latency in milliseconds.\n");
         out.push_str("# TYPE aurion_bft_finality_latency_ms gauge\n");
-        out.push_str(&format!("aurion_bft_finality_latency_ms{{chain_id=\"{}\"}} {}\n\n", chain, latency));
+        out.push_str(&format!(
+            "aurion_bft_finality_latency_ms{{chain_id=\"{}\"}} {}\n\n",
+            chain, latency
+        ));
 
         out.push_str("# HELP aurion_active_protocol_version Active on-chain protocol version.\n");
         out.push_str("# TYPE aurion_active_protocol_version gauge\n");
-        out.push_str(&format!("aurion_active_protocol_version{{chain_id=\"{}\"}} {}\n\n", chain, version));
+        out.push_str(&format!(
+            "aurion_active_protocol_version{{chain_id=\"{}\"}} {}\n\n",
+            chain, version
+        ));
 
         out.push_str("# EOF\n");
         out
