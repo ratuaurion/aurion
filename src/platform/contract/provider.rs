@@ -183,6 +183,35 @@ impl RpcProvider {
         client::contract_call(&self.rpc_url, &raw_hex)
             .map_err(|e| ContractError::Provider(e.to_string()))
     }
+
+    /// Daftarkan metadata kontrak ke registry **off-chain** simpul
+    /// (`aur_sendContractMetadata`).
+    ///
+    /// Registry bersifat in-memory per simpul: hilang saat restart, tidak
+    /// tercermin dalam konsensus, dan hanya indeks penolong untuk CLI/SDK.
+    ///
+    /// # Inputs
+    /// - `code_hash`: `code_hash` kontrak (`blake3(payload deploy)`).
+    /// - `metadata`: metadata yang akan didaftarkan.
+    ///
+    /// # Outputs
+    /// - `Ok(())`: metadata terdaftar.
+    ///
+    /// # Errors
+    /// Metadata gagal diserialisasi, atau simpul menolak (mis. `code_hash`
+    /// pada metadata tidak cocok dengan parameter).
+    pub fn publish_metadata(
+        &self,
+        code_hash: &Hash256,
+        metadata: &super::metadata::ContractMetadata,
+    ) -> Result<(), ContractError> {
+        let json = metadata
+            .to_json()
+            .map_err(|e| ContractError::Metadata(e.to_string()))?;
+        client::publish_contract_metadata(&self.rpc_url, &code_hash.to_hex(), &json)
+            .map(|_| ())
+            .map_err(|e| ContractError::Provider(e.to_string()))
+    }
 }
 
 /// Serialisasi kanonikal transaksi untuk transport `aur_call`.

@@ -262,6 +262,31 @@ pub fn get_contract_metadata(rpc_url: &str, code_hash_hex: &str) -> Result<Strin
     }
 }
 
+/// Panggil `aur_sendContractMetadata`: daftarkan metadata kontrak ke registry
+/// off-chain simpul.
+///
+/// # Inputs
+/// - `rpc_url`: URL JSON-RPC simpul.
+/// - `code_hash_hex`: `code_hash` kontrak dalam hex.
+/// - `metadata_json`: metadata kontrak dalam JSON kanonik.
+///
+/// # Outputs
+/// Objek konfirmasi dari simpul.
+///
+/// # Errors
+/// Transport gagal atau simpul menolak (mis. `code_hash` tidak cocok).
+pub fn publish_contract_metadata(
+    rpc_url: &str,
+    code_hash_hex: &str,
+    metadata_json: &str,
+) -> Result<Value, RpcClientError> {
+    call(
+        rpc_url,
+        "aur_sendContractMetadata",
+        &[code_hash_hex, metadata_json],
+    )
+}
+
 /// Parse objek hasil `aur_call` menjadi [`crate::state::sandbox::DryRunReport`].
 ///
 /// # Inputs

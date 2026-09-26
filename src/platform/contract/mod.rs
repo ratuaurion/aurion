@@ -29,6 +29,7 @@
 //! - Zero unsafe (AUR-ARCH-011), zero float (AUR-ARCH-012), payload maksimal 24 KB.
 
 pub mod calldata;
+pub mod cli;
 pub mod error;
 pub mod instance;
 pub mod intent;
@@ -51,3 +52,5 @@ pub use metadata::{
 };
 pub use provider::{DryRunReport, MemoryProvider, Provider, RpcProvider};
 pub use signer::{ApprovalMode, KeystoreSigner, Signer};
+
+pub use cli::{handle_contract_subcommand, print_contract_help};

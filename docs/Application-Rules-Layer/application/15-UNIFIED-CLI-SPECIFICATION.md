@@ -69,9 +69,41 @@ aurion
 ├── genesis       -> Inspeksi parameter dan hash blok genesis (inspect, hash, validate)
 ├── rpc           -> Gateway JSON-RPC 2.0 & WebSocket mandiri (start, status)
 ├── query         -> Kueri cepat terhadap simpul lokal/remote (block, tx, account)
+├── contract      -> Operasi kontrak AVM melalui Contract SDK
+│                    (verify, deploy, call, query, metadata, publish-metadata, inspect)
 ├── conformance   -> Runner pengujian kepatuhan protokol 8-Pilar CTS (run, export)
 └── version       -> Informasi versi atomik SemVer 2.0.0, commit git, dan flag kompilasi
 ```
+
+### 3.1 Modul Kontrak (`aurion contract`)
+
+Modul ini adalah bridge CLI resmi antara Contract SDK (`src/platform/contract/`)
+dan simpul JSON-RPC. Seluruh logika kontrak tetap hidup di SDK; CLI hanya
+menangani parsing argumen, penyelesaian keystore, dan presentasi.
+
+| Subcommand | Kelas | R-network | R-keystore | Keterangan |
+| :--- | :--- | :---: | :---: | :--- |
+| `verify <file\|hex>` | Read | tidak | tidak | Verifikasi statis bytecode AVM (AUR-VM-005). |
+| `deploy <file\|hex>` | Mutating* | ya* | ya* | Tanpa `--keystore` hanya verifikasi offline (kompatibilitas mundur). |
+| `call <addr> <method> [args...]` | Mutating | ya | ya | Urutan wajib: dry-run -> clear signing -> broadcast. |
+| `query <addr> <method> [args...]` | Read | ya | **tidak** | Menjalankan `aur_call` tanpa menandatangani/menyiarkan. |
+| `metadata <addr\|code_hash>` | Read | ya | tidak | Menampilkan ABI, selector, dan `code_hash`. |
+| `publish-metadata <code_hash>` | Read | ya | tidak | Mendaftarkan metadata ke registry off-chain simpul. |
+| `inspect <addr>` | Read | tidak | tidak | Membaca state kontrak dari redb lokal. |
+
+Aturan keselamatan yang WAJIB dipatuhi:
+
+1. **Pemisahan simulasi vs broadcast.** `call` dan `deploy` menampilkan hasil
+   dry-run sebelum meminta persetujuan clear-signing. Tidak ada penandatanganan
+   sebelum pengguna melihat hasil simulasi.
+2. **Anti-penipuan binding.** Metadata wajib lolos `verify_binding()` terhadap
+   `code_hash` on-chain sebelum simulasi dijalankan.
+3. **Non-interaktif eksplisit.** Pada lingkungan non-TTY tanpa `--yes`, CLI
+   menolak dengan pesan jelas; CLI tidak boleh menandatangani secara diam-diam.
+4. **Tanpa panic.** Kesalahan jaringan, keystore, dan parsing menghasilkan pesan
+   ramah pengguna dan kode status keluar non-zero.
+
+Panduan operasional lengkap: `docs/operations/CONTRACT_CLI_GUIDE.md`.
 
 ---
 
