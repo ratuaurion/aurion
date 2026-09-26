@@ -31,12 +31,58 @@ pub enum CliCommand {
     Recovery(Vec<String>),
     Version,
     Help,
+    /// Bantuan untuk **subperintah** tertentu, mis. `aurion node --help`.
+    ///
+    /// Dihasilkan hanya bila argumen help muncul SETELAH nama perintah, sehingga
+    /// `aurion --help` (tanpa perintah) tetap memakai `Help` biasa.
+    SubcommandHelp {
+        command: String,
+        args: Vec<String>,
+    },
+}
+
+/// Perintah yang memiliki layar bantuan khusus (bukan master help).
+///
+/// Daftar ini eksplisit agar `aurion <apa-pun> --help` tidak pernah jatuh ke
+/// penangan yang menjalankan proses sungguhan.
+pub const HELP_CAPABLE_COMMANDS: &[&str] = &[
+    "node", "validator", "wallet", "account", "block", "tx", "storage", "genesis", "rpc", "query",
+    "network", "contract", "conformance", "l2", "specialized", "l3", "interop", "l4", "infra",
+    "l5", "devnet", "testnet", "snapshot", "faucet", "explorer", "audit", "metrics",
+    "governance", "gov", "recovery", "dr",
+];
+
+/// Deteksi permintaan bantuan pada tingkat subperintah.
+///
+/// Mengembalikan `true` bila `args` berisi `--help`/`-h`/`help` di posisi mana
+/// pun setelah nama perintah. Ini yang mencegah `aurion node --help` menjalankan
+/// node sungguhan — bug yang hanya ditemukan saat perintah "aman" tidak
+/// berbahaya seperti yang diasumsikan.
+#[must_use]
+pub fn wants_subcommand_help(args: &[String]) -> bool {
+    args.iter()
+        .any(|a| a == "--help" || a == "-h" || a == "help")
 }
 
 impl CliCommand {
     pub fn parse(args: &[String]) -> Self {
         if args.is_empty() {
             return Self::Help;
+        }
+
+        // PERBAIKAN BUG: `--help`/`-h`/`help` setelah nama perintah harus
+        // menampilkan bantuan, bukan menjalankan proses. Sebelumnya
+        // `aurion node --help` jatuh ke `CliCommand::Node(["--help"])`, yang
+        // default sub-nya "start" sehingga Full Node benar-benar dijalankan
+        // (dan menyambung ke bootnode mainnet).
+        if args[0] != "help" && args[0] != "-h" && args[0] != "--help" {
+            let is_known = HELP_CAPABLE_COMMANDS.contains(&args[0].as_str());
+            if is_known && wants_subcommand_help(&args[1..]) {
+                return Self::SubcommandHelp {
+                    command: args[0].clone(),
+                    args: args[1..].to_vec(),
+                };
+            }
         }
 
         match args[0].as_str() {

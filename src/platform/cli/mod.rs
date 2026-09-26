@@ -5,6 +5,7 @@
 
 pub mod command;
 pub mod dispatcher;
+pub mod faucet_cmd;
 pub mod output;
 
 pub use command::CliCommand;

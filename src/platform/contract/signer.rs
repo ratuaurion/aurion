@@ -128,6 +128,16 @@ impl KeystoreSigner {
     pub fn approval_mode(&self) -> ApprovalMode {
         self.mode
     }
+
+    /// Ekspor kunci privat ke bentuk `Keypair` Aurion.
+    ///
+    /// Hanya untuk komponen yang harus menandatangani (faucet).
+    /// `Keypair` membasahi seed privat saat di-drop, dan `Debug` keduanya
+    /// sama-sama tidak pernah membocorkan kunci privat (AUR-ARCH-015).
+    #[must_use]
+    pub fn to_keypair(&self) -> crate::crypto::Keypair {
+        crate::crypto::Keypair::from_signing_key(&self.key)
+    }
 }
 
 /// `Debug` manual: **tidak pernah** membocorkan seed kunci privat (AUR-ARCH-015).

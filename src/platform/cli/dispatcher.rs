@@ -235,25 +235,6 @@ struct SnapshotMetadataInfo {
 }
 
 #[derive(Serialize)]
-struct FaucetStatusInfo {
-    status: &'static str,
-    network: &'static str,
-    faucet_address: String,
-    dispense_amount_aur: &'static str,
-    dispense_amount_quanta: u128,
-    cooldown_seconds: u64,
-}
-
-#[derive(Serialize)]
-struct FaucetRequestInfo {
-    status: &'static str,
-    recipient: String,
-    amount_aur: &'static str,
-    amount_quanta: u128,
-    tx_hash: String,
-}
-
-#[derive(Serialize)]
 struct ExplorerSummaryInfo {
     network: &'static str,
     chain_id: u32,
@@ -1095,6 +1076,14 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         ),
                     }
                 });
+            }
+
+            // Faucet produksi: hanya diaktifkan bila operator SECARA EKSPLISIT
+            // memberikan --faucet-key. Node TIDAK PERNAH otomatis mengaktifkan
+            // faucet, supaya tidak ada rekening berdaulat yang tanpa disengaja
+            // mulai membagikan dana.
+            if let Some(faucet_key_path) = get_arg_value(&args, "--faucet-key") {
+                attach_node_faucet(&node, &faucet_key_path, &args)?;
             }
 
             let rpc_node = Arc::clone(&node);
@@ -2887,91 +2876,29 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             Ok(())
         }
 
+        // PERBAIKAN: sebelumnya handler ini mencetak nilai PALSU (status
+        // "DISPENSED" + tx hash rekaan) tanpa pernah menyentuh jaringan.
+        // Sekarang seluruh subperintah benar-benar bekerja ke simpul / state.
         CliCommand::Faucet(args) => {
-            let sub = args.first().map(|s| s.as_str()).unwrap_or("status");
+            // `aurion faucet` polos menampilkan bantuan, bukan menjalankan
+            // `status` yang butuh kredensial. Perintah tanpa argumen harus
+            // aman, bukan gagal dengan pesan galat yang membingungkan.
+            let Some(sub) = args.first().map(|s| s.as_str()) else {
+                print_subcommand_help("faucet");
+                return Ok(());
+            };
+            // `args` dijamin tidak kosong di atas, jadi slicing aman.
+            let rest: &[String] = &args[1..];
             match sub {
-                "request" => {
-                    let recipient = args
-                        .get(1)
-                        .cloned()
-                        .or_else(|| get_arg_value(&args, "--to"))
-                        .unwrap_or_else(|| {
-                            "aur1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqsqqqqqqqq"
-                                .to_string()
-                        });
-
-                    let info = FaucetRequestInfo {
-                        status: "DISPENSED",
-                        recipient: recipient.to_string(),
-                        amount_aur: "10.00000000",
-                        amount_quanta: 1_000_000_000,
-                        tx_hash:
-                            "0x8f10a7b4892c5d1e2f3a4b5c6d7e8f90123456789abcdef0123456789abcdef0"
-                                .to_string(),
-                    };
-
-                    format.print(&info, || {
-                        println!(
-                            "=================================================================="
-                        );
-                        println!(
-                            "             AURION PUBLIC TESTNET FAUCET DISPENSER               "
-                        );
-                        println!(
-                            "=================================================================="
-                        );
-                        println!("  Status:           {}", info.status);
-                        println!("  Recipient:        {}", info.recipient);
-                        println!(
-                            "  Dispensed Amount: {} AUR ({} Quanta)",
-                            info.amount_aur, info.amount_quanta
-                        );
-                        println!("  Tx Hash:          {}", info.tx_hash);
-                        println!(
-                            "=================================================================="
-                        );
-                    });
-                }
+                "init" => crate::platform::cli::faucet_cmd::cmd_init(rest, format),
+                "claim" | "request" => crate::platform::cli::faucet_cmd::cmd_claim(rest, format),
+                "status" => crate::platform::cli::faucet_cmd::cmd_status(rest, format),
+                "audit" => crate::platform::cli::faucet_cmd::cmd_audit(rest, format),
                 _ => {
-                    let info = FaucetStatusInfo {
-                        status: "ONLINE",
-                        network: "aurion-public-testnet",
-                        faucet_address:
-                            "aur1dev0000000000000000000000000000000000000000000000000sqqqqqqqq"
-                                .to_string(),
-                        dispense_amount_aur: "10.00000000",
-                        dispense_amount_quanta: 1_000_000_000,
-                        cooldown_seconds: 60,
-                    };
-
-                    format.print(&info, || {
-                        println!(
-                            "=================================================================="
-                        );
-                        println!(
-                            "               AURION TESTNET FAUCET STATUS                       "
-                        );
-                        println!(
-                            "=================================================================="
-                        );
-                        println!("  Status:           {}", info.status);
-                        println!("  Network:          {}", info.network);
-                        println!("  Faucet Address:   {}", info.faucet_address);
-                        println!(
-                            "  Quota Per Claim:  {} AUR ({} Quanta)",
-                            info.dispense_amount_aur, info.dispense_amount_quanta
-                        );
-                        println!(
-                            "  Cooldown Period:  {} seconds per address",
-                            info.cooldown_seconds
-                        );
-                        println!(
-                            "=================================================================="
-                        );
-                    });
+                    print_subcommand_help("faucet");
+                    Ok(())
                 }
             }
-            Ok(())
         }
 
         CliCommand::Explorer(args) => {
@@ -3497,6 +3424,13 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             print_master_help();
             Ok(())
         }
+
+        // Bantuan tingkat subperintah (mis. `aurion node --help`).
+        // Selalu read-only: tidak pernah menjalankan proses apa pun.
+        CliCommand::SubcommandHelp { command, .. } => {
+            print_subcommand_help(&command);
+            Ok(())
+        }
     }
 }
 
@@ -3525,6 +3459,205 @@ fn normalize_tcp_endpoint(endpoint: &str) -> String {
     } else {
         format!("tcp/{endpoint}")
     }
+}
+
+fn print_subcommand_help(command: &str) {
+    println!("================================================================================");
+    println!("  aurion {command} -- AURION UNIFIED CLI");
+    println!("================================================================================");
+    println!();
+    match command {
+        "node" => {
+            println!("Usage: aurion node [subcommand] [options]");
+            println!();
+            println!("Subcommands:");
+            println!("  start        Start the sovereign full node & JSON-RPC gateway (default)");
+            println!("  status       Print launch configuration and exit WITHOUT starting");
+            println!();
+            println!("Options:");
+            println!("  --rpc-bind <IP:PORT>   JSON-RPC bind (default 127.0.0.1:8545)");
+            println!("  --p2p-bind <IP:PORT>   P2P bind address");
+            println!("  --data-dir <PATH>      redb database (default data/aurion.redb)");
+            println!("  --identity-key <PATH>  Node identity key file");
+            println!("  --bootnode <HOST:PORT> Bootnode peer; --no-bootnode for offline");
+            println!("  --locator <MULTIADDR>  Advertised locator (default tcp/127.0.0.1:9000)");
+            println!("  --dry-run              Print status and exit without starting");
+            println!("  --faucet-key <PATH>    Attach the production faucet using this keystore");
+            println!("  --help, -h             Show this help and exit (never starts a node)");
+        }
+        "faucet" => {
+            println!("Usage: aurion faucet <subcommand> [options]");
+            println!();
+            println!("Subcommands:");
+            println!("  init     Fund the faucet account from the Master Treasury (AUR-MON §2.3)");
+            println!("  claim    Request testnet funds for an address");
+            println!("  status   Show faucet balance, reserve, quota, and cooldown");
+            println!("  audit    Show the recent distribution audit trail");
+            println!("  help     Show this help");
+            println!();
+            println!("Options:");
+            println!("  --amount <AUR>          Amount to dispense per claim (default 10)");
+            println!("  --fund <AUR>            Treasury->faucet amount for 'init' (default 1000)");
+            println!("  --keystore <PATH>       Faucet or Treasury keystore (Argon2)");
+            println!("  --password-stdin        Read the keystore password from stdin");
+            println!("  --reserve <AUR>         Reserve floor the faucet may never go below");
+            println!("  --cooldown <SECS>       Per-recipient cooldown (default 60)");
+            println!("  --max-total <AUR>       Lifetime dispense cap (anti-runaway)");
+            println!("  --to <ADDRESS>          Recipient address for 'claim'");
+            println!("  --output, -o [text|json]");
+            println!("  --help, -h              Show this help and exit");
+            println!();
+            println!("Constitutional rule: the faucet MUST draw liquidity exclusively from the");
+            println!("Master Treasury operational account and MUST NOT mint new coins.");
+        }
+        "contract" => {
+            println!("Usage: aurion contract <subcommand> [options]");
+            println!();
+            println!("Subcommands:");
+            println!("  deploy            Deploy a contract (offline verify when no --keystore)");
+            println!("  call              Simulate -> clear sign -> broadcast a state change");
+            println!("  query             Read-only call (never signs or broadcasts)");
+            println!("  metadata          Show ABI, selectors, and code_hash");
+            println!("  publish-metadata  Register metadata in the node's off-chain registry");
+            println!("  inspect           Read contract state from local redb");
+            println!("  verify            Static AVM bytecode verification (offline)");
+            println!("  help              Show detailed help");
+            println!();
+            println!("See 'aurion contract help' for the full option reference.");
+        }
+        "wallet" => {
+            println!("Usage: aurion wallet <subcommand> [options]");
+            println!();
+            println!("Subcommands:");
+            println!("  create    Create a new keystore (Argon2-encrypted)");
+            println!("  import    Import from a BIP-39 24-word mnemonic read via stdin");
+            println!("  address   Print the bech32m address of a keystore");
+            println!("  balance   Query on-chain balance");
+            println!("  nonce     Query on-chain nonce");
+            println!("  send      Sign and broadcast a transfer");
+            println!("  sign-tx   Produce a signed raw transaction without broadcasting");
+            println!();
+            println!("Password is read from an interactive prompt, --password-stdin, or");
+            println!("AURION_WALLET_PASSWORD. Password/mnemonic values on argv are IGNORED.");
+        }
+        other => {
+            println!("No dedicated help screen for '{other}'.");
+            println!();
+            println!("Run 'aurion --help' for the full command list.");
+        }
+    }
+    println!("================================================================================");
+}
+
+/// Baca konfigurasi faucet dari argumen CLI (dengan default konservatif).
+///
+/// # Inputs
+/// - `args`: argumen CLI (`--reserve`, `--amount`, `--cooldown`, `--max-total`).
+///
+/// # Outputs
+/// `FaucetConfig` tervalidasi.
+///
+/// # Errors
+/// Nilai bukan bilangan bulat, atau konfigurasi tidak konsisten.
+fn build_faucet_config(args: &[String]) -> Result<crate::gateway::faucet::FaucetConfig, String> {
+    use crate::gateway::faucet::FaucetConfig;
+
+    let mut config = FaucetConfig::default();
+
+    if let Some(v) = get_arg_value(args, "--amount") {
+        config.dispense_amount = parse_aur_arg(&v)?;
+    }
+    if let Some(v) = get_arg_value(args, "--reserve") {
+        config.reserve_floor = parse_aur_arg(&v)?;
+    }
+    if let Some(v) = get_arg_value(args, "--cooldown") {
+        config.cooldown_secs = v
+            .parse::<u64>()
+            .map_err(|_| format!("--cooldown '{v}' bukan bilangan bulat yang valid"))?;
+    }
+    if let Some(v) = get_arg_value(args, "--max-total") {
+        config.max_total_dispense = parse_aur_arg(&v)?;
+    }
+
+    config
+        .validate()
+        .map_err(|e| format!("Konfigurasi faucet tidak valid: {e}"))?;
+    Ok(config)
+}
+
+/// Parse nominal AUR menjadi `Quantum` dengan presisi 9 desimal (tanpa float).
+fn parse_aur_arg(value: &str) -> Result<crate::core::Quantum, String> {
+    crate::core::Quantum::from_aur_str(value.trim())
+        .map_err(|e| format!("Nominal '{value}' tidak valid: {e}"))
+}
+
+/// Ambil password keystore sesuai aturan CLI (stdin / env / prompt).
+fn read_keystore_password(args: &[String]) -> Result<String, String> {
+    if args.iter().any(|a| a == "--password-stdin") {
+        let mut buf = String::new();
+        std::io::BufRead::read_line(&mut std::io::stdin().lock(), &mut buf)
+            .map_err(|e| format!("Gagal membaca password dari stdin: {e}"))?;
+        return Ok(buf.trim_end_matches(['\r', '\n']).to_string());
+    }
+    if let Ok(pw) = std::env::var("AURION_WALLET_PASSWORD") {
+        return Ok(pw);
+    }
+    Err(
+        "Password keystore tidak tersedia: gunakan --password-stdin atau set AURION_WALLET_PASSWORD"
+            .to_string(),
+    )
+}
+
+/// Pasang faucet produksi ke konteks RPC simpul (AUR-MON §2.3).
+///
+/// ## Inputs
+/// - `node`: simpul yang state genesis-nya sudah tersinkron ke `rpc_context`.
+/// - `key_path`: keystore Argon2 faucet, atau `--dev-seed` untuk devnet lokal.
+/// - `args`: argumen CLI untuk konfigurasi & password.
+///
+/// ## Outputs
+/// Faucet terpasang pada `node.rpc_context` sehingga `aur_requestFaucet` aktif.
+///
+/// ## Errors
+/// Keystore gagal dibuka, seed dev tidak diizinkan, atau konfigurasi invalid.
+fn attach_node_faucet(
+    node: &Arc<AurionNode>,
+    key_path: &str,
+    args: &[String],
+) -> Result<(), String> {
+    use crate::contract::{ApprovalMode, KeystoreSigner};
+    use crate::gateway::faucet::FaucetDispenser;
+
+    let config = build_faucet_config(args)?;
+
+    let keypair = if key_path == "--dev-seed" {
+        // Seed deterministik HANYA untuk devnet lokal, dan hanya bila operator
+        // menuliskannya secara eksplisit. Tidak ada jalur dev yang diam-diam aktif.
+        if !args.iter().any(|a| a == "--faucet-dev-seed") {
+            return Err(
+                "Seed dev faucet memerlukan flag eksplisit --faucet-dev-seed (jangan pakai di produksi)"
+                    .to_string(),
+            );
+        }
+        KeystoreSigner::from_seed([0xFA; 32], ApprovalMode::AutoApprove).to_keypair()
+    } else {
+        let password = read_keystore_password(args)?;
+        KeystoreSigner::from_keystore_file(key_path, &password, ApprovalMode::AutoApprove)
+            .map_err(|e| format!("Gagal membuka keystore faucet '{key_path}': {e}"))?
+            .to_keypair()
+    };
+
+    let faucet_address = keypair.derive_address();
+    let dispenser = FaucetDispenser::new(keypair, node.config.chain_id, config);
+
+    println!("[AURION FAUCET] Aktif — rekening faucet: {faucet_address}");
+    println!(
+        "[AURION FAUCET] Dana faucet WAJIB berasal dari Master Treasury (AUR-MON §2.3)."
+    );
+    println!("[AURION FAUCET] Jalankan 'aurion faucet init' bila rekening ini belum didanai.");
+
+    node.rpc_context.attach_faucet(dispenser);
+    Ok(())
 }
 
 fn print_master_help() {

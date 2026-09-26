@@ -423,29 +423,62 @@ async fn test_cli_dispatch_testnet_and_snapshot_subcommands() {
 
 #[tokio::test]
 async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
-    // 1. Faucet Status & Request (Text & JSON)
+    // 1. Faucet.
+    //
+    // PERUBAHAN: implementasi faucet sebelumnya adalah stub yang MENCETAK nilai
+    // palsu (`status: "DISPENSED"` + tx hash rekaan) tanpa pernah menyentuh
+    // jaringan, sehingga test ini selalu hijau. Implementasi produksi nyata
+    // sekarang membutuhkan kredensial, jadi test disesuaikan dengan perilaku
+    // jujur tersebut: tanpa keystore HARUS gagal, bukan berpura-pura sukses.
     let res = dispatch(CliCommand::Faucet(vec!["status".to_string()]), OutputFormat::Text).await;
-    assert!(res.is_ok());
-    let res = dispatch(CliCommand::Faucet(vec!["status".to_string()]), OutputFormat::Json).await;
-    assert!(res.is_ok());
+    assert!(
+        res.is_err(),
+        "faucet status tanpa keystore harus menolak, bukan mengarang data"
+    );
+    assert!(
+        res.unwrap_err().contains("keystore"),
+        "galat harus menyebut kebutuhan keystore"
+    );
 
+    // Dengan seed dev eksplisit, status harus benar-benar terbaca dari state.
+    for fmt in [OutputFormat::Text, OutputFormat::Json] {
+        let res = dispatch(
+            CliCommand::Faucet(vec![
+                "status".to_string(),
+                "--faucet-dev-seed".to_string(),
+            ]),
+            fmt,
+        )
+        .await;
+        assert!(res.is_ok(), "faucet status --faucet-dev-seed harus berhasil");
+    }
+
+    // `claim` ke rekening yang belum didanai harus ditolak dengan jelas.
     let res = dispatch(
         CliCommand::Faucet(vec![
-            "request".to_string(),
-            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+            "claim".to_string(),
+            "aur1crqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqvpsxqcrqqyq2se0".to_string(),
+            "--faucet-dev-seed".to_string(),
         ]),
         OutputFormat::Text,
-    ).await;
-    assert!(res.is_ok());
+    )
+    .await;
+    assert!(
+        res.is_err(),
+        "claim tanpa dana harus gagal, bukan mengarang tx hash"
+    );
 
+    // Alamat penerima tidak valid harus ditolak oleh parser.
     let res = dispatch(
         CliCommand::Faucet(vec![
-            "request".to_string(),
-            "aur1000000000000000000000000000000000000000000000000000sqqqqqqqq".to_string(),
+            "claim".to_string(),
+            "bukan-alamat".to_string(),
+            "--faucet-dev-seed".to_string(),
         ]),
-        OutputFormat::Json,
-    ).await;
-    assert!(res.is_ok());
+        OutputFormat::Text,
+    )
+    .await;
+    assert!(res.is_err(), "alamat tidak valid harus ditolak");
 
     // 2. Explorer Summary & Serve (Text & JSON)
     let res = dispatch(CliCommand::Explorer(vec!["summary".to_string()]), OutputFormat::Text).await;
@@ -466,13 +499,15 @@ async fn test_cli_dispatch_faucet_and_explorer_subcommands() {
         CliCommand::Explorer(vec!["summary".to_string()])
     );
 
-    let res = run_cli(&[
-        "faucet".to_string(),
-        "status".to_string(),
-        "--output".to_string(),
-        "json".to_string(),
-    ]).await;
-    assert!(res.is_ok());
+    // `faucet` tanpa subcommand atau dengan sub tak dikenal menampilkan bantuan.
+    for args in [
+        vec!["faucet".to_string()],
+        vec!["faucet".to_string(), "--help".to_string()],
+        vec!["faucet".to_string(), "help".to_string()],
+    ] {
+        let res = run_cli(&args).await;
+        assert!(res.is_ok(), "bantuan faucet harus berhasil");
+    }
 
     let res = run_cli(&[
         "explorer".to_string(),

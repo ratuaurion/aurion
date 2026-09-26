@@ -64,6 +64,21 @@ impl Keypair {
         SigningKey::from_bytes(&self.signing_key.to_bytes())
     }
 
+    /// Bangun `Keypair` dari `SigningKey` yang sudah ada.
+    ///
+    /// Dipakai saat material kunci berasal dari keystore terenkripsi dan perlu
+    /// dipakai oleh komponen yang bekerja dengan `Keypair` (mis. faucet).
+    /// `Drop` tetap akan zeroize salinan seed privat yang tersimpan di struct.
+    #[must_use]
+    pub fn from_signing_key(signing_key: &SigningKey) -> Self {
+        let signing_key = SigningKey::from_bytes(&signing_key.to_bytes());
+        let verifying_key = signing_key.verifying_key();
+        Self {
+            signing_key,
+            verifying_key,
+        }
+    }
+
     /// Derivasi alamat kanonikal langsung dari kunci publik.
     pub fn derive_address(&self) -> crate::core::Address {
         crate::crypto::bech32m::derive_address_from_pubkey(&self.public_key_bytes())
