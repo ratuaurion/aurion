@@ -166,6 +166,80 @@ grep -rn "difficulty_target\|pow_hash\|mining_reward" src/
 - `README.md` §4.1 — Gerbang Kemurnian BFT
 - `docs/Constitutions/AURION CONSTITUTION.md` Pasal 2 — Penolakan Total Proof-of-Work
 - `docs/Constitutions/AURION-GOVERNANCE-SPECIFICATION.md` — larangan perubahan alokasi genesis
-- `.internal-tasks/TASK_REGISTER.md` — entri AUD-BFT-001
 
-sumber kebenaran kedua.
+---
+
+## 8. Catatan Topologi Ekosistem (DOKUMENTASI SAJA — BUKAN TINDAKAN)
+
+### 8.1 Apa yang diverifikasi
+
+Audit tidak menghapus berkas apa pun. Pemeriksaan terhadap direktori
+sekitar `C:\Projects` menunjukkan adanya **delapan repositori terpisah**
+di luar repo `aurion`:
+
+| Direktori | Git | Manifest | Status |
+| :--- | :--- | :--- | :--- |
+| `aurion` | ya | `Cargo.toml` | Repo inti — **Single Binary `/bin/aurion`** |
+| `aur-wallet` | ya | `package.json` | Backend Aurion (dompet) |
+| `aurion-bootnode` | ya | `Cargo.toml` | Backend Aurion (bootnode) |
+| `aurion-explorer` | ya | `package.json` | Backend Aurion (explorer web) |
+| `aurion-faucet` | ya | `Cargo.toml` | Backend Aurion (layanan faucet) |
+| `aurion-market` | ya | `Cargo.toml` | Backend Aurion (pasar) |
+| `aurion-web` | ya | `package.json` | Backend Aurion (web) |
+| `aurion-test` | tidak | – | Harness uji |
+| `aurion-validator` | tidak | – | Harness validator |
+| `nebula` | tidak | `go.mod` | **Proyek terpisah — bukan bagian Aurion** |
+
+> **Pernyataan pemilik proyek:** kedelapan direktori tersebut adalah backend
+> Aurion; `nebula` adalah proyek terpisah dan berada di luar lingkup Aurion.
+
+### 8.2 Mengapa ini dicatat
+
+AUR-ARCH-001 menyatakan Aurion didistribusikan sebagai **satu binary utama**
+(`/bin/aurion`). Repo `aurion` sendiri sudah memenuhi hal ini: hanya ada satu
+`Cargo.toml`, dan `docker-compose.yml` menjalankan `./bin/aurion` sebagai image
+yang sama (`aurion:latest`) untuk validator, sentry, dan gateway.
+
+Namun, beberapa backend Aurion (bootnode, faucet, market, explorer,
+wallet) berada di repo terpisah. Hal ini **tidak otomatis melanggar
+AUR-ARCH-001**, karena invarian tersebut mengatur *distribusi binary konsensus*,
+bukan jumlah repositori. Namun observasi ini perlu dicatat karena:
+
+1. **`aurion-faucet` (Rust) berada di repo terpisah** sementara `faucet.rs`
+   kini sudah terintegrasi ke dalam `/bin/aurion` (lihat commit `49ca833`).
+   Ada risiko dua implementasi faucet yang tidak sinkron.
+2. **`aurion-explorer` (Next.js) adalah dashboard terpisah**, sementara
+   Explorer native `/explorer` sudah tertanam di dalam binary. Keduanya harus
+   memakai kontrak API yang sama.
+3. Aturan fee dan terminologi BFT yang baru dikunci oleh `bft_purity_gate`
+   hanya berlaku pada repo `aurion`. Repo lain **tidak** tercakup gerbang ini.
+
+### 8.3 Batas gerbang anti-regresi
+
+```bash
+cargo test --offline --test bft_purity_gate
+```
+
+hanya memindai `aurion/src/`. Untuk repositori Aurion lain, aturan yang sama
+belum diterapkan. Ini **bukan** kelalaian —-setiap repo memiliki siklus rilis dan
+karakteristik sendiri — namun dicatat agar tidak disalahpahami sebagai
+"seluruh ekosistem Aurion sudah murni BFT".
+
+### 8.4 Tindakan yang TIDAK diambil
+
+Berkas berikut terbukti **nol referensi** dari `src/`, `tests/`, dan `tools/`
+namun **tidak dihapus** atas instruksi pemilik:
+
+| Berkas | Referensi kode |
+| :--- | :--- |
+| `CONFORMANCE_MATRIX.json` | 0 |
+| `MAINNET_CONFIG.toml` | 0 |
+| `MAINNET_DASHBOARD.json` | 0 |
+| `RELEASE_CANDIDATE_rc1.json` | 0 |
+| `SBOM_rc1.json` | 0 |
+
+> **Peringatan:** `GENESIS_CEREMONY.json` dan `MAINNET_GENESIS_BLOCK.json`
+> **HARUS TETAP ADA**. Keduanya di-embed lewat `include_str!` pada
+> `src/primitives/genesis/ceremony.rs`. Menghapusnya akan membuat build gagal.
+
+- `.internal-tasks/TASK_REGISTER.md` — entri AUD-BFT-001

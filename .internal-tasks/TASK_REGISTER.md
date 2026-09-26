@@ -597,6 +597,48 @@ python tools/guardrail.py
 * **2026-09-17 16:15:** Penyelesaian PRD-015: Deterministic Genesis Ceremony (Langkah 15 Era VI). Upacara pembentukan Genesis deterministik & multi-party hash attestation. Protokol multi-pihak melibatkan Creator, Developer, dan 4 Genesis Validators (𝒱₀). Atestasi kriptografis Ed25519 menandatangani canonical Genesis signing digest (`"AURION-GENESIS-CEREMONY-V1"`). Verifikasi kuorum BFT $\ge 666,667$ / $1,000,000$ validator voting weight ($> 2/3$). Invariant konservasi moneter 100% alokasi Genesis 66M AUR ke Master Treasury, zero-float `Quantum(u128)` 9 desimal ($10^9$). Integrasi CLI `/bin/aurion genesis ceremony run`, `verify`, `inspect`. Artefak `GENESIS_CEREMONY.json` dan panduan operasional `GENESIS_CEREMONY_GUIDE.md`, serta suite integrasi `tests/genesis_ceremony.rs` 100% PASS (9/9 tests). Progres Era VI naik menjadi 60.0%.
 * **2026-09-17 16:35:** Penyelesaian PRD-016: Aurion Mainnet Launch (Langkah 16 Era VI). Inisialisasi sovereign production Mainnet ledger dari sealed genesis ceremony transcript (`GENESIS_CEREMONY.json`). Konfigurasi parameter jaringan produksi: Chain ID `1001`, genesis timestamp `1773532800` (15 March 2026 00:00:00 UTC), wire magic `AUR0`, 4 bootnodes validator ($\mathcal{V}_0$). Implementasi transisi konsensus BFT Slot 0 $\to$ Block 1 dengan CommitCertificate 4 validator. Transaksi produksi pertama di Mainnet (transfer Creator, Ed25519 signature, mempool validation, block 2 inclusion, alokasi 100% fee validator, subsidi blok R, transisi root SMT, konservasi saldo exact). Verifikasi persistensi & crash recovery ACID pada database `redb 4.3`. Integrasi CLI terpadu: `aurion node start [--dry-run|status]`, `aurion validator start [--index <0..3>] [--dry-run|status]`, `aurion network [status|peers]`. Artefak produksi: `MAINNET_GENESIS_BLOCK.json`, `MAINNET_CONFIG.toml`, dan runbook operator `MAINNET_LAUNCH_GUIDE.md`. Suite integrasi otomatis `tests/mainnet_launch.rs` (5/5 tests PASS). Atestasi release binary deterministik `target/release/aurion.exe` (2,111,488 bytes, SHA-256: `7a427f8db6ca8176078e96f9f9baed2bbf38017d9c6b77d8868de799148307d7`). Progres Era VI naik menjadi 80.0% (4/5 langkah selesai). PRD-017 Siap Dieksekusi.
 
+### 2026-09-26 — AUD-TOPO-001: Verifikasi Topologi Ekosistem Aurion (DOKUMENTASI, TANPA PENGHAPUSAN)
+
+**Konteks.** Pemilik proyek meminta pemeriksaan menyeluruh dan penghapusan
+berkas yang "palsu"/tidak relevan. Pemeriksaan dilakukan **sebelum** tindakan
+apa pun, karena penghapusan berkas inti dapat merusak build.
+
+**Keputusan pemilik:** seluruh direktori di `C:\Projects` adalah backend Aurion,
+kecuali `nebula` yang proyek terpisah. **Tidak ada berkas yang dihapus.**
+
+**Hasil verifikasi (faktual):**
+
+| Asumsi awal | Kenyataan terverifikasi |
+| :--- | :--- |
+| Banyak berkas "palsu" | Mayoritas **nyata dan terpakai**; 515 test lulus, 360 berkas terlacak |
+| Lapisan L2/L3/L4/L5 hanya dokumen | **11.744 baris kode Rust nyata** di `src/scaling`, `src/specialized`, `src/interop`, `src/infrastructure` |
+| Fitur RBF / BIP-44 fiktif | **Diimplementasikan** (16 + 17 referensi di `src/`) |
+| Multi-project melanggar AUR-ARCH-001 | Repo `aurion` sudah **Single Binary** (satu `Cargo.toml`); backend terpisah tidak otomatis melanggar invarian yang mengatur distribusi binary konsensus |
+
+**Berkas dengan 0 referensi kode** (ditemukan, **tidak dihapus** atas instruksi
+pemilik): `CONFORMANCE_MATRIX.json`, `MAINNET_CONFIG.toml`,
+`MAINNET_DASHBOARD.json`, `RELEASE_CANDIDATE_rc1.json`, `SBOM_rc1.json`.
+
+**Peringatan yang dicatat:** `GENESIS_CEREMONY.json` dan
+`MAINNET_GENESIS_BLOCK.json` **wajib dipertahankan** — keduanya di-embed lewat
+`include_str!` pada `src/primitives/genesis/ceremony.rs`; penghapusan akan
+menggagalkan build.
+
+**Catatan risiko arsitektural (untuk keputusan pemilik proyek):**
+
+1. `aurion-faucet` (Rust) masih ada sebagai repo terpisah, sementara `faucet.rs`
+   kini sudah terintegrasi ke `/bin/aurion` (commit `49ca833`) — ada risiko dua
+   implementasi faucet yang tidak sinkron.
+2. `aurion-explorer` (Next.js) adalah dashboard terpisah, sementara Explorer
+   native `/explorer` tertanam di dalam binary — keduanya harus memakai kontrak
+   API yang sama.
+3. Gerbang `bft_purity_gate` hanya memindai `aurion/src/`. Repositori Aurion
+   lain **belum** tercakup aturan kemurnian BFT yang sama.
+
+Rincian lengkap pada `docs/operations/BFT_PURITY_AUDIT.md` bagian 8.
+
+---
+
 ### 2026-09-26 — AUD-BFT-001: Pemurnian Konsensus BFT & Gerbang Anti-Regresi
 
 **Latar belakang.** Audit kode menemukan sebuah agen sebelumnya telah
