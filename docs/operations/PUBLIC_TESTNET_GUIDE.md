@@ -14,7 +14,7 @@ Gunakan parameter berikut untuk mengonfigurasi dompet (Web Wallet, ekstensi pera
 | **Chain ID** | `9999` (atau `1001` untuk genesis staging) | ID rantai deterministik pencegah replay lintas-jaringan |
 | **Simbol Aset** | `AUR` | Mata uang kripto native berdaulat |
 | **Unit Terkecil (Atomic Unit)** | `Quantum` (1 AUR = $10^9$ Quanta) | Presisi fixed integer 9 desimal tanpa floating-point |
-| **Mekanisme Konsensus** | Single-Slot BFT Finality | Waktu blok deterministik, kuorum $>2/3$, SLA $<1.000$ ms |
+| **Mekanisme Konsensus** | Round-Based BFT Finality | Waktu blok deterministik, kuorum $>2/3$, SLA $<1.000$ ms |
 | **Mekanisme Fee** | 100% ke Validator Proposer | Melengkapi insentif emisi blok BFT |
 | **Public JSON-RPC URL** | `http://127.0.0.1:8545` (atau `bootnode.ratuaurion.store:8080`) | Mendukung JSON-RPC 2.0 & CORS |
 | **Public WebSocket URL** | `ws://127.0.0.1:8545` | Streaming blok & tx via RFC 6455 |

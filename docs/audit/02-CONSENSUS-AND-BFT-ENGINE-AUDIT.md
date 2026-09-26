@@ -8,7 +8,7 @@
 ## 1. Ruang Lingkup Audit
 
 Audit konsensus mencakup:
-1. **Single-Slot BFT Finality:** Jaminan finalitas instan 2-fase (Prevote & Precommit) dengan latensi sub-detik (<1000ms SLA).
+1. **Round-Based BFT Finality:** Jaminan finalitas instan 2-fase (Prevote & Precommit) dengan latensi sub-detik (<1000ms SLA).
 2. **Kalkulasi Kuorum Byzantine:** Verifikasi ambang batas kuorum $> 2/3$ bobot pemungutan suara validator:
    $$W_{\text{quorum}} \ge \left\lfloor \frac{2 \times W_{\text{total}}}{3} \right\rfloor + 1$$
 3. **Pencegahan Ekuivokasi (Double-Voting Protection):** Deteksi dan penolakan multi-proposal atau multi-vote pada tinggi blok dan putaran yang sama.
@@ -34,4 +34,4 @@ Audit konsensus mencakup:
 ---
 
 ## 3. Kesimpulan Auditor
-Konsensus BFT Aurion mematuhi model toleransi kesalahan Byzantine klasik (Dwork-Lynch-Stockmeyer / Castro-Liskov PBFT) dengan optimasi single-slot, membuktikan ketiadaan celah ekuivokasi, dan menjamin integritas state ledger di bawah kondisi adversarial.
+Konsensus BFT Aurion mematuhi model toleransi kesalahan Byzantine klasik (Dwork-Lynch-Stockmeyer / Castro-Liskov PBFT) dengan optimasi round-based, membuktikan ketiadaan celah ekuivokasi, dan menjamin integritas state ledger di bawah kondisi adversarial.

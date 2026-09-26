@@ -39,7 +39,7 @@ pub enum L3FinalityTier {
     InstantLocal = 1,
     /// 2. Finalitas Soft di L2 (<50ms): Komitmen checkpoint tersimpan di L2 Rollup
     SoftL2Settled = 2,
-    /// 3. Finalitas Hard di L1 (Single-Slot BFT): Batch L2 difinalisasi di L1 Base
+    /// 3. Finalitas Hard di L1 (Round-Based BFT): Batch L2 difinalisasi di L1 Base
     HardL1Finalized = 3,
 }
 

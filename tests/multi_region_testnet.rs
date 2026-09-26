@@ -7,7 +7,7 @@
 //! - AUR-ARCH-009: Process Lifecycle, Graceful Shutdown, dan Konvergensi State Terdistribusi.
 //! - AUR-ARCH-011: Absolute Zero Unsafe Code (#![forbid(unsafe_code)]).
 //! - AUR-ARCH-012: Absolute Zero Float Arithmetic (Fixed Precision Quantum u128).
-//! - AUR-CONS-*: Single-Slot BFT Consensus with >2/3 Quorum Finality under WAN latency.
+//! - AUR-CONS-*: Round-Based BFT Consensus with >2/3 Quorum Finality under WAN latency.
 //!
 //! Suite ini memverifikasi:
 //! 1. Kluster konsensus 4-region geografis (AP, EU, US, SA) di bawah latensi WAN simulasi (15ms - 300ms).

@@ -13,12 +13,19 @@
 
 ### Pasal 1: Kedaulatan & Konsensus BFT Deterministik
 
-1. **Konsensus BFT Deterministik:** Jaringan Aurion beroperasi secara eksklusif di atas mekanisme konsensus **Byzantine Fault Tolerance (BFT)** deterministik dengan *single-slot finality*.
-2. **Penolakan Total Proof-of-Work:** Protokol Aurion tidak mengenal konsep penambangan (*mining*), kalkulasi tingkat kesulitan (*difficulty target*), maupun kompetisi komputasi hash untuk memproduksi blok. Seluruh terminologi dan mekanisme PoW diharamkan dari protokol konsensus.
+1. Jaringan Aurion beroperasi secara eksklusif di atas mekanisme konsensus **Byzantine Fault Tolerance (BFT)** berbasis ronde (*Round-Based BFT*) dengan finalitas kuorum. Seluruh terminologi dan mekanisme PoW diharamkan dari protokol konsensus.
+   - **Finalitas bukan berbasis slot waktu tetap.** Finalitas diperoleh melalui **Sertifikat Kuorum (*Quorum Certificate / QC*)** dengan bobot suara $> \frac{2}{3}$ total validator aktif, yang dapat terbentuk pada ronde mana pun.
+   - **Liveness dijaga oleh Round Timeout.** Bila Proposer tidak mengajukan blok dalam `round_timeout`, protokol menaikkan ronde dan membuka peluang proposing baru. Protokol karena itu tetap hidup meski Proposer offline.
    - **L-terminologi:** Istilah `miner` / `mining` dilarang muncul di lapisan produksi (kode, receipt, prompt pengguna, golden vector). Aturan ini ditegakkan otomatis oleh `tests/bft_purity_gate.rs`.
    - **L-skema fee:** Alokasi biaya transaksi bersifat tunggal — **100% ke validator BFT, 0% burn** (`FEE_VALIDATOR_PERCENTAGE = 100`, `FEE_BURN_PERCENTAGE = 0`). Skema historis "20% burn / 80% miner" telah dicabut dan tidak boleh divalidasi ulang.
    - Rujukan audit: `docs/operations/BFT_PURITY_AUDIT.md` (AUD-BFT-001).
-3. **Pencetakan Blok:** Blok hanya dapat diajukan oleh satu validator (*Proposer*) yang ditunjuk secara bergilir berdasarkan jadwal deterministik pada ketinggian ($H$) dan ronde ($R$) tertentu.
+2. **Penolakan Total Proof-of-Work:** Protokol Aurion tidak mengenal konsep penambangan (*mining*), kalkulasi tingkat kesulitan (*difficulty target*), maupun kompetisi komputasi hash untuk memproduksi blok.
+   - **L-terminologi:** Istilah `miner` / `mining` dilarang muncul di lapisan produksi (kode, receipt, prompt pengguna, golden vector). Aturan ini ditegakkan otomatis oleh `tests/bft_purity_gate.rs`.
+   - **L-skema fee:** Alokasi biaya transaksi bersifat tunggal — **100% ke validator BFT, 0% burn** (`FEE_VALIDATOR_PERCENTAGE = 100`, `FEE_BURN_PERCENTAGE = 0`). Skema historis "20% burn / 80% miner" telah dicabut dan tidak boleh divalidasi ulang.
+   - Rujukan audit: `docs/operations/BFT_PURITY_AUDIT.md` (AUD-BFT-001).
+3. **Penetapan Proposer — Opportunistik (*First-Valid-Block-Wins*):** Pada implementasi saat ini, **validator mana pun** dapat mengajukan blok untuk suatu ketinggian. Jaringan menerima proposal valid pertama yang berhasil mengumpulkan kuorum.
+   - **Justifikasi:** Kesederhanaan dan latensi rendah untuk *validator set* tepercaya yang dipakai saat ini.
+   - **Batas yang diakui:** Jadwal proposer *round-robin* deterministik **belum** ditegakkan di lapisan ledger. Untuk lingkungan publik tanpa kepercayaan, lihat Rencana Deterministic Leader Election pada `docs/operations/BFT_PURITY_AUDIT.md` §9.
 4. **Finalitas Blok:** Sebuah blok dinyatakan sah, permanen, dan tidak dapat dibatalkan (*irreversible*) jika dan hanya jika telah memperoleh sertifikat kuorum kriptografis (*Quorum Certificate / QC*) dengan bobot suara lebih dari dua pertiga ($> \frac{2}{3}$) total validator aktif.
 
 ### Pasal 2: Hakikat Kedaulatan & Akuntabilitas

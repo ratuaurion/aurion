@@ -45,7 +45,7 @@ Audit mencakup 5 domain fungsional mandiri di `src/` dan seluruh test harness di
 c:\Projects\aurion\src\
 ├── primitives/          # Blake3, Ed25519, Codec, Genesis (L1 Crypto Core)
 ├── statemachine/        # STF, Monetary, Account, SMT, AVM Interpreter
-├── consensus/           # Single-Slot BFT Engine, Mempool RBF, Epoch Rotation
+├── consensus/           # Round-Based BFT Engine, Mempool RBF, Epoch Rotation
 ├── scaling/             # L2 Sequencer, DA Ingestion, Bridge Vault, Relayer
 ├── specialized/         # L3 Domains (DEX, Gaming, Privacy), Checkpoint Client
 ├── interop/             # L4 Cross-Chain Envelopes, Light Clients, Circuit Breaker

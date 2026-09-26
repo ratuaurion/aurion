@@ -2,7 +2,7 @@
 //!
 //! # Mengapa test ini ada
 //!
-//! Aurion adalah protokol **BFT deterministik dengan single-slot finality**.
+//! Aurion adalah protokol **BFT deterministik dengan round-based finality**.
 //! Konstitusi Pasal 2 secara eksplisit **melarang** konsep penambangan (*mining*),
 //! kalkulasi tingkat kesulitan (*difficulty*), dan kompetisi hash.
 //!
@@ -223,5 +223,96 @@ fn no_proof_of_work_concepts_in_consensus() {
         violations.is_empty(),
         "Ditemukan konsep Proof-of-Work di lapisan produksi:\n\n{}",
         violations.join("\n")
+    );
+}
+// ---------------------------------------------------------------------------
+// 5. Konsistensi terminologi konsensus: ronde, BUKAN slot
+// ---------------------------------------------------------------------------
+
+/// Aurion adalah BFT **berbasis ronde**, bukan *single-slot*.
+///
+/// Audit menemukan dokumen dan komentar kode sama-sama mengklaim
+/// "single-slot finality", padahal `consensus/bft/reactor.rs` mengimplementasikan
+/// round timeout + round advance (lihat `docs/operations/BFT_PURITY_AUDIT.md`
+/// §9). Proyek memilih menyelaraskan dokumentasi dengan kode; test ini menjaga
+/// agar penyimpangan itu tidak muncul kembali diam-diam.
+#[test]
+fn no_single_slot_terminology_anywhere() {
+    // Cakupan: seluruh file .rs dan .md di repo, kecuali `target/` dan `.git/`.
+    let mut violations: Vec<String> = Vec::new();
+    let mut checked = 0usize;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            if name == "target" || name == ".git" || name == "node_modules" {
+                continue;
+            }
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            let is_source = path.extension().is_some_and(|e| e == "rs");
+            let is_doc = path.extension().is_some_and(|e| e == "md");
+            if !is_source && !is_doc {
+                continue;
+            }
+            // Berkas gerbang ini sendiri menyebut istilah yang dicari (string
+            // deteksi + pesan galat), jadi dikecualikan agar test tidak
+            // mendeteksi dirinya sendiri.
+            if path.file_name().is_some_and(|n| n == "bft_purity_gate.rs") {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else {
+                continue;
+            };
+            checked += 1;
+            let lower = text.to_lowercase();
+            if let Some(pos) = lower
+                .find("single-slot")
+                .or_else(|| lower.find("single slot"))
+            {
+                let line_no = text[..pos].matches('\n').count() + 1;
+                violations.push(format!("{}:{line_no}", path.display()));
+            }
+        }
+    }
+
+    assert!(
+        checked > 50,
+        "pemindaian hanya menjangkau {checked} berkas; pola path mungkin salah"
+    );
+    assert!(
+        violations.is_empty(),
+        "Aurion adalah BFT berbasis ronde, BUKAN single-slot. Ditemukan {} klaim \
+         'single-slot' pada:\n\n{}",
+        violations.len(),
+        violations.join("\n")
+    );
+}
+
+/// Membuktikan implementasi konsensus memang multi-round, sehingga istilah
+/// "single-slot" tidak mungkin dianggap sekadar penyebutan dokumentasi.
+#[test]
+fn consensus_implementation_is_round_based() {
+    let reactor = std::fs::read_to_string(src_dir().join("consensus/bft/reactor.rs"))
+        .expect("reactor.rs harus terbaca");
+
+    // Round advance = bukti bahwa ini BFT multi-round, bukan slot tunggal.
+    assert!(
+        reactor.contains("current_round.saturating_add(1)"),
+        "reactor harus menaikkan ronde (round advance) demi liveness"
+    );
+    // Round timeout harus memicu penanganan timeout.
+    assert!(
+        reactor.contains("round_timeout"),
+        "reactor harus punya round timeout untuk liveness"
     );
 }

@@ -34,7 +34,7 @@ Ekosistem Aurion mengadopsi pemisahan hierarkis yang ketat:
  Sovereign Base Layer                  Execution & Scaling Layer             Hyper-Specialized Networks
     │                                     │                                     │
  ├── Sovereign Settlement              ├── High-Throughput Execution         ├── Micro-Execution Domains
- ├── Single-Slot BFT Consensus         ├── Transaction Batch Compression     ├── App-Specific Rollups
+ ├── Round-Based BFT Consensus         ├── Transaction Batch Compression     ├── App-Specific Rollups
  ├── Native State Ledger               ├── L1 State Commitments (Roots)      ├── Ultra-Low Latency Channels
  ├── Native AVM Smart Contracts        ├── Data Availability (DA) Posting    └── Settlement to L2
  ├── Validator Set & Staking           ├── Proof Generation (ZK/Fraud)
@@ -46,7 +46,7 @@ Ekosistem Aurion mengadopsi pemisahan hierarkis yang ketat:
 | Dimensi | Layer-1 (L1 Base) | Layer-2 (L2 Rollup/Execution) | Layer-3 (L3 App-Specific) |
 | :--- | :--- | :--- | :--- |
 | **Fungsi Utama** | Settlement, Konsensus, Keamanan Inti | Throughput, Kompresi, Skalabilitas | Kustomisasi Aplikasi Ekstrem |
-| **Konsensus** | Single-Slot BFT Finality (>2/3 Quorum) | Sequencer BFT / Leader Rotation | Single Sequencer / State Channel |
+| **Konsensus** | Round-Based BFT Finality (>2/3 Quorum) | Sequencer BFT / Leader Rotation | Single Sequencer / State Channel |
 | **Finalitas** | Hard Finality Mutlak ($\le 1$ detik) | Soft Finality (ms) $\to$ Hard via L1 | Instan $\to$ Soft via L2 $\to$ Hard via L1 |
 | **Eksekusi VM** | Aurion Native VM (AVM) | AVM-Equivalent / Optimized Rollup VM | Domain-Specific Runtime / WASM / Custom |
 | **Penyimpanan State** | `redb 4.3` ACID On-Disk | Rollup State Store + L1 State Root | Ephemeral / Micro State Store |

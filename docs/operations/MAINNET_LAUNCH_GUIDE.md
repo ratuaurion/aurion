@@ -22,7 +22,7 @@ Seluruh peserta jaringan produksi Aurion terikat pada invariant konstitusional b
 | **Hard Cap Pasokan Genesis** | `66,000,000` AUR | $6.6 \times 10^{16}$ Quantum (9 desimal, $u128$) |
 | **Alokasi Genesis (100%)** | `66,000,000` AUR | 100% dialokasikan ke Master Treasury Account |
 | **Emisi Blok Berkelanjutan (H > 0)** | `1` AUR per blok ($10^9\text{ Q}$) | 20% Proposer, 80% Precommit Voters QC |
-| **Konsensus Finalitas** | Single-Slot BFT Finality | Kuorum $>2/3$ voting power ($\ge 666,667$) |
+| **Konsensus Finalitas** | Round-Based BFT Finality | Kuorum $>2/3$ voting power ($\ge 666,667$) |
 | **Mesin Penyimpanan** | `redb 4.3` | Murni Rust ACID, zero C++ runtime |
 | **Protokol P2P Wire & Bootnode** | Magic `AUR0`, 52-byte Header | TCP Port 7447 (`116.212.72.89`), Nginx SSL 8080 |
 | **Doktrin Integritas Kode** | Zero-Mock Policy | Larangan mutlak `--dev` & mock consensus |

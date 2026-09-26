@@ -1,4 +1,4 @@
-//! Modul Konsensus BFT Single-Slot Finality Aurion.
+//! Modul Konsensus BFT Round-Based Finality Aurion.
 
 pub mod block;
 pub mod certificate;

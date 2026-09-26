@@ -7,7 +7,7 @@
 //! Mengukur secara empiris:
 //! 1. Throughput kriptografis (Blake3 hashing multi-ukuran, Ed25519 sign & verify).
 //! 2. Throughput State Machine & Transaksi L1 (STF transfer, mempool, AVM, block assembly).
-//! 3. Latensi konsensus Single-Slot BFT (<1.000 ms SLA) pada skala validator berbeda.
+//! 3. Latensi konsensus Round-Based BFT (<1.000 ms SLA) pada skala validator berbeda.
 //! 4. Throughput Layer-2 & Layer-3 Rollup Scaling (Sequencer STF, Batch Frame DA, SMT, DEX matching).
 //! 5. Amplifikasi I/O disk database fisik `redb 4.3` dan latensi persistence atomik.
 //! 6. Jejak memori (memory footprint) pada beban tinggi.
@@ -440,10 +440,10 @@ fn bench_consensus_latency() -> Vec<BenchResult> {
         results.push(BenchResult::new(
             "BFT Consensus",
             match cluster_size {
-                4 => "Single-Slot BFT Round (4 Val)",
-                10 => "Single-Slot BFT Round (10 Val)",
-                25 => "Single-Slot BFT Round (25 Val)",
-                _ => "Single-Slot BFT Round",
+                4 => "Round-Based BFT Round (4 Val)",
+                10 => "Round-Based BFT Round (10 Val)",
+                25 => "Round-Based BFT Round (25 Val)",
+                _ => "Round-Based BFT Round",
             },
             iters,
             elapsed,
@@ -810,7 +810,7 @@ fn main() {
     println!("=========================================================================================");
     println!("           AURION PROTOCOL PERFORMANCE & CAPACITY BENCHMARK SUITE (VER-008)              ");
     println!("=========================================================================================");
-    println!("  Invariants: Zero Unsafe (AUR-ARCH-011) | Zero Float (AUR-ARCH-012) | Single-Slot BFT   ");
+    println!("  Invariants: Zero Unsafe (AUR-ARCH-011) | Zero Float (AUR-ARCH-012) | Round-Based BFT   ");
     println!("-----------------------------------------------------------------------------------------");
 
     let mut all_results = Vec::new();
@@ -825,7 +825,7 @@ fn main() {
     println!("DONE ({} tests)", r2.len());
     all_results.extend(r2);
 
-    print!("  [3/6] Running Suite 3: Single-Slot BFT Consensus Latency... ");
+    print!("  [3/6] Running Suite 3: Round-Based BFT Consensus Latency... ");
     let r3 = bench_consensus_latency();
     println!("DONE ({} tests)", r3.len());
     all_results.extend(r3);
@@ -882,7 +882,7 @@ fn main() {
     println!("+-------------------------+----------------------------------+----------+---------------+----------------+-----------------------+---------------+");
     println!();
     println!("  HASIL AKHIR: Seluruh {} pengujian benchmark empiris selesai dieksekusi.", all_results.len());
-    println!("  Status Invariant: 100% INTEGER ARITHMETIC | 0 UNSAFE CODE | SINGLE-SLOT BFT SLA SATISFIED.");
+    println!("  Status Invariant: 100% INTEGER ARITHMETIC | 0 UNSAFE CODE | ROUND-BASED BFT SLA SATISFIED.");
     println!("=========================================================================================");
     println!();
 }

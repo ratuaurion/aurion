@@ -29,7 +29,7 @@ Sesuai dengan Dokumen 12 (*Operational Rules*) dan Invariant `AUR-ARCH-011`/`AUR
 | `aurion_transactions_processed_total` | `counter` | `chain_id` | Akumulasi total transaksi yang berhasil dieksekusi dan dikomit ke ledger. | Monoton naik. |
 | `aurion_blocks_finalized_total` | `counter` | `chain_id` | Akumulasi total blok yang memperoleh sertifikat komitmen BFT (`CommitCertificate`). | Monoton naik. |
 | `aurion_validator_fees_total` | `counter` | `chain_id` | Akumulasi total unit Quantum fee transaksi yang dialirkan 100% ke validator pembuat blok. | Monoton naik (100% fee routing). |
-| `aurion_bft_finality_latency_ms` | `gauge` | `chain_id` | Latensi waktu (milidetik) dari penerbitan proposal hingga kuorum precommit $>2/3$. | $< 1,000\text{ ms}$ (SLA Single-Slot Finality). |
+| `aurion_bft_finality_latency_ms` | `gauge` | `chain_id` | Latensi waktu (milidetik) dari penerbitan proposal hingga kuorum precommit $>2/3$. | $< 1,000\text{ ms}$ (SLA Round-Based Finality). |
 | `aurion_active_protocol_version` | `gauge` | `chain_id` | Versi protokol konsensus aktif yang diakui oleh state machine. | Versi mayor saat ini (`1` untuk Mainnet Genesis). |
 
 ---
@@ -73,7 +73,7 @@ aurion_blocks_finalized_total{chain_id="1001"} 12480
 # TYPE aurion_validator_fees_total counter
 aurion_validator_fees_total{chain_id="1001"} 1969000000
 
-# HELP aurion_bft_finality_latency_ms Single-slot BFT finality commit latency in milliseconds.
+# HELP aurion_bft_finality_latency_ms Round-based BFT finality commit latency in milliseconds.
 # TYPE aurion_bft_finality_latency_ms gauge
 aurion_bft_finality_latency_ms{chain_id="1001"} 720
 

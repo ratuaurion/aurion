@@ -117,7 +117,7 @@ impl MetricsRegistry {
         out.push_str("# TYPE aurion_burned_quanta_total counter\n");
         out.push_str(&format!("aurion_burned_quanta_total{{chain_id=\"{}\"}} {}\n\n", chain, burned));
 
-        out.push_str("# HELP aurion_bft_finality_latency_ms Single-slot BFT finality commit latency in milliseconds.\n");
+        out.push_str("# HELP aurion_bft_finality_latency_ms Round-based BFT finality commit latency in milliseconds.\n");
         out.push_str("# TYPE aurion_bft_finality_latency_ms gauge\n");
         out.push_str(&format!("aurion_bft_finality_latency_ms{{chain_id=\"{}\"}} {}\n\n", chain, latency));
 

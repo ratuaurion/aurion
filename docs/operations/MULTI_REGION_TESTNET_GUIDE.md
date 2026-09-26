@@ -12,7 +12,7 @@ Langkah ke-11 (**`NET-011: Private Multi-Region Testnet`**) memperluas penggelar
 ### Fitur Utama:
 1. **Topologi Lintas Benua dengan Latensi WAN**:
    - Mensimulasikan dan menguji konsensus BFT di bawah latensi jaringan nyata (15 ms hingga 300 ms).
-   - Memastikan finalitas *single-slot* (< 1.000 ms SLA) tetap terpenuhi meskipun paket suara BFT menyeberangi samudra.
+   - Memastikan finalitas *round-based* (< 1.000 ms SLA) tetap terpenuhi meskipun paket suara BFT menyeberangi samudra.
 2. **Rotasi Validator Dinamis Berbasis Epoch (`EpochTransition`)**:
    - Pemisahan blok dalam unit *Epoch* (default 10 blok).
    - Mekanisme rotasi validator: penambahan validator baru atau pengeluaran validator yang tidak aktif secara deterministik dengan sertifikat komit kuorum $>2/3$.

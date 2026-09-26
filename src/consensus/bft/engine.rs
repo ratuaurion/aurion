@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-//! Mesin Konsensus BFT Single-Slot Finality Aurion.
+//! Mesin Konsensus BFT Round-Based Finality Aurion.
 //! Mengatur pemilihan proposer, perakitan proposal blok, voting dua fase,
 //! pembentukan sertifikat komitmen kuorum, dan finalisasi state ke ledger.
 

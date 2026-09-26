@@ -383,7 +383,7 @@ pub fn run_pillar_5() -> PillarExecutionResult {
 
 pub fn run_pillar_6() -> PillarExecutionResult {
     let start = Instant::now();
-    let name = "BFT Single-Slot Finality Consensus & Quorum Verification (>2/3)";
+    let name = "BFT Round-Based Finality Consensus & Quorum Verification (>2/3)";
 
     let header = BlockHeader {
         version: 1,

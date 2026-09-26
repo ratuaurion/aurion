@@ -2,7 +2,7 @@
 
 //! Suite Pengujian Adversarial Konsensus BFT Aurion (VER-005).
 //!
-//! Menguji ketahanan, keamanan, dan keandalan konsensus Aurion-BFT Single-Slot Finality
+//! Menguji ketahanan, keamanan, dan keandalan konsensus Aurion-BFT Round-Based Finality
 //! terhadap aneka skenario serangan Byzantine dan kegagalan jaringan terdistribusi:
 //!
 //! 1. Toleransi Node Offline / Silent Byzantine (1 dari 4 validator offline, f < n/3, kuorum tercapai).

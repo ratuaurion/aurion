@@ -16,7 +16,7 @@ Dossier ini menyajikan satu set lengkap dokumen audit keamanan teknis formal unt
 ├────────────────────────────────┬──────────────────────────────────────────────────┤
 │ 00. Ringkasan Eksekutif        │ Metodologi, parameter ruang lingkup, matriks temuan│
 │ 01. Kriptografi & Primitif     │ Blake3, Ed25519 RFC 8032, BIP-39/SLIP-0010, Keystore│
-│ 02. Konsensus & BFT Engine     │ Single-slot finality, kuorum >2/3, anti-ekuivokasi│
+│ 02. Konsensus & BFT Engine     │ Round-based BFT, kuorum >2/3, anti-ekuivokasi    │
 │ 03. State Machine & Moneter    │ STF, 66M cap, split fee 20/80, SMT Blake3, Zero-Float│
 │ 04. Mesin Eksekusi AVM         │ Stack 1024, batas memori 1MB, metering gas, revert│
 │ 05. Jaringan P2P & Wire Frame  │ Frame AUR0, handshake, isolasi sentry, anti-DoS  │
@@ -38,7 +38,7 @@ Dossier ini menyajikan satu set lengkap dokumen audit keamanan teknis formal unt
 | :---: | :--- | :--- | :---: |
 | **00** | [`00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md`](file:///c:/Projects/aurion/docs/audit/00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md) | Ringkasan eksekutif, postur keamanan, kepatuhan invariant, dan metodologi audit. | **CERTIFIED PASS** |
 | **01** | [`01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md) | Primitif hashing Blake3, Ed25519 strict non-malleability, dompet BIP-39, SLIP-0010. | **CERTIFIED PASS** |
-| **02** | [`02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md) | Konsensus Single-Slot BFT, prevote/precommit, ekuivokasi, kuorum Byzantine $3f+1$. | **CERTIFIED PASS** |
+| **02** | [`02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md) | Konsensus Round-Based BFT, prevote/precommit, ekuivokasi, kuorum Byzantine $3f+1$. | **CERTIFIED PASS** |
 | **03** | [`03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md) | Hukum konservasi Genesis 66M, alokasi 100% fee ke validator, aritmatika Quantum integer 9 desimal. | **CERTIFIED PASS** |
 | **04** | [`04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md) | Aurion Native VM (AVM), isolasi memori 1MB, proteksi stack overflow, gas metering. | **CERTIFIED PASS** |
 | **05** | [`05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md`](file:///c:/Projects/aurion/docs/audit/05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md) | Wire protocol `AUR0`, anti-DoS payload, mutual handshake, isolasi simpul sentry. | **CERTIFIED PASS** |

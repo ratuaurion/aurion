@@ -307,7 +307,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                 architecture: "Single Sovereign Primary Binary (/bin/aurion)",
                 hard_cap_aur: 66_000_000,
                 quantum_scale: "10^8 (1 AUR = 100,000,000 Quanta)",
-                consensus: "Single-Slot BFT Finality (>2/3 Quorum)",
+                consensus: "Round-Based BFT Finality (>2/3 Quorum)",
                 hashing: "Blake3 256-bit",
                 signatures: "Ed25519 (Strict Anti-Malleability)",
             };
@@ -1224,7 +1224,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     println!("  Chain ID:           {}", info.chain_id);
                     println!("  Genesis Block Hash: {}", info.genesis_block_hash);
                     println!("  State Root:         {}", info.state_root);
-                    println!("  Consensus:          Single-Slot BFT Finality (>2/3 Quorum)");
+                    println!("  Consensus:          Round-Based BFT Finality (>2/3 Quorum)");
                     println!("  Storage Engine:     {}", info.storage_engine);
                     println!("  Database Path:      {}", info.database_path);
                     println!("  Ledger Height:      {}", info.current_height);
@@ -1240,7 +1240,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
             println!("==================================================================");
             println!("[AURION VALIDATOR] Validator Index: {}", val_idx + 1);
             println!(
-                "[AURION VALIDATOR] Consensus Algorithm: Single-Slot BFT Finality (2/3+ Quorum)"
+                "[AURION VALIDATOR] Consensus Algorithm: Round-Based BFT Finality (2/3+ Quorum)"
             );
             println!(
                 "[AURION VALIDATOR] Serving Status Gateway on http://{}",
@@ -2462,7 +2462,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         println!("  Chain ID:             {}", info.genesis_chain_id);
                         println!("  Data Directory:       {}", info.data_dir);
                         println!(
-                            "  BFT Validators:       {} nodes (single-slot finality)",
+                            "  BFT Validators:       {} nodes (round-based finality)",
                             info.validators_count
                         );
                         println!(
@@ -2475,7 +2475,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         );
                         println!("  P2P Port Allocation:  {}", info.p2p_port_range);
                         println!("  RPC Port Allocation:  {}", info.rpc_port_range);
-                        println!("  Consensus Model:      Single-Slot BFT (>2/3 quorum)");
+                        println!("  Consensus Model:      Round-Based BFT (>2/3 quorum)");
                         println!(
                             "  Execution Mode:       Native Local PC / Docker Disk D Compatible"
                         );
@@ -2508,7 +2508,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                     let info = DevnetStatusInfo {
                         network: "aurion-devnet-live".to_string(),
                         topology: "4-Val + 1-Sentry + 1-RPC Gateway".to_string(),
-                        consensus: "Single-Slot BFT Finality (>2/3 Quorum)".to_string(),
+                        consensus: "Round-Based BFT Finality (>2/3 Quorum)".to_string(),
                         active_nodes: 6,
                         total_nodes: 6,
                         nodes: nodes.clone(),
@@ -2729,7 +2729,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         total_validators: 4,
                         total_sentries: 2,
                         max_wan_rtt_ms: 300,
-                        consensus: "Single-Slot BFT with Dynamic Epoch Rotation (>2/3 Quorum)",
+                        consensus: "Round-Based BFT with Dynamic Epoch Rotation (>2/3 Quorum)",
                         nodes: nodes.clone(),
                     };
 
@@ -3054,7 +3054,7 @@ pub async fn dispatch(command: CliCommand, format: OutputFormat) -> Result<(), S
                         p2p_protocol_version: 1,
                         bootnodes_count: crate::runtime::config::NodeConfig::mainnet_bootnodes()
                             .len(),
-                        active_consensus: "Single-Slot BFT Finality (>2/3 Quorum)",
+                        active_consensus: "Round-Based BFT Finality (>2/3 Quorum)",
                         hard_cap_aur: 66_000_000,
                         status: "MAINNET_PRODUCTION_ACTIVE",
                     };
@@ -3668,7 +3668,7 @@ fn print_master_help() {
     println!();
     println!("Available Core Commands:");
     println!("  node        Start or manage a full sovereign node & JSON-RPC gateway daemon");
-    println!("  validator   Run BFT consensus validator engine with single-slot finality");
+    println!("  validator   Run BFT consensus validator engine with round-based finality");
     println!("  wallet      Manage keys, BIP-39 24-word mnemonics, and transaction signing");
     println!("  account     Query account balances, nonces, and on-chain identity");
     println!("  block       Inspect canonical blocks by height or hash");

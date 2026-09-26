@@ -187,7 +187,7 @@ impl ChainLedger {
         self.latest_block().height()
     }
 
-    /// Tinggi blok yang telah final. Pada Aurion-BFT Single-Slot Finality,
+    /// Tinggi blok yang telah final. Pada Aurion-BFT Round-Based Finality,
     /// setiap blok yang sah dikomit adalah final seketika.
     pub fn finalized_height(&self) -> u64 {
         self.latest_height()

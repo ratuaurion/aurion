@@ -24,7 +24,7 @@ Tahap pembekuan ini menandai bahwa seluruh logika konsensus, mesin virtual kontr
 | **Alokasi Fee Transaksi** | `100% ke Validator Proposer` | Melengkapi insentif perakitan blok |
 | **Topologi Bootnode Resmi** | `116.212.72.89` (TCP Port 7447) | Nginx SSL Gateway `bootnode.ratuaurion.store:8080` |
 | **Waktu Slot Target BFT** | `60.000 ms` (60 detik) | `AUR-APP-05` |
-| **Ambang Kuorum Finalitas** | `> 2/3 Total Bobot Voting Validator` | Single-slot BFT guarantee |
+| **Ambang Kuorum Finalitas** | `> 2/3 Total Bobot Voting Validator` | Round-based BFT guarantee |
 | **Doktrin Integritas Kode** | Zero-Mock Policy | Larangan mutlak `--dev` & mock consensus |
 
 ---
@@ -92,7 +92,7 @@ Output yang diharapkan:
   "architecture": "Single Sovereign Primary Binary (/bin/aurion)",
   "hard_cap_aur": 66000000,
   "quantum_scale": "10^9 (1 AUR = 1,000,000,000 Quanta)",
-  "consensus": "Single-Slot BFT Finality (>2/3 Quorum)",
+  "consensus": "Round-Based BFT Finality (>2/3 Quorum)",
   "hashing": "Blake3 256-bit",
   "signatures": "Ed25519 (Strict Anti-Malleability)"
 }

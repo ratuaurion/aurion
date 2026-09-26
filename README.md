@@ -204,7 +204,7 @@ Setiap kontribusi kode, refaktorisasi, dan rilis Aurion wajib mematuhi invariant
 
 ### 4.1 Gerbang Kemurnian BFT (BFT Purity Gate)
 
-Aurion adalah protokol **BFT deterministik dengan single-slot finality**. Konstitusi
+Aurion adalah protokol **BFT berbasis ronde (*Round-Based BFT*) dengan finalitas kuorum**. Konstitusi
 Pasal 2 melarang total konsep penambangan (*mining*), kalkulasi tingkat kesulitan
 (*difficulty*), dan kompetisi hash.
 
@@ -233,6 +233,23 @@ cargo test --offline --test bft_purity_gate
 Komentar yang **mencatat penghapusan** skema lama tetap diizinkan — itu
 justru dokumentasi, bukan kontaminasi.
 
+### 4.2 Mekanika Konsensus & Batas yang Diketahui
+
+Aurion memakai **BFT berbasis ronde** (*Round-Based BFT*), 2-fase
+(Prevote → Precommit). Finalitas diperoleh melalui **Sertifikat Kuorum (QC)**
+dengan bobot suara **> 2/3** validator aktif — bukan melalui slot waktu tetap.
+Bila proposer tidak mengajukan blok dalam `round_timeout`, protokol menaikkan
+ronde sehingga jaringan tetap hidup meski proposer offline.
+
+**Penetapan proposer saat ini bersifat oportunistik (*First-Valid-Block-Wins*).**
+Validator mana pun dapat mengajukan blok untuk suatu ketinggian, dan jaringan
+menerima proposal valid pertama yang mengumpulkan kuorum. Layer ledger
+memvalidasi height, parent hash, timestamp, dan merkle root, tetapi belum
+menegakkan jadwal proposer *round-robin* deterministik.
+
+Rencana **Deterministic Leader Election** sebagai upgrade *hard-fork*
+tercantum pada `docs/operations/BFT_PURITY_AUDIT.md` §9.4.
+
 ---
 
 ## 5. Tata Letak Repositori & Struktur Modul Terpadu
@@ -252,7 +269,7 @@ aurion/
 │   ├── core/                           # Shared Core: Types, Quantum u128, Hash256, Address
 │   ├── protocol/                       # Canonical wire formats, codecs, serializations
 │   ├── crypto/                         # Blake3 standard/KDF, Ed25519 strict, Bech32m
-│   ├── consensus/                      # Single-slot BFT, CommitCertificate, Quorum validation
+│   ├── consensus/                      # Round-based BFT, CommitCertificate, Quorum validation
 │   ├── execution/                      # State Transition Function (STF), Block processing
 │   ├── state/                          # Accounts, Sparse Merkle Tree (SMT), Monetary State
 │   ├── storage/                        # Persistent KV storage engine, RocksDB/MDBX bindings
@@ -376,7 +393,7 @@ Dokumentasi lengkap protokol Aurion terbagi ke dalam dua pilar utama:
 ### A. Protocol & Consensus Specifications (`docs/Constitutions/`)
 1. [`AURION CONSTITUTION.md`](docs/Constitutions/AURION%20CONSTITUTION.md): Konstitusi Tertinggi Protokol Aurion.
 2. [`AURION-MONETARY-POLICY-SPECIFICATION.md`](docs/Constitutions/AURION-MONETARY-POLICY-SPECIFICATION.md): Kebijakan Moneter, Hard Cap 66M AUR, Deflasi.
-3. [`AURION-CONSENSUS-SPECIFICATION.md`](docs/Constitutions/AURION-CONSENSUS-SPECIFICATION.md): Mekanisme Konsensus BFT Single-Slot Finality.
+3. [`AURION-CONSENSUS-SPECIFICATION.md`](docs/Constitutions/AURION-CONSENSUS-SPECIFICATION.md): Mekanisme Konsensus BFT Round-Based Finality.
 4. [`AURION-STATE-TRANSITION-SPECIFICATION.md`](docs/Constitutions/AURION-STATE-TRANSITION-SPECIFICATION.md): Aturan Transisi State $\sigma' = \Upsilon(\sigma, B)$.
 5. [`AURION-TRANSACTION-SPECIFICATION.md`](docs/Constitutions/AURION-TRANSACTION-SPECIFICATION.md): Struktur Transaksi Kanonikal 184B+.
 6. [`AURION-CRYPTOGRAPHY-SPECIFICATION.md`](docs/Constitutions/AURION-CRYPTOGRAPHY-SPECIFICATION.md): Primitif Kriptografi Blake3 & Ed25519.
@@ -426,7 +443,7 @@ Dokumentasi lengkap protokol Aurion terbagi ke dalam dua pilar utama:
 ### D. Comprehensive Security Audit Dossier (`docs/audit/`)
 1. [`00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md`](docs/audit/00-AUDIT-SUMMARY-AND-EXECUTIVE-OVERVIEW.md): Ringkasan Eksekutif, Ruang Lingkup, & Matriks Temuan (100% Pass).
 2. [`01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md`](docs/audit/01-CRYPTOGRAPHY-AND-PRIMITIVES-AUDIT.md): Audit Kriptografi Blake3, RFC 8032 Non-Malleability, BIP-39.
-3. [`02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md`](docs/audit/02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md): Audit Konsensus Single-Slot BFT, Ekuivokasi, Kuorum $>2/3$.
+3. [`02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md`](docs/audit/02-CONSENSUS-AND-BFT-ENGINE-AUDIT.md): Audit Konsensus Round-Based BFT, Ekuivokasi, Kuorum $>2/3$.
 4. [`03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md`](docs/audit/03-STATE-MACHINE-AND-MONETARY-POLICY-AUDIT.md): Audit STF, Batasan 66M Cap, Pembagian Fee 20/80, SMT Blake3.
 5. [`04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md`](docs/audit/04-AVM-SMART-CONTRACT-EXECUTION-AUDIT.md): Audit AVM Sandbox, Batas Memori 1MB, Stack 1024, Gas Metering.
 6. [`05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md`](docs/audit/05-P2P-NETWORKING-AND-WIRE-SECURITY-AUDIT.md): Audit Framing `AUR0`, Batas Ukuran Payload, Isolasi Sentry.

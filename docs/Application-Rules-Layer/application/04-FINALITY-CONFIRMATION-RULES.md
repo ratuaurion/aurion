@@ -15,7 +15,7 @@
 
 Protokol Aurion **TIDAK MENGGUNAKAN** model finalitas probabilistik ala Nakamoto (seperti "tunggu 6 konfirmasi" pada Bitcoin). 
 
-Aurion menggunakan mesin konsensus **Aurion-BFT** dengan **Finalitas Tunggal Deterministik (*Deterministic Single-Slot Finality*)**:
+Aurion menggunakan mesin konsensus **Aurion-BFT** dengan **Finalitas Tunggal Deterministik (*Round-Based BFT with Quorum Finality*)**:
 - Sebuah blok $B$ dianggap **FINAL SECARA MATEMATIS** saat dan hanya saat sekurang-kurangnya $> 2/3$ bobot voting validator aktif telah membubuhkan tanda tangan sah pada fase Pre-commit dan menghasilkan **Commit Certificate $\mathcal{CC}(B)$**.
 - Setelah $\mathcal{CC}(B)$ terbentuk, probabilitas reorganisasi (*reorg*) adalah **MUTLAK 0%** di bawah asumsi Byzantine $< 1/3$.
 

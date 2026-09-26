@@ -1,7 +1,7 @@
 # AURION — Protocol Performance & Capacity Model (VER-008)
 > **Status:** RATIFIKASI FORMAL (VER-008 SELESAI)  
 > **Klasifikasi:** Dokumen Rekayasa Kinerja, Kapasitas, dan Dimensi Sistem  
-> **Prinsip Tertinggi:** Zero Unsafe (`#![forbid(unsafe_code)]`) | Zero Float (`Quantum(u128)` Integer Arithmetic AUR-ARCH-012) | Single-Slot BFT Finality (<1.000 ms SLA) | Zero-Mock Policy
+> **Prinsip Tertinggi:** Zero Unsafe (`#![forbid(unsafe_code)]`) | Zero Float (`Quantum(u128)` Integer Arithmetic AUR-ARCH-012) | Round-Based BFT Finality (<1.000 ms SLA) | Zero-Mock Policy
 
 ---
 
@@ -19,7 +19,7 @@ cargo test --bench protocol_bench --release
 ### Invariant Arsitektur yang Ditegakkan
 1. **AUR-ARCH-011 (Zero Unsafe Code):** Tidak ada satu pun blok `unsafe` pada seluruh jalur eksekusi STF, mempool, konsensus, storage engine, maupun adapter domain.
 2. **AUR-ARCH-012 (Zero Floating-Point Arithmetic):** Seluruh metrik latensi, alokasi memori, perhitungan throughput (TPS/ops/s), dan rasio amplifikasi dihitung menggunakan aljabar integer presisi tinggi (`u128`, nanodetik, mikrodetik, Quanta integer dengan skala $1\text{ AUR} = 10^9\text{ Quantum}$).
-3. **AUR-ARCH-005 & AUR-APP-05 (Single-Slot BFT Finality):** Konsensus BFT 2-fase (Prevote & Precommit) dengan kuorum $> 2/3$ daya voting wajib menyelesaikan komitmen deterministik dalam jendela waktu $\le 1.000\text{ ms}$ per blok.
+3. **AUR-ARCH-005 & AUR-APP-05 (Round-Based BFT Finality):** Konsensus BFT 2-fase (Prevote & Precommit) dengan kuorum $> 2/3$ daya voting wajib menyelesaikan komitmen deterministik dalam jendela waktu $\le 1.000\text{ ms}$ per blok.
 4. **Doktrin Zero-Mock & Isolasi Jaringan Nyata:** Seluruh pengukuran kapasitas dan operasi simpul mengikat proses biner produksi nyata tanpa emulasi proses kluster palsu dalam satu server, flag mock `--dev`, ataupun dummy state machine. Semua simpul P2P terhubung melalui topologi berdaulat (Bootnode `116.212.72.89:7447`, RPC Gateway terisolasi lokal `127.0.0.1:8080` di balik reverse proxy Nginx SSL).
 
 ---
@@ -43,9 +43,9 @@ Seluruh data berikut diambil dari eksekusi profil `release` teroptimasi (`protoc
 | **L1 State Machine** | STF Native Transfer Apply | 2.000 | 269 µs | 134 ns | **7.418.397 TPS** | $\ge 10.000\text{ TPS}$ | **PASS** |
 | **L1 State Machine** | AVM Bytecode Arithmetic | 10.000 | 1.246 µs | 124 ns | **8.025.682 ops/s** | $\ge 100.000\text{ ops/s}$ | **PASS** |
 | **BFT Consensus** | Deterministic Proposer Select | 10.000 | 2.333 µs | 233 ns | 4.285.224 ops/s | $\le 5\text{ µs}$ | **PASS** |
-| **BFT Consensus** | Single-Slot BFT Round (4 Val) | 100 | 70.215 µs | 702 µs | 702 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
-| **BFT Consensus** | Single-Slot BFT Round (10 Val) | 100 | 177.201 µs | 1.772 µs | 1.772 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
-| **BFT Consensus** | Single-Slot BFT Round (25 Val) | 100 | 440.939 µs | 4.409 µs | 4.409 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
+| **BFT Consensus** | Round-Based BFT Round (4 Val) | 100 | 70.215 µs | 702 µs | 702 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
+| **BFT Consensus** | Round-Based BFT Round (10 Val) | 100 | 177.201 µs | 1.772 µs | 1.772 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
+| **BFT Consensus** | Round-Based BFT Round (25 Val) | 100 | 440.939 µs | 4.409 µs | 4.409 µs/blok | $\le 1.000\text{ ms}$ | **PASS** |
 | **Layer-2 Scaling** | L2 Sequencer STF + Soft Finality | 2.000 | 3.004 µs | 1 µs | **665.668 L2-TPS** | $\ge 50.000\text{ TPS}$ | **PASS** |
 | **Layer-2 Scaling** | L2 Batch Frame DA Packaging | 1 | 0 µs | 100 ns | Canonical Frame Packed | $\le 1.000\text{ µs}$ | **PASS** |
 | **Layer-2 Scaling** | L2 SMT 1K Leaves Recompute | 1.000 | 626 µs | 626 ns | Deterministic Root | $\le 10\text{ µs}$ | **PASS** |
@@ -81,13 +81,13 @@ Seluruh data berikut diambil dari eksekusi profil `release` teroptimasi (`protoc
 
 ---
 
-## 4. Alokasi Waktu Konsensus Single-Slot BFT (<1.000 ms SLA)
+## 4. Alokasi Waktu Konsensus Round-Based BFT (<1.000 ms SLA)
 
 Berdasarkan ukuran validator set dan latensi jaringan tipikal, anggaran waktu konsensus 1 slot dibagi sebagai berikut:
 
 ```
 +---------------------------------------------------------------------------------------+
-|                       ANGGARAN WAKTU SINGLE-SLOT FINALITY (1.000 ms)                 |
+|                       ANGGARAN WAKTU ROUND-BASED FINALITY (1.000 ms)                 |
 +-------------------+--------------------+-------------------+--------------------------+
 | Fase              | Durasi Empiris     | Batas Anggaran    | Komponen yang Diuji      |
 +-------------------+--------------------+-------------------+--------------------------+
@@ -98,7 +98,7 @@ Berdasarkan ukuran validator set dan latensi jaringan tipikal, anggaran waktu ko
 | 5. Storage Commit | 8.52 ms            | 50.0 ms           | Redb atomic commit       |
 | 6. Safety Margin  | -                  | 390.0 ms          | Buffer variasi latensi   |
 +-------------------+--------------------+-------------------+--------------------------+
-| TOTAL SINGLE-SLOT | ~50 - 150 ms       | 1.000.0 ms        | Lolos SLA (<1.000 ms)    |
+| TOTAL ROUND-BASED | ~50 - 150 ms       | 1.000.0 ms        | Lolos SLA (<1.000 ms)    |
 +-------------------+--------------------+-------------------+--------------------------+
 ```
 
@@ -165,7 +165,7 @@ Rasio amplifikasi penyimpanan `redb 4.3` yang diukur secara empiris adalah **4,3
 
 Berdasarkan pengujian empiris pada `benches/protocol_bench.rs` dan model kapasitas matematis integer di atas:
 * Seluruh 24 benchmark lolos ambang batas SLA protokol Aurion.
-* Kinerja komputasi konsensus single-slot BFT (0,7 ms s/d 4,4 ms) membuktikan bahwa target interval blok 1 detik dengan finalitas instan tercapai dengan margin keamanan $> 80\%$.
+* Kinerja komputasi konsensus round-based BFT (0,7 ms s/d 4,4 ms) membuktikan bahwa target interval blok 1 detik dengan finalitas instan tercapai dengan margin keamanan $> 80\%$.
 * Invariant `AUR-ARCH-011` (Zero Unsafe) dan `AUR-ARCH-012` (Zero Float) terbukti memberikan determinisme eksekusi mutlak tanpa mengorbankan kecepatan throughput sistem.
 
 **Task VER-008 resmi diratifikasi dan dinyatakan SELESAI.**

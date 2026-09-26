@@ -15,7 +15,7 @@ pub fn generate_golden_vectors_json() -> String {
     out.push_str("    \"developer_allocation_quanta\": \"330000000000000\",\n");
     out.push_str("    \"fee_burn_percent\": 0,\n");
     out.push_str("    \"fee_validator_percent\": 100,\n");
-    out.push_str("    \"consensus\": \"deterministic-bft-single-slot-finality\",\n");
+    out.push_str("    \"consensus\": \"round-based-bft-quorum-finality\",\n");
     out.push_str("    \"proof_of_work\": \"forbidden\",\n");
     out.push_str("    \"wire_magic\": \"0x41555230\",\n");
     out.push_str("    \"wire_magic_str\": \"AUR0\",\n");

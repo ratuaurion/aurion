@@ -8,7 +8,7 @@
 
 ## 1. Ringkasan Eksekutif
 
-Aurion adalah protokol **BFT deterministik dengan single-slot finality**. Konstitusi
+Aurion adalah protokol **BFT deterministik dengan round-based BFT finality**. Konstitusi
 Pasal 2 secara eksplisit melarang konsep penambangan (*mining*), kalkulasi tingkat
 kesulitan (*difficulty*), dan kompetisi hash untuk memproduksi blok.
 
@@ -253,4 +253,86 @@ tidak ada tautan rusak:
 > `include_str!` pada `src/primitives/genesis/ceremony.rs`. Menghapusnya akan
 > membuat build gagal.
 
-- `.internal-tasks/TASK_REGISTER.md` — entri AUD-BFT-001
+
+---
+
+---
+
+## 9. Mekanika Konsensus: Round-Based BFT & Penetapan Proposer
+
+### 9.1 Koreksi: "Round-Based Finality" adalah klaim yang tidak akurat
+
+Dokumen sebelumnya (kedua konstitusi, README, dan sejumlah panduan
+operasional) menyebut Aurion sebagai BFT *round-based BFT finality*. Pemeriksaan
+terhadap `src/consensus/bft/` menunjukkan klaim itu **tidak sesuai
+implementasi**.
+
+Pasal lama konstitusi yang berbunyi *"Blok hanya dapat diajukan oleh satu
+validator yang ditunjuk secara bergilir berdasarkan jadwal deterministik"*
+juga **tidak ditegakkan** di lapisan ledger.
+
+> **Keputusan proyek:** selaraskan dokumentasi dengan kode (Opsi B). Logika
+> konsensus **tidak** diubah. Tidak ada satu pun pernyataan Rust yang berubah —
+> hanya baris komentar (`//!`, `//`) dan string tampilan.
+
+### 9.2 Yang benar-benar diimplementasikan
+
+| Aspek | Implementasi | Lokasi |
+| :--- | :--- | :--- |
+| Mekanisme | BFT berbasis ronde, 2-fase (Prevote → Precommit) | `consensus/bft/reactor.rs` |
+| Finalitas | Sertifikat Kuorum dengan bobot suara $> 2/3$ | `reactor.rs`, `certificate.rs` |
+| Liveness | Round timeout → round advance → peluang proposing baru | `reactor.rs:243`, `reactor.rs:393` |
+| Anti-ekuivokasi | Vote terakumulasi per `(height, round, phase)` | `reactor.rs:68` |
+| Reward | 20% proposer / 80% voters QC — imbalan berdasarkan peran | `state/monetary.rs:64` |
+
+`MAX_ROUND_DRIFT` membatasi lompatan ronde sehingga validator tidak dapat
+menaikkan ronde secara bebas.
+
+### 9.3 Mengapa ini BFT, bukan PoW
+
+Tidak ada hash (`blake3`) yang perlu ditembus, tidak ada target
+kesulitan, dan tidak ada pencarian nonce secara brute-force.
+Hadiah blok diberikan berdasarkan **peran** — Proposer dan penandatangan QC —
+bukan berdasarkan siapa yang pertama menyelesaikan persoalan hash. Nilai hadiah
+juga tetap konstan per tinggi blok; `calculate_block_reward` tidak bergantung
+pada waktu maupun biaya komputasi.
+
+### 9.4 Roadmap: Deterministic Leader Election (Round-Robin)
+
+**Current State — Opportunistic / First-Valid-Block-Wins.**
+
+Pada implementasi saat ini, **validator mana pun** dapat mengajukan blok untuk
+suatu ketinggian. Jaringan menerima proposal valid pertama yang berhasil
+mengumpulkan kuorum. `validate_block_proposal` pada
+`statemachine/state/chain.rs` memverifikasi height, parent hash, timestamp, dan
+merkle root — tetapi **tidak** memverifikasi apakah pengusul berhak menjadi
+proposer terjadwal untuk `(height, round)` tersebut. Indeks proposer diambil
+langsung dari envelope proposal.
+
+**Rationale.** Kesederhanaan dan latensi rendah untuk *validator set* tepercaya
+yang dipakai saat ini. Untuk jaringan bootstrap yang terisolasi, pendekatan ini
+cukup dan tidak menambah permukaan disseminated consensus.
+
+**Known Limitation.** Tanpa jadwal proposer yang ditegakkan, validator mana pun
+dapat mengirim proposal berulang (*proposer spam*), dan bonus proposer 20% dari
+block reward diberikan kepada siapa pun yang menang balapan proposing pertama —
+bukan kepada validator yang "jadwalnya" giliran. Ini membuka ketimpangan
+insentif dan pemborosan bandwidth. Untuk lingkungan publik tanpa kepercayaan,
+hal ini perlu ditangani sebelum go-public.
+
+**Future Roadmap.** *Deterministic Leader Election* dijadwalkan sebagai upgrade
+*hard-fork* tersendiri, dengan urutan:
+
+1. Menetapkan fungsi deterministik `proposer(height, round)` — kandidat
+   *round-robin* atas *active validator set* dengan toleransi *missed slots*.
+2. Menegakkan jadwal tersebut di `validate_block_proposal` dan `BftReactor`
+   sehingga proposal dari non-proposer ditolak **sebelum** vote dicatat.
+3. Menambahkan bukti *view-change* yang tertandatangan antar ronde agar
+   perpindahan proposer dapat diverifikasi oleh validator lain.
+4. Menyelaraskan `epoch.rs` dengan rotasi validator agar jadwal tetap stabil
+   lintas epoch.
+
+Rencana ini belum memerlukan perubahan apa pun terhadap konsensus yang
+berjalan saat ini.
+
+

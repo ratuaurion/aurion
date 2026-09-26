@@ -16,7 +16,7 @@ Evaluasi audit dilakukan secara ketat untuk memverifikasi bahwa implementasi ref
 1. **Lapisan Kriptografi (Cryptography Layer):**  
    Skema tanda tangan digital Ed25519 kanonikal (RFC 8032), fungsi hash Blake3 256-bit, pohon Merkle biner, format alamat Bech32m (`aur`), serta pembentukan seed BIP-39 dan derivasi kunci hierarkis BIP-44/SLIP-0010 (`m/44'/9999'/0'/0/0`).
 2. **Lapisan Konsensus & BFT Engine (Consensus Layer):**  
-   Protokol konsensus Aurion BFT 2-fase (Prevote & Precommit), deteksi ekuivokasi (*double-voting detection*), mitigasi split-brain partitioning, transisi epoch dan rotasi validator dinamis, serta finalitas single-slot bergaransi (<1000 ms).
+   Protokol konsensus Aurion BFT 2-fase (Prevote & Precommit), deteksi ekuivokasi (*double-voting detection*), mitigasi split-brain partitioning, transisi epoch dan rotasi validator dinamis, serta finalitas round-based bergaransi (<1000 ms).
 3. **Lapisan Mesin Status & Akuntansi (State Machine & Ledger):**  
    Fungsi transisi state deterministik $\sigma' = \Upsilon(\sigma, B)$, akuntansi presisi integer murni `Quantum(u128)` 9 desimal, hukum konservasi suplai moneter Genesis 66M AUR ke Master Treasury dan alokasi 100% fee transaksi ke validator perakit blok, proteksi *balance underflow*, dan antrean mempool dengan mandat *Replace-By-Fee* (RBF $\ge 10\%$).
 4. **Lapisan Mesin Virtual Kontrak Pintar (Aurion VM / AVM):**  

@@ -6,7 +6,7 @@
 //! - AUR-ARCH-001: Single Sovereign Primary Binary (/bin/aurion).
 //! - AUR-ARCH-009: Process Lifecycle, Graceful Shutdown, dan Konvergensi State Terdistribusi.
 //! - AUR-APP-12: Sentry Node Privilege Isolation (Anti-DDoS Filtering).
-//! - AUR-CONS-*: Single-Slot BFT Consensus with >2/3 Quorum Finality.
+//! - AUR-CONS-*: Round-Based BFT Consensus with >2/3 Quorum Finality.
 //!
 //! Suite ini memverifikasi:
 //! 1. Inisialisasi dan provisioning 6 simpul devnet (4 Validator, 1 Sentry, 1 RPC Gateway).

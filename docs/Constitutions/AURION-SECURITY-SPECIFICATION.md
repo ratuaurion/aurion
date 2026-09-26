@@ -94,7 +94,7 @@ $$\mathbf{Threat} \longrightarrow \mathbf{Assumption} \longrightarrow \mathbf{De
 - **Assumption:** Penyerang tidak memiliki $\ge \frac{2}{3} W_E$ bobot konsensus.
 - **Defense:**
   1. *Account Nonce Serialization:* Hanya satu transaksi dengan nonce $N$ yang dapat dieksekusi dari akun yang sama.
-  2. *Single-Slot Finality:* Transaksi yang telah masuk ke dalam blok final berstatus abadi dan tidak dapat digantikan oleh blok alternatif.
+  2. *Round-Based Finality:* Transaksi yang telah masuk ke dalam blok final berstatus abadi dan tidak dapat digantikan oleh blok alternatif.
 - **Invariant:** $\forall \alpha, \forall N, \quad \big| \left\{ T_x \mid T_x.\text{sender} == \alpha \land T_x.\text{nonce} == N \text{ dieksekusi} \right\} \big| \le 1$.
 - **Detection:** Mesin STF menolak transaksi kedua yang menggunakan nonce yang telah terpakai.
 - **Recovery:** Saldo pengirim didebet tepat satu kali; percobaan transaksi kedua gugur.

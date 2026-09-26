@@ -31,7 +31,7 @@ pub const FEE_VALIDATOR_PERCENTAGE: u128 = 100;
 /// Rasio pembakaran fee transaksi protokol (0% Burn).
 pub const FEE_BURN_PERCENTAGE: u128 = 0;
 
-/// Waktu target produksi per blok dalam detik (Single-Slot BFT).
+/// Waktu target produksi per blok dalam detik (Round-Based BFT).
 pub const TARGET_BLOCK_TIME_SECONDS: u64 = 60;
 
 #[derive(Debug, Error, PartialEq, Eq)]
